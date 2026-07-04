@@ -74,6 +74,9 @@ jobs:
           python -m pip install --upgrade pyinstaller
           # Console build so --selftest output / any traceback is visible in the CI log.
           export ROLODEX_CONSOLE=1
+          # Windows-form MSYS2 prefix so the spec can find the GTK typelibs to bundle.
+          export ROLODEX_MINGW="$(cygpath -w "$MINGW_PREFIX")"
+          echo "MINGW prefix: $ROLODEX_MINGW"
           python -m PyInstaller packaging/rolodex.spec --noconfirm
           echo "===== SELFTEST (console build) ====="
           set +e

@@ -9,6 +9,7 @@
 # Build locally:  pyinstaller packaging/rolodex.spec --noconfirm
 
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_all
 
@@ -19,6 +20,18 @@ CONSOLE = os.environ.get("ROLODEX_CONSOLE") == "1"
 # collect_all('gi') pulls the GObject-introspection namespace: shared libs, typelibs, and the
 # hidden gi.repository.* submodules. The gi runtime hook then points GI_TYPELIB_PATH at them.
 datas, binaries, hiddenimports = collect_all("gi")
+
+# On Windows/MSYS2 the automatic typelib collection misses the GTK stack, so `gi.require_version`
+# fails at runtime with "Namespace Gtk not available". Explicitly bundle every MSYS2 typelib into
+# the `gi_typelibs` dir where the gi runtime hook points GI_TYPELIB_PATH. ROLODEX_MINGW is the
+# Windows-form MSYS2 prefix (e.g. D:\...\ucrt64), exported by the CI workflow.
+if sys.platform == "win32":
+    import glob
+
+    _mingw = os.environ.get("ROLODEX_MINGW", "C:/msys64/ucrt64")
+    _typelibs = glob.glob(os.path.join(_mingw, "lib", "girepository-1.0", "*.typelib"))
+    datas += [(f, "gi_typelibs") for f in _typelibs]
+    print(f"[rolodex.spec] bundling {len(_typelibs)} typelibs from {_mingw}")
 
 a = Analysis(
     ["../rolodex.py"],
