@@ -13,6 +13,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   **Layman:** Safety net that checks the encryption and data code still works after any change.
   Kind: test.
   Source: in-session-2026-07-04.
+  Seeded (2026-07-04): tests/test_vault.py added with round-trip, wrong-password, 0600, migrate-idempotency, and the save-vault write-error regression. Remaining: parse_text_file, search_entries, category helpers, and CI wiring (ROLO-0020).
 
 - 📋 [ROLO-0002] **Auto-lock the vault on idle and add a manual Lock button.**
   Why: once unlocked, the vault and master password stay in memory indefinitely — a real gap if the user walks away. This is the biggest security improvement available.

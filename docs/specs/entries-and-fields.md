@@ -35,9 +35,10 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
 
 - **INV-9** A label is auto-classified sensitive when it contains any `SENSITIVE_KEYWORDS`
   token (password, pass, secret, key, token, pin, authenticator), case-insensitive. In the
-  editor, editing a label to contain a keyword auto-checks "Hide" and masks the value; removing
-  the keyword only un-masks the value's visibility — it does **not** un-check "Hide". The
-  checkbox is set one-way (auto-check only); the user un-checks it manually.
+  editor, editing a label to contain a keyword auto-checks "Hide" — one-way: removing the keyword
+  leaves the checkbox as-is, and the user un-checks it manually. The value entry's visibility
+  always tracks the "Hide" checkbox, so a field is never shown in cleartext while it will be
+  saved as sensitive.
 - **INV-10** The "Hide" checkbox is the source of truth for `sensitive` on save — the user can
   override the auto-detection either way.
 - **INV-11** In the detail view a sensitive field shows the mask string (8 bullets) until

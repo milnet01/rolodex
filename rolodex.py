@@ -57,13 +57,14 @@ def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
     ciphertext = f.encrypt(plaintext)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        with os.fdopen(fd, "wb") as fp:
-            fp.write(MAGIC)
-            fp.write(salt)
-            fp.write(ciphertext)
+        fp = os.fdopen(fd, "wb")
     except Exception:
-        os.close(fd)
+        os.close(fd)  # fdopen didn't take ownership of the fd; close it ourselves
         raise
+    with fp:
+        fp.write(MAGIC)
+        fp.write(salt)
+        fp.write(ciphertext)
 
 
 def load_vault(password: str, path: str) -> tuple[dict, bytes]:
@@ -180,6 +181,11 @@ def search_entries(vault: dict, query: str) -> list[tuple[str, dict]]:
 
 def list_entries(vault: dict) -> list[tuple[str, dict]]:
     return sorted(vault["entries"].items(), key=lambda x: x[1]["name"].lower())
+
+
+def entries_noun(n: int) -> str:
+    """'entry' for exactly one, else 'entries' — for count labels."""
+    return "entry" if n == 1 else "entries"
 
 
 # ---------------------------------------------------------------------------
@@ -733,7 +739,7 @@ class MainWindow(Adw.ApplicationWindow):
                 self.listbox.append(row)
                 if eid == select_id:
                     select_row = row
-            self.count_label.set_text(f"{len(entries)} of {total} entries")
+            self.count_label.set_text(f"{len(entries)} of {total} {entries_noun(total)}")
 
         elif categories:
             # Grouped view
@@ -768,7 +774,7 @@ class MainWindow(Adw.ApplicationWindow):
                             select_row = row
                 shown += len(uncat)
 
-            self.count_label.set_text(f"{total} entries")
+            self.count_label.set_text(f"{total} {entries_noun(total)}")
 
         else:
             # No categories: flat list (backward-compatible)
@@ -779,7 +785,7 @@ class MainWindow(Adw.ApplicationWindow):
                 self.listbox.append(row)
                 if eid == select_id:
                     select_row = row
-            self.count_label.set_text(f"{total} entries")
+            self.count_label.set_text(f"{total} {entries_noun(total)}")
 
         if select_row:
             self.listbox.select_row(select_row)
@@ -1218,11 +1224,12 @@ class MainWindow(Adw.ApplicationWindow):
         content = "\n".join(lines)
         fd = os.open(filepath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fp:
-                fp.write(content)
+            fp = os.fdopen(fd, "w", encoding="utf-8")
         except Exception:
-            os.close(fd)
+            os.close(fd)  # fdopen didn't take ownership of the fd; close it ourselves
             raise
+        with fp:
+            fp.write(content)
 
         self._toast(f"Exported {len(entries)} entries")
 
@@ -1372,14 +1379,17 @@ class FieldRow(Gtk.ListBoxRow):
         if sensitive:
             self.value_entry.set_visibility(False)
 
-        # Auto-detect sensitive on label change
+        # Value visibility always tracks the "Hide" checkbox, so a field is never shown in
+        # cleartext while it will be saved as sensitive.
+        def on_sens_toggled(check):
+            self.value_entry.set_visibility(not check.get_active())
+        self.sens_check.connect("toggled", on_sens_toggled)
+
+        # Auto-check "Hide" when the label gains a sensitive keyword (one-way; the user can
+        # un-check manually). Removing the keyword leaves the checkbox as-is.
         def on_label_changed(entry):
-            text = entry.get_text()
-            if is_sensitive_label(text):
+            if is_sensitive_label(entry.get_text()):
                 self.sens_check.set_active(True)
-                self.value_entry.set_visibility(False)
-            else:
-                self.value_entry.set_visibility(True)
         self.label_entry.connect("changed", on_label_changed)
 
         remove_btn = Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Remove field")

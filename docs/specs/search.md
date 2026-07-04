@@ -14,7 +14,8 @@ Retroactive spec for sidebar search (`search_entries`, `MainWindow._on_search_ch
 - **INV-5** While a query is active the sidebar shows a flat list of matches with **no category
   grouping**, regardless of whether categories exist.
 - **INV-6** The count label reads "`N` of `M` entries" during an active search (matches out of
-  total); with no active query it reads "`M` entries".
+  total); with no active query it reads "`M` entries". The noun is singularised — "entry" for
+  exactly one, else "entries" (via `entries_noun`), agreeing with `M`.
 - **INV-7** Clearing the search restores the normal view (grouped if categories exist, else
   flat) and re-selects the current entry if it is still visible. The query is stripped first, so
   a whitespace-only query counts as no active search (normal view).

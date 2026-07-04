@@ -42,8 +42,9 @@ Use a scratch vault, not your real one, while developing.
    agree on the approach before code exists.
 2. Branch from `main`: `git checkout -b <topic>`.
 3. Make the change. Keep the diff scoped to one concern.
-4. Manually exercise the affected flow end to end (there is no automated test suite yet — see
-   the roadmap). At minimum: create a vault, add/edit/delete an entry, quit and re-unlock.
+4. Run the tests (`pytest tests/`) and manually exercise the affected flow end to end (test
+   coverage is still a seed — see ROLO-0001). At minimum, manually: create a vault,
+   add/edit/delete an entry, quit and re-unlock.
 5. Update `CHANGELOG.md` under an *Unreleased* heading.
 6. Open a pull request describing what changed and how you verified it.
 

@@ -16,10 +16,20 @@ All notable changes to Rolodex are documented here. The format is based on
 - Expanded roadmap covering UI, UX, performance, refactoring, accessibility, theming,
   packaging (incl. self-contained Linux/Windows/macOS builds), and tooling
   (ROLO-0001 … ROLO-0032), not just security.
+- Seed automated test suite (`tests/test_vault.py`, pytest) covering the encryption round-trip,
+  wrong-password handling, `0600` permissions, migration idempotency, and the write-error
+  regression. Broader coverage is tracked as ROLO-0001.
 
 ### Changed
 - Import file picker now opens in the user's home directory instead of a hardcoded personal path.
 - `rolodex.desktop` ships with a placeholder install path and a `Security` category.
+- Entry count label now singularises ("1 entry" instead of "1 entries").
+
+### Fixed
+- Vault save and plaintext export no longer double-close the file descriptor on a write error,
+  which previously raised `OSError(EBADF)` and masked the original error. Regression-tested.
+- The Add/Edit field editor no longer shows a value in cleartext while it will be saved as
+  sensitive: value visibility now tracks the "Hide" checkbox.
 
 ## [1.0.0] - 2026-02-27
 

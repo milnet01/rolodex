@@ -36,12 +36,11 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
   `save_vault` and the plaintext export use `os.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)`;
   backups `shutil.copy2` then `os.chmod(..., 0o600)`. (Mode applies on creation — overwriting an
   existing file keeps its permissions; see `import-export-backup.md` INV-15.)
-- **INV-10** A write error is never silently swallowed — it propagates to the caller.
-  (Implementation note: `save_vault`/export wrap the fd in `with os.fdopen(fd, ...)`, which
-  already closes it on both success and error; the handler's extra `os.close(fd)` on the error
-  path therefore hits an already-closed fd and raises `OSError(EBADF)`, which can *mask* the
-  original write error. This is a latent bug flagged for a code cleanup — the manual close is
-  only needed for the narrow case where `os.fdopen` itself fails.)
+- **INV-10** A write error propagates to the caller rather than being silently swallowed, and
+  the *original* error surfaces (not a masking one). `save_vault`/export open the fd, hand it to
+  `os.fdopen` (a `with` block owns closing it), and call `os.close(fd)` manually only if
+  `os.fdopen` itself fails — so the fd is closed exactly once on every path (regression-tested in
+  `tests/test_vault.py`).
 
 ### Creation & migration
 
