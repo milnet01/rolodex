@@ -8,8 +8,9 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [1.1.0] - 2026-07-04
 
-First public release with prebuilt, self-contained binaries for Linux, Windows, and macOS,
-plus the full open-source documentation set and a round of review-driven bug fixes.
+First public release with prebuilt, self-contained binaries for **Linux and macOS** (a Windows
+build is in progress — see below), plus the full open-source documentation set and a round of
+review-driven bug fixes.
 
 ### Added
 - Public open-source release: MIT `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
@@ -25,9 +26,10 @@ plus the full open-source documentation set and a round of review-driven bug fix
   wrong-password handling, `0600` permissions, migration idempotency, and the write-error
   regression. Broader coverage is tracked as ROLO-0001.
 - Cross-platform packaging: a PyInstaller spec (`packaging/rolodex.spec`) and a GitHub Actions
-  workflow (`.github/workflows/build.yml`) that build a single-file, self-contained binary for
-  Linux, Windows, and macOS and publish them to a Release on `v*` tags. The Linux build is
-  verified; the Windows/macOS jobs are best-effort (GTK bundling) pending CI iteration.
+  workflow (`.github/workflows/build.yml`) that build a single-file, self-contained binary and
+  publish it to a Release on `v*` tags. Each build runs a `--selftest` gate on its native runner,
+  so only binaries that actually load the GTK stack are published. Linux and macOS pass and ship;
+  the Windows build currently fails its self-test (GTK bundle) and is withheld (ROLO-0031).
 
 ### Changed
 - Import file picker now opens in the user's home directory instead of a hardcoded personal path.
