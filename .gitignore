@@ -1,0 +1,15 @@
+# NEVER publish real credential data
+contacts.vault
+*.vault
+Backups/
+.rolodex.conf
+
+# Local export/import artifacts
+rolodex_export_*.txt
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor / OS cruft
+.claude/settings.local.json

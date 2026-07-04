@@ -1,0 +1,2482 @@
+#!/usr/bin/env python3
+"""Rolodex - Encrypted credential manager with GTK4/Adwaita GUI."""
+
+import base64
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import uuid
+from datetime import datetime
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+APP_ID = "com.rolodex.Contacts"
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+VAULT_FILE = os.path.join(APP_DIR, "contacts.vault")
+CONFIG_FILE = os.path.join(APP_DIR, ".rolodex.conf")
+MAGIC = b"VLT1"
+ITERATIONS = 600_000
+SENSITIVE_KEYWORDS = {"password", "pass", "secret", "key", "token", "pin", "authenticator"}
+MIN_PASSWORD_LENGTH = 8
+MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+
+# ---------------------------------------------------------------------------
+# Encryption layer
+# ---------------------------------------------------------------------------
+
+
+def derive_key(password: str, salt: bytes) -> bytes:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=ITERATIONS,
+    )
+    return base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
+
+
+def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
+    key = derive_key(password, salt)
+    f = Fernet(key)
+    plaintext = json.dumps(vault_data, ensure_ascii=False).encode("utf-8")
+    ciphertext = f.encrypt(plaintext)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fp:
+            fp.write(MAGIC)
+            fp.write(salt)
+            fp.write(ciphertext)
+    except Exception:
+        os.close(fd)
+        raise
+
+
+def load_vault(password: str, path: str) -> tuple[dict, bytes]:
+    with open(path, "rb") as fp:
+        magic = fp.read(4)
+        if magic != MAGIC:
+            raise ValueError("Not a valid vault file")
+        salt = fp.read(16)
+        ciphertext = fp.read()
+    key = derive_key(password, salt)
+    f = Fernet(key)
+    plaintext = f.decrypt(ciphertext)
+    return json.loads(plaintext.decode("utf-8")), salt
+
+
+def create_vault(password: str, path: str) -> tuple[dict, bytes]:
+    salt = os.urandom(16)
+    vault_data = {"version": 2, "categories": [], "entries": {}}
+    save_vault(vault_data, password, salt, path)
+    return vault_data, salt
+
+
+def migrate_vault(vault: dict) -> dict:
+    """Upgrade vault data to the latest version (v2). Idempotent."""
+    if "categories" not in vault:
+        vault["categories"] = []
+    for entry in vault["entries"].values():
+        if "category" not in entry:
+            entry["category"] = ""
+    vault["version"] = 2
+    return vault
+
+
+# ---------------------------------------------------------------------------
+# Data operations
+# ---------------------------------------------------------------------------
+
+
+def is_sensitive_label(label: str) -> bool:
+    label_lower = label.lower()
+    return any(kw in label_lower for kw in SENSITIVE_KEYWORDS)
+
+
+# Field category classification — order matters (first match wins)
+FIELD_CATEGORIES = [
+    ("credential", {"password", "pass", "pin", "authenticator", "guard"}),
+    ("key",        {"key", "token", "secret"}),
+    ("identity",   {"username", "user", "email", "mail", "account", "id", "gamertag", "tag"}),
+    ("url",        {"url", "website", "link", "domain", "http"}),
+    ("date",       {"date", "expires", "expiry", "plus", "subscription", "renewal", "expire"}),
+]
+
+
+def field_category(label: str) -> str:
+    """Classify a field label into a category for color-coding."""
+    label_lower = label.lower()
+    for category, keywords in FIELD_CATEGORIES:
+        if any(kw in label_lower for kw in keywords):
+            return category
+    return "other"
+
+
+def add_entry(vault: dict, name: str, fields: list[dict], notes: str = "", category: str = "") -> str:
+    entry_id = str(uuid.uuid4())
+    now = datetime.now().isoformat()
+    vault["entries"][entry_id] = {
+        "name": name,
+        "category": category,
+        "fields": fields,
+        "notes": notes,
+        "created": now,
+        "modified": now,
+    }
+    return entry_id
+
+
+def update_entry(vault, entry_id, name=None, fields=None, notes=None, category=None):
+    entry = vault["entries"][entry_id]
+    if name is not None:
+        entry["name"] = name
+    if fields is not None:
+        entry["fields"] = fields
+    if notes is not None:
+        entry["notes"] = notes
+    if category is not None:
+        entry["category"] = category
+    entry["modified"] = datetime.now().isoformat()
+
+
+def delete_entry(vault: dict, entry_id: str) -> None:
+    del vault["entries"][entry_id]
+
+
+def search_entries(vault: dict, query: str) -> list[tuple[str, dict]]:
+    query_lower = query.lower()
+    results = []
+    for eid, entry in vault["entries"].items():
+        if query_lower in entry["name"].lower():
+            results.append((eid, entry))
+            continue
+        if entry.get("category") and query_lower in entry["category"].lower():
+            results.append((eid, entry))
+            continue
+        matched = False
+        for field in entry["fields"]:
+            if query_lower in field["label"].lower() or query_lower in field["value"].lower():
+                results.append((eid, entry))
+                matched = True
+                break
+        if not matched and entry.get("notes") and query_lower in entry["notes"].lower():
+            results.append((eid, entry))
+    return sorted(results, key=lambda x: x[1]["name"].lower())
+
+
+def list_entries(vault: dict) -> list[tuple[str, dict]]:
+    return sorted(vault["entries"].items(), key=lambda x: x[1]["name"].lower())
+
+
+# ---------------------------------------------------------------------------
+# Category helpers
+# ---------------------------------------------------------------------------
+
+
+def add_category(vault: dict, name: str) -> bool:
+    """Add a category. Returns False if it already exists."""
+    if name in vault["categories"]:
+        return False
+    vault["categories"].append(name)
+    return True
+
+
+def rename_category(vault: dict, old_name: str, new_name: str) -> None:
+    idx = vault["categories"].index(old_name)
+    vault["categories"][idx] = new_name
+    for entry in vault["entries"].values():
+        if entry.get("category") == old_name:
+            entry["category"] = new_name
+
+
+def delete_category(vault: dict, name: str) -> None:
+    vault["categories"].remove(name)
+    for entry in vault["entries"].values():
+        if entry.get("category") == name:
+            entry["category"] = ""
+
+
+def entries_by_category(vault: dict) -> dict[str, list[tuple[str, dict]]]:
+    """Return {category_name: [(eid, entry), ...]} with entries sorted by name.
+    Uncategorised entries are under key ''."""
+    groups: dict[str, list] = {}
+    for eid, entry in vault["entries"].items():
+        cat = entry.get("category", "")
+        # Treat orphaned category references as uncategorised
+        if cat and cat not in vault["categories"]:
+            cat = ""
+        groups.setdefault(cat, []).append((eid, entry))
+    for lst in groups.values():
+        lst.sort(key=lambda x: x[1]["name"].lower())
+    return groups
+
+
+# ---------------------------------------------------------------------------
+# Import parser
+# ---------------------------------------------------------------------------
+
+
+def parse_text_file(filepath: str) -> list[dict]:
+    with open(filepath, "r", encoding="utf-8") as fp:
+        content = fp.read()
+    blocks = re.split(r"\n\s*\n", content.strip())
+    entries = []
+    for block in blocks:
+        lines = block.strip().split("\n")
+        if not lines:
+            continue
+        name = lines[0].rstrip(":").strip()
+        fields = []
+        notes_lines = []
+        for line in lines[1:]:
+            match = re.match(r"^([^:]+?):\s+(.+)$", line)
+            if match:
+                label = match.group(1).strip()
+                value = match.group(2).strip()
+                fields.append({"label": label, "value": value, "sensitive": is_sensitive_label(label)})
+            elif line.strip():
+                notes_lines.append(line.strip())
+        entries.append({"name": name, "fields": fields, "notes": "\n".join(notes_lines)})
+    return entries
+
+
+def import_entries(vault, parsed, skip_duplicates=True):
+    existing_names = {e["name"].lower() for e in vault["entries"].values()}
+    imported = skipped = 0
+    for entry_data in parsed:
+        if skip_duplicates and entry_data["name"].lower() in existing_names:
+            skipped += 1
+            continue
+        add_entry(vault, entry_data["name"], entry_data["fields"], entry_data["notes"])
+        existing_names.add(entry_data["name"].lower())
+        imported += 1
+    return imported, skipped
+
+
+# ---------------------------------------------------------------------------
+# Clipboard
+# ---------------------------------------------------------------------------
+
+
+def copy_to_clipboard(text: str) -> bool:
+    for cmd in [
+        ["wl-copy", "--trim-newline"],
+        ["xclip", "-selection", "clipboard"],
+        ["xsel", "--clipboard", "--input"],
+    ]:
+        if shutil.which(cmd[0]):
+            try:
+                proc = subprocess.run(cmd, input=text.encode("utf-8"), capture_output=True, timeout=5)
+                return proc.returncode == 0
+            except (subprocess.TimeoutExpired, OSError):
+                continue
+    return False
+
+
+# ===========================================================================
+# ---------------------------------------------------------------------------
+# Window geometry config
+# ---------------------------------------------------------------------------
+
+
+def load_config() -> dict:
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_config(data: dict) -> None:
+    try:
+        existing = load_config()
+        existing.update(data)
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(existing, f)
+    except OSError:
+        pass
+
+
+# ===========================================================================
+# GTK4 / Adwaita GUI
+# ===========================================================================
+
+
+class UnlockDialog(Gtk.Window):
+    """Initial password dialog - unlock existing vault or create new one."""
+
+    def __init__(self, app, vault_path, is_new):
+        super().__init__(title="Rolodex", application=app)
+        self.app = app
+        self.vault_path = vault_path
+        self.is_new = is_new
+        self.set_default_size(380, -1)
+        self.set_resizable(False)
+
+        # Header bar
+        header = Adw.HeaderBar()
+        header.set_show_end_title_buttons(True)
+
+        # Main layout
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        outer.append(header)
+
+        clamp = Adw.Clamp(maximum_size=340)
+        clamp.set_margin_top(24)
+        clamp.set_margin_bottom(24)
+        clamp.set_margin_start(24)
+        clamp.set_margin_end(24)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+
+        # Icon / title
+        title = Gtk.Label(label="Rolodex")
+        title.add_css_class("unlock-title")
+        vbox.append(title)
+
+        if is_new:
+            sub = Gtk.Label(label="Create a master password to encrypt your vault.")
+            sub.set_wrap(True)
+            sub.add_css_class("dim-label")
+            vbox.append(sub)
+
+        # Password field(s) using Adw.PasswordEntryRow
+        pw_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        pw_list.add_css_class("boxed-list")
+
+        self.pw_entry = Adw.PasswordEntryRow(title="Master password")
+        pw_list.append(self.pw_entry)
+
+        if is_new:
+            self.pw_confirm = Adw.PasswordEntryRow(title="Confirm password")
+            pw_list.append(self.pw_confirm)
+
+        vbox.append(pw_list)
+
+        # Enter key support — capture phase so we see it before the entry row
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        key_ctrl.connect("key-pressed", self._on_key_pressed)
+        self.add_controller(key_ctrl)
+
+        # Status label
+        self.status = Gtk.Label()
+        self.status.add_css_class("error")
+        self.status.set_visible(False)
+        vbox.append(self.status)
+
+        # Unlock / Create button
+        btn_label = "Create Vault" if is_new else "Unlock"
+        self.btn = Gtk.Button(label=btn_label)
+        self.btn.add_css_class("suggested-action")
+        self.btn.add_css_class("pill")
+        self.btn.connect("clicked", self._on_activate)
+        vbox.append(self.btn)
+
+        clamp.set_child(vbox)
+        outer.append(clamp)
+        self.set_child(outer)
+
+    def _on_key_pressed(self, controller, keyval, keycode, state):
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            self._on_activate()
+            return True
+        return False
+
+    def _show_error(self, msg):
+        self.status.set_text(msg)
+        self.status.set_visible(True)
+
+    def _on_activate(self, *_args):
+        pw = self.pw_entry.get_text()
+        if not pw:
+            self._show_error("Please enter a password.")
+            return
+
+        if self.is_new:
+            if len(pw) < MIN_PASSWORD_LENGTH:
+                self._show_error(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+                return
+            pw2 = self.pw_confirm.get_text()
+            if pw != pw2:
+                self._show_error("Passwords do not match.")
+                return
+            try:
+                vault, salt = create_vault(pw, self.vault_path)
+            except Exception as e:
+                self._show_error(str(e))
+                return
+            self.app.open_main(vault, salt, pw, self.vault_path)
+            self.close()
+        else:
+            self.btn.set_sensitive(False)
+            self.btn.set_label("Unlocking...")
+            # Run decryption in a thread so the UI doesn't freeze
+            import threading
+            threading.Thread(target=self._try_unlock, args=(pw,), daemon=True).start()
+
+    def _try_unlock(self, pw):
+        try:
+            vault, salt = load_vault(pw, self.vault_path)
+            GLib.idle_add(self._unlock_ok, vault, salt, pw)
+        except InvalidToken:
+            GLib.idle_add(self._unlock_fail, "Wrong password.")
+        except Exception as e:
+            GLib.idle_add(self._unlock_fail, str(e))
+
+    def _unlock_ok(self, vault, salt, pw):
+        migrate_vault(vault)
+        self.app.open_main(vault, salt, pw, self.vault_path)
+        self.close()
+
+    def _unlock_fail(self, msg):
+        self.btn.set_sensitive(True)
+        self.btn.set_label("Unlock")
+        self._show_error(msg)
+        self.pw_entry.grab_focus()
+
+
+# --------------------------------------------------------------------------
+# Entry row widget for the sidebar list
+# --------------------------------------------------------------------------
+
+
+class EntryRow(Gtk.ListBoxRow):
+    def __init__(self, entry_id: str, name: str):
+        super().__init__()
+        self.entry_id = entry_id
+        label = Gtk.Label(label=name, xalign=0, hexpand=True)
+        label.set_ellipsize(3)  # Pango.EllipsizeMode.END
+        label.set_margin_top(8)
+        label.set_margin_bottom(8)
+        label.set_margin_start(8)
+        label.set_margin_end(8)
+        self.label = label
+        self.set_child(label)
+
+        # Drag source for drag-and-drop between categories
+        drag_src = Gtk.DragSource()
+        drag_src.set_actions(Gdk.DragAction.MOVE)
+        drag_src.connect("prepare", self._on_drag_prepare)
+        drag_src.connect("drag-begin", self._on_drag_begin)
+        self.add_controller(drag_src)
+
+    def _on_drag_prepare(self, source, x, y):
+        return Gdk.ContentProvider.new_for_value(self)
+
+    def _on_drag_begin(self, source, drag):
+        icon = Gtk.DragIcon.get_for_drag(drag)
+        lbl = Gtk.Label(label=self.label.get_text() or "Entry")
+        lbl.add_css_class("caption")
+        lbl.set_margin_top(6)
+        lbl.set_margin_bottom(6)
+        lbl.set_margin_start(12)
+        lbl.set_margin_end(12)
+        icon.set_child(lbl)
+
+
+# --------------------------------------------------------------------------
+# Category header row for sidebar
+# --------------------------------------------------------------------------
+
+
+class CategoryHeaderRow(Gtk.ListBoxRow):
+    """Non-selectable header row with disclosure arrow, category name, count badge."""
+
+    def __init__(self, category_name: str, count: int, collapsed: bool):
+        super().__init__()
+        self.category_name = category_name
+        self.set_selectable(False)
+        self.set_activatable(True)
+        self.add_css_class("category-header-row")
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
+
+        # Disclosure arrow
+        arrow_icon = "pan-end-symbolic" if collapsed else "pan-down-symbolic"
+        self.arrow = Gtk.Image(icon_name=arrow_icon)
+        self.arrow.add_css_class("dim-label")
+        box.append(self.arrow)
+
+        # Category name
+        display_name = category_name if category_name else "Uncategorised"
+        name_label = Gtk.Label(label=display_name.upper(), xalign=0, hexpand=True)
+        name_label.add_css_class("category-header-label")
+        box.append(name_label)
+
+        # Count badge
+        count_label = Gtk.Label(label=str(count))
+        count_label.add_css_class("category-count")
+        box.append(count_label)
+
+        self.set_child(box)
+
+        # Drop target for dragging entries onto this category
+        drop = Gtk.DropTarget(actions=Gdk.DragAction.MOVE)
+        drop.set_gtypes([EntryRow])
+        drop.connect("enter", self._on_drop_enter)
+        drop.connect("leave", self._on_drop_leave)
+        drop.connect("drop", self._on_drop)
+        self.add_controller(drop)
+
+    def _on_drop_enter(self, target, x, y):
+        self.add_css_class("category-drop-hover")
+        return Gdk.DragAction.MOVE
+
+    def _on_drop_leave(self, target):
+        self.remove_css_class("category-drop-hover")
+
+    def _on_drop(self, target, dragged_row, x, y):
+        self.remove_css_class("category-drop-hover")
+        if not isinstance(dragged_row, EntryRow):
+            return False
+        # Find the MainWindow ancestor
+        widget = self.get_root()
+        if hasattr(widget, "_move_entry_to_category"):
+            widget._move_entry_to_category(dragged_row.entry_id, self.category_name)
+        return True
+
+
+# --------------------------------------------------------------------------
+# Main window
+# --------------------------------------------------------------------------
+
+
+class MainWindow(Adw.ApplicationWindow):
+    def __init__(self, app, vault, salt, password, vault_path):
+        super().__init__(application=app, title="Rolodex")
+        self.app_ref = app
+        self.vault = vault
+        self.salt = salt
+        self.password = password
+        self.vault_path = vault_path
+        self._revealed = False
+
+        # Restore saved window size or use defaults
+        conf = load_config()
+        w = conf.get("window_width", 820)
+        h = conf.get("window_height", 580)
+        self.set_default_size(w, h)
+        if conf.get("window_maximized"):
+            self.maximize()
+
+        self.connect("close-request", self._on_close_request)
+
+        # --- Header bar with actions ---
+        header = Adw.HeaderBar()
+
+        # Left side: Add button
+        add_btn = Gtk.Button(icon_name="list-add-symbolic", tooltip_text="Add entry")
+        add_btn.connect("clicked", self._on_add)
+        header.pack_start(add_btn)
+
+        # Right side: menu
+        menu = Gio.Menu()
+        menu.append("Manage categories...", "win.manage-categories")
+        menu.append("Import from text file...", "win.import")
+        menu.append("Backup vault...", "win.backup")
+        menu.append("Restore vault from backup...", "win.restore")
+        menu.append("Export (decrypted plaintext)...", "win.export")
+        menu.append("Change master password...", "win.chpass")
+        menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu)
+        header.pack_end(menu_btn)
+
+        # Actions
+        for name, callback in [
+            ("manage-categories", self._on_manage_categories),
+            ("import", self._on_import),
+            ("backup", self._on_backup),
+            ("restore", self._on_restore),
+            ("export", self._on_export),
+            ("chpass", self._on_change_password),
+        ]:
+            action = Gio.SimpleAction(name=name)
+            action.connect("activate", callback)
+            self.add_action(action)
+
+        # "Move to category" action for right-click context menu
+        move_action = Gio.SimpleAction(name="move-to-category", parameter_type=GLib.VariantType.new("(ss)"))
+        move_action.connect("activate", self._on_move_to_category_action)
+        self.add_action(move_action)
+
+        # --- Paned: sidebar | detail ---
+        paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        paned.add_css_class("main-paned")
+        paned.set_shrink_start_child(False)
+        paned.set_shrink_end_child(False)
+        paned.set_position(260)
+
+        # ---- Left sidebar ----
+        left_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        left_box.add_css_class("sidebar-box")
+
+        # Search
+        self.search_entry = Gtk.SearchEntry(placeholder_text="Search entries...")
+        self.search_entry.set_margin_top(8)
+        self.search_entry.set_margin_start(8)
+        self.search_entry.set_margin_end(8)
+        self.search_entry.set_margin_bottom(4)
+        self.search_entry.connect("search-changed", self._on_search_changed)
+        left_box.append(self.search_entry)
+
+        # Count label
+        self.count_label = Gtk.Label(xalign=0)
+        self.count_label.add_css_class("count-label")
+        self.count_label.add_css_class("caption")
+        self.count_label.set_margin_start(12)
+        self.count_label.set_margin_bottom(4)
+        left_box.append(self.count_label)
+
+        # List box in a scrolled window
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        self.listbox = Gtk.ListBox()
+        self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.listbox.add_css_class("navigation-sidebar")
+        self.listbox.connect("row-selected", self._on_row_selected)
+        self.listbox.connect("row-activated", self._on_row_activated)
+        scroll.set_child(self.listbox)
+        left_box.append(scroll)
+
+        paned.set_start_child(left_box)
+
+        # ---- Right detail pane ----
+        self.detail_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        self.detail_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.detail_scroll.set_child(self.detail_box)
+
+        # Placeholder when nothing selected
+        self.placeholder = Adw.StatusPage(
+            title="Select an entry",
+            description="Choose an entry from the list, or add a new one.",
+            icon_name="contact-new-symbolic",
+        )
+        self.placeholder.set_vexpand(True)
+
+        # Stack: placeholder vs detail
+        self.detail_stack = Gtk.Stack()
+        self.detail_stack.add_named(self.placeholder, "empty")
+        self.detail_stack.add_named(self.detail_scroll, "detail")
+        self.detail_stack.set_visible_child_name("empty")
+
+        paned.set_end_child(self.detail_stack)
+
+        # --- Assemble with toast overlay ---
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        main_box.append(header)
+        main_box.append(paned)
+        self._toast_overlay = Adw.ToastOverlay()
+        self._toast_overlay.set_child(main_box)
+        self.set_content(self._toast_overlay)
+
+        self._current_entry_id = None
+        self._collapsed_categories: set[str] = set()
+        migrate_vault(self.vault)
+        self._refresh_list()
+
+    # ------------------------------------------------------------------
+    # Vault persistence
+    # ------------------------------------------------------------------
+
+    def _save(self):
+        save_vault(self.vault, self.password, self.salt, self.vault_path)
+
+    def _on_close_request(self, *_args):
+        save_config({
+            "window_width": self.get_width(),
+            "window_height": self.get_height(),
+            "window_maximized": self.is_maximized(),
+        })
+        return False  # allow the window to close
+
+    # ------------------------------------------------------------------
+    # Sidebar list
+    # ------------------------------------------------------------------
+
+    def _refresh_list(self, select_id=None):
+        query = self.search_entry.get_text().strip()
+        categories = self.vault.get("categories", [])
+
+        # Clear list
+        while True:
+            row = self.listbox.get_row_at_index(0)
+            if row is None:
+                break
+            self.listbox.remove(row)
+
+        select_row = None
+        total = len(self.vault["entries"])
+
+        if query:
+            # Search active: flat list, no grouping
+            entries = search_entries(self.vault, query)
+            for eid, entry in entries:
+                row = EntryRow(eid, entry["name"])
+                self._attach_entry_context_menu(row)
+                self.listbox.append(row)
+                if eid == select_id:
+                    select_row = row
+            self.count_label.set_text(f"{len(entries)} of {total} entries")
+
+        elif categories:
+            # Grouped view
+            groups = entries_by_category(self.vault)
+            shown = 0
+            for cat_name in categories:
+                cat_entries = groups.get(cat_name, [])
+                collapsed = cat_name in self._collapsed_categories
+                header = CategoryHeaderRow(cat_name, len(cat_entries), collapsed)
+                self.listbox.append(header)
+                if not collapsed:
+                    for eid, entry in cat_entries:
+                        row = EntryRow(eid, entry["name"])
+                        self._attach_entry_context_menu(row)
+                        self.listbox.append(row)
+                        if eid == select_id:
+                            select_row = row
+                shown += len(cat_entries)
+
+            # Uncategorised last
+            uncat = groups.get("", [])
+            if uncat:
+                collapsed = "" in self._collapsed_categories
+                header = CategoryHeaderRow("", len(uncat), collapsed)
+                self.listbox.append(header)
+                if not collapsed:
+                    for eid, entry in uncat:
+                        row = EntryRow(eid, entry["name"])
+                        self._attach_entry_context_menu(row)
+                        self.listbox.append(row)
+                        if eid == select_id:
+                            select_row = row
+                shown += len(uncat)
+
+            self.count_label.set_text(f"{total} entries")
+
+        else:
+            # No categories: flat list (backward-compatible)
+            entries = list_entries(self.vault)
+            for eid, entry in entries:
+                row = EntryRow(eid, entry["name"])
+                self._attach_entry_context_menu(row)
+                self.listbox.append(row)
+                if eid == select_id:
+                    select_row = row
+            self.count_label.set_text(f"{total} entries")
+
+        if select_row:
+            self.listbox.select_row(select_row)
+        elif self._current_entry_id:
+            # Try to re-select current entry
+            idx = 0
+            while True:
+                row = self.listbox.get_row_at_index(idx)
+                if row is None:
+                    break
+                if isinstance(row, EntryRow) and row.entry_id == self._current_entry_id:
+                    self.listbox.select_row(row)
+                    return
+                idx += 1
+            # Entry gone or collapsed, clear detail
+            self._current_entry_id = None
+            self.detail_stack.set_visible_child_name("empty")
+
+    def _on_search_changed(self, entry):
+        self._refresh_list()
+
+    def _on_row_selected(self, listbox, row):
+        if row is None:
+            self._current_entry_id = None
+            self.detail_stack.set_visible_child_name("empty")
+            return
+        if isinstance(row, CategoryHeaderRow):
+            return
+        self._current_entry_id = row.entry_id
+        self._revealed = False
+        self._show_detail(row.entry_id)
+
+    def _on_row_activated(self, listbox, row):
+        if isinstance(row, CategoryHeaderRow):
+            cat = row.category_name
+            if cat in self._collapsed_categories:
+                self._collapsed_categories.discard(cat)
+            else:
+                self._collapsed_categories.add(cat)
+            self._refresh_list()
+
+    # ------------------------------------------------------------------
+    # Detail pane
+    # ------------------------------------------------------------------
+
+    def _show_detail(self, entry_id):
+        if entry_id not in self.vault["entries"]:
+            self.detail_stack.set_visible_child_name("empty")
+            return
+        entry = self.vault["entries"][entry_id]
+        self.detail_stack.set_visible_child_name("detail")
+
+        # Clear old contents
+        child = self.detail_box.get_first_child()
+        while child:
+            next_child = child.get_next_sibling()
+            self.detail_box.remove(child)
+            child = next_child
+
+        clamp = Adw.Clamp(maximum_size=560)
+        clamp.set_margin_top(20)
+        clamp.set_margin_bottom(20)
+        clamp.set_margin_start(20)
+        clamp.set_margin_end(20)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        # Entry name header
+        name_label = Gtk.Label(label=entry["name"], xalign=0)
+        name_label.add_css_class("title-2")
+        name_label.add_css_class("entry-title")
+        name_label.set_selectable(True)
+        name_label.set_wrap(True)
+        vbox.append(name_label)
+
+        # Separator
+        vbox.append(Gtk.Separator())
+
+        # Fields in an Adw.PreferencesGroup style
+        fields_group = Gtk.ListBox()
+        fields_group.set_selection_mode(Gtk.SelectionMode.NONE)
+        fields_group.add_css_class("boxed-list")
+
+        for i, field in enumerate(entry["fields"]):
+            row = Adw.ActionRow()
+            row.set_title(GLib.markup_escape_text(field["label"]))
+            row.add_css_class(f"field-{field_category(field['label'])}")
+
+            # Value display
+            if field.get("sensitive") and not self._revealed:
+                display = MASK
+            else:
+                display = field["value"]
+
+            val_label = Gtk.Label(label=display)
+            val_label.set_selectable(True)
+            if field.get("sensitive") and not self._revealed:
+                val_label.add_css_class("field-masked")
+            elif field.get("sensitive") and self._revealed:
+                val_label.add_css_class("field-revealed-sensitive")
+            row.add_suffix(val_label)
+
+            # Copy button
+            copy_btn = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
+                                  tooltip_text=f"Copy {field['label']}")
+            copy_btn.add_css_class("flat")
+            copy_btn.add_css_class("copy-btn")
+            copy_btn.connect("clicked", self._make_copy_handler(field["value"], field["label"]))
+            row.add_suffix(copy_btn)
+
+            fields_group.append(row)
+
+        vbox.append(fields_group)
+
+        # Notes
+        if entry.get("notes"):
+            notes_label_header = Gtk.Label(label="Notes", xalign=0)
+            notes_label_header.add_css_class("heading")
+            notes_label_header.set_margin_top(8)
+            vbox.append(notes_label_header)
+
+            notes_frame = Gtk.Frame()
+            notes_frame.add_css_class("notes-frame")
+            notes_text = Gtk.Label(label=entry["notes"], xalign=0, selectable=True, wrap=True)
+            notes_text.set_margin_top(8)
+            notes_text.set_margin_bottom(8)
+            notes_text.set_margin_start(12)
+            notes_text.set_margin_end(12)
+            notes_frame.set_child(notes_text)
+            vbox.append(notes_frame)
+
+        # Action buttons row
+        btn_box = Gtk.Box(spacing=8, margin_top=12)
+        btn_box.set_halign(Gtk.Align.START)
+
+        toggle_text = "Hide sensitive" if self._revealed else "Reveal sensitive"
+        reveal_btn = Gtk.Button(label=toggle_text)
+        reveal_btn.add_css_class("reveal-btn")
+        reveal_btn.connect("clicked", self._on_toggle_reveal, entry_id)
+        btn_box.append(reveal_btn)
+
+        edit_btn = Gtk.Button(label="Edit")
+        edit_btn.add_css_class("edit-btn")
+        edit_btn.connect("clicked", self._on_edit, entry_id)
+        btn_box.append(edit_btn)
+
+        delete_btn = Gtk.Button(label="Delete")
+        delete_btn.add_css_class("destructive-action")
+        delete_btn.connect("clicked", self._on_delete, entry_id)
+        btn_box.append(delete_btn)
+
+        vbox.append(btn_box)
+
+        # Timestamps
+        ts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin_top=16)
+        created = entry.get("created", "")[:19].replace("T", " ")
+        modified = entry.get("modified", "")[:19].replace("T", " ")
+        ts_created = Gtk.Label(label=f"Created: {created}", xalign=0)
+        ts_created.add_css_class("timestamp")
+        ts_modified = Gtk.Label(label=f"Modified: {modified}", xalign=0)
+        ts_modified.add_css_class("timestamp")
+        ts_box.append(ts_created)
+        ts_box.append(ts_modified)
+        vbox.append(ts_box)
+
+        clamp.set_child(vbox)
+        self.detail_box.append(clamp)
+
+    def _make_copy_handler(self, value, label):
+        def handler(_btn):
+            if copy_to_clipboard(value):
+                self._toast(f"Copied {label}")
+            else:
+                self._toast("Clipboard not available")
+        return handler
+
+    def _toast(self, msg):
+        self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=2))
+
+    def _on_toggle_reveal(self, btn, entry_id):
+        self._revealed = not self._revealed
+        self._show_detail(entry_id)
+
+    # ------------------------------------------------------------------
+    # Delete
+    # ------------------------------------------------------------------
+
+    def _on_delete(self, btn, entry_id):
+        entry = self.vault["entries"][entry_id]
+        dialog = Adw.AlertDialog(
+            heading="Delete entry?",
+            body=f'Delete "{entry["name"]}"? This cannot be undone.',
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("delete", "Delete")
+        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_delete_response, entry_id)
+        dialog.present(self)
+
+    def _on_delete_response(self, dialog, response, entry_id):
+        if response == "delete":
+            delete_entry(self.vault, entry_id)
+            self._save()
+            self._current_entry_id = None
+            self.detail_stack.set_visible_child_name("empty")
+            self._refresh_list()
+            self._toast("Entry deleted")
+
+    # ------------------------------------------------------------------
+    # Add entry dialog
+    # ------------------------------------------------------------------
+
+    def _on_add(self, *_args):
+        dialog = AddEditDialog(self, "Add Entry")
+        dialog.present(self)
+
+    def _finish_add(self, name, fields, notes, category=""):
+        eid = add_entry(self.vault, name, fields, notes, category=category)
+        self._save()
+        self._refresh_list(select_id=eid)
+        self._toast(f'Added "{name}"')
+
+    # ------------------------------------------------------------------
+    # Edit entry dialog
+    # ------------------------------------------------------------------
+
+    def _on_edit(self, btn, entry_id):
+        entry = self.vault["entries"][entry_id]
+        dialog = AddEditDialog(self, "Edit Entry", entry_id=entry_id, entry=entry)
+        dialog.present(self)
+
+    def _finish_edit(self, entry_id, name, fields, notes, category=""):
+        update_entry(self.vault, entry_id, name=name, fields=fields, notes=notes, category=category)
+        self._save()
+        self._refresh_list(select_id=entry_id)
+        self._show_detail(entry_id)
+        self._toast("Entry updated")
+
+    # ------------------------------------------------------------------
+    # Import
+    # ------------------------------------------------------------------
+
+    def _on_import(self, *_args):
+        chooser = Gtk.FileDialog()
+        chooser.set_title("Import from text file")
+        txt_filter = Gtk.FileFilter()
+        txt_filter.set_name("Text files")
+        txt_filter.add_mime_type("text/plain")
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name("All files")
+        all_filter.add_pattern("*")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(txt_filter)
+        filters.append(all_filter)
+        chooser.set_filters(filters)
+
+        # Start the picker in the user's home directory
+        home = GLib.get_home_dir()
+        if home:
+            chooser.set_initial_folder(Gio.File.new_for_path(home))
+
+        chooser.open(self, None, self._on_import_file_chosen)
+
+    def _on_import_file_chosen(self, chooser, result):
+        try:
+            gfile = chooser.open_finish(result)
+        except GLib.Error:
+            return
+        filepath = gfile.get_path()
+        if not filepath:
+            return
+
+        try:
+            parsed = parse_text_file(filepath)
+        except Exception as e:
+            self._show_message("Import Error", str(e))
+            return
+
+        if not parsed:
+            self._show_message("Import", "No entries found in file.")
+            return
+
+        # Show preview dialog
+        dialog = ImportPreviewDialog(self, parsed, filepath)
+        dialog.present(self)
+
+    def _finish_import(self, parsed):
+        imported, skipped = import_entries(self.vault, parsed)
+        self._save()
+        self._refresh_list()
+        msg = f"Imported {imported} entries."
+        if skipped:
+            msg += f" Skipped {skipped} duplicates."
+        self._toast(msg)
+
+    # ------------------------------------------------------------------
+    # Backup (encrypted copy)
+    # ------------------------------------------------------------------
+
+    def _on_backup(self, *_args):
+        # Save latest state first
+        self._save()
+
+        save_dialog = Gtk.FileDialog()
+        save_dialog.set_title("Backup vault to...")
+        default_name = f"contacts_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.vault"
+        save_dialog.set_initial_name(default_name)
+        save_dialog.save(self, None, self._on_backup_file_chosen)
+
+    def _on_backup_file_chosen(self, chooser, result):
+        try:
+            gfile = chooser.save_finish(result)
+        except GLib.Error:
+            return
+        filepath = gfile.get_path()
+        if not filepath:
+            return
+        try:
+            shutil.copy2(self.vault_path, filepath)
+            os.chmod(filepath, 0o600)
+            self._toast("Vault backed up")
+        except Exception as e:
+            self._show_message("Backup Error", str(e))
+
+    # ------------------------------------------------------------------
+    # Restore (from encrypted backup)
+    # ------------------------------------------------------------------
+
+    def _on_restore(self, *_args):
+        dialog = Adw.AlertDialog(
+            heading="Restore from backup",
+            body="This will replace all current entries with the backup contents. You will need to enter the backup's master password.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("restore", "Restore")
+        dialog.set_response_appearance("restore", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_restore_confirmed)
+        dialog.present(self)
+
+    def _on_restore_confirmed(self, dialog, response):
+        if response != "restore":
+            return
+        chooser = Gtk.FileDialog()
+        chooser.set_title("Select vault backup")
+        vault_filter = Gtk.FileFilter()
+        vault_filter.set_name("Vault files")
+        vault_filter.add_pattern("*.vault")
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name("All files")
+        all_filter.add_pattern("*")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(vault_filter)
+        filters.append(all_filter)
+        chooser.set_filters(filters)
+        chooser.open(self, None, self._on_restore_file_chosen)
+
+    def _on_restore_file_chosen(self, chooser, result):
+        try:
+            gfile = chooser.open_finish(result)
+        except GLib.Error:
+            return
+        filepath = gfile.get_path()
+        if not filepath:
+            return
+        # Prompt for the backup's master password
+        self._restore_path = filepath
+        pw_dialog = RestorePasswordDialog(self)
+        pw_dialog.present(self)
+
+    def _finish_restore(self, vault, salt, password):
+        migrate_vault(vault)
+        self.vault = vault
+        self.salt = salt
+        self.password = password
+        self._save()
+        self._current_entry_id = None
+        self.detail_stack.set_visible_child_name("empty")
+        self._refresh_list()
+        count = len(self.vault["entries"])
+        self._toast(f"Restored {count} entries from backup")
+
+    # ------------------------------------------------------------------
+    # Export (decrypted plaintext)
+    # ------------------------------------------------------------------
+
+    def _on_export(self, *_args):
+        dialog = Adw.AlertDialog(
+            heading="Export decrypted backup",
+            body="This will export all entries in plaintext. Continue?",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("export", "Export")
+        dialog.set_response_appearance("export", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_export_confirmed)
+        dialog.present(self)
+
+    def _on_export_confirmed(self, dialog, response):
+        if response != "export":
+            return
+
+        save_dialog = Gtk.FileDialog()
+        save_dialog.set_title("Export to file")
+        default_name = f"rolodex_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        save_dialog.set_initial_name(default_name)
+        save_dialog.save(self, None, self._on_export_file_chosen)
+
+    def _on_export_file_chosen(self, chooser, result):
+        try:
+            gfile = chooser.save_finish(result)
+        except GLib.Error:
+            return
+        filepath = gfile.get_path()
+        if not filepath:
+            return
+
+        entries = list_entries(self.vault)
+        lines = []
+        for eid, entry in entries:
+            lines.append(entry["name"])
+            if entry.get("category"):
+                lines.append(f"  Category: {entry['category']}")
+            max_label = max((len(f["label"]) for f in entry["fields"]), default=0)
+            for field in entry["fields"]:
+                label = field["label"].ljust(max_label)
+                lines.append(f"  {label}  {field['value']}")
+            if entry.get("notes"):
+                lines.append(f"  Notes: {entry['notes']}")
+            lines.append("")
+
+        content = "\n".join(lines)
+        fd = os.open(filepath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fp:
+                fp.write(content)
+        except Exception:
+            os.close(fd)
+            raise
+
+        self._toast(f"Exported {len(entries)} entries")
+
+    # ------------------------------------------------------------------
+    # Change password
+    # ------------------------------------------------------------------
+
+    def _on_change_password(self, *_args):
+        dialog = ChangePasswordDialog(self)
+        dialog.present(self)
+
+    def _finish_change_password(self, new_pw):
+        self.password = new_pw
+        self.salt = os.urandom(16)
+        self._save()
+        self._toast("Master password changed")
+
+    # ------------------------------------------------------------------
+    # Category management
+    # ------------------------------------------------------------------
+
+    def _on_manage_categories(self, *_args):
+        dialog = ManageCategoriesDialog(self)
+        dialog.present(self)
+
+    def _move_entry_to_category(self, entry_id, category):
+        """Move an entry to a category ('' = Uncategorised). Saves vault."""
+        if entry_id in self.vault["entries"]:
+            self.vault["entries"][entry_id]["category"] = category
+            self.vault["entries"][entry_id]["modified"] = datetime.now().isoformat()
+            self._save()
+            self._refresh_list()
+            if self._current_entry_id == entry_id:
+                self._show_detail(entry_id)
+
+    def _on_move_to_category_action(self, action, param):
+        entry_id, category = param.unpack()
+        self._move_entry_to_category(entry_id, category)
+
+    def _attach_entry_context_menu(self, entry_row):
+        """Attach a right-click context menu with 'Move to...' to an EntryRow."""
+        categories = self.vault.get("categories", [])
+        if not categories:
+            return
+        gesture = Gtk.GestureClick(button=3)
+        gesture.connect("pressed", self._on_entry_right_click, entry_row)
+        entry_row.add_controller(gesture)
+
+    def _on_entry_right_click(self, gesture, n_press, x, y, entry_row):
+        categories = self.vault.get("categories", [])
+        if not categories:
+            return
+        entry = self.vault["entries"].get(entry_row.entry_id)
+        if not entry:
+            return
+        current_cat = entry.get("category", "")
+
+        popover = Gtk.Popover()
+        popover.set_parent(entry_row)
+        rect = Gdk.Rectangle()
+        rect.x = int(x)
+        rect.y = int(y)
+        rect.width = 1
+        rect.height = 1
+        popover.set_pointing_to(rect)
+        popover.set_has_arrow(False)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        header = Gtk.Label(label="Move to...", xalign=0)
+        header.add_css_class("heading")
+        header.set_margin_top(6)
+        header.set_margin_bottom(4)
+        header.set_margin_start(8)
+        header.set_margin_end(8)
+        vbox.append(header)
+        vbox.append(Gtk.Separator())
+
+        def make_move_handler(eid, cat, pop):
+            def handler(_btn):
+                pop.popdown()
+                self._move_entry_to_category(eid, cat)
+            return handler
+
+        if current_cat != "":
+            btn = Gtk.Button(label="Uncategorised")
+            btn.add_css_class("flat")
+            btn.connect("clicked", make_move_handler(entry_row.entry_id, "", popover))
+            vbox.append(btn)
+        for cat in categories:
+            if cat != current_cat:
+                btn = Gtk.Button(label=cat)
+                btn.add_css_class("flat")
+                btn.connect("clicked", make_move_handler(entry_row.entry_id, cat, popover))
+                vbox.append(btn)
+
+        popover.set_child(vbox)
+        popover.connect("closed", lambda p: p.unparent())
+        popover.popup()
+
+    # ------------------------------------------------------------------
+    # Utility
+    # ------------------------------------------------------------------
+
+    def _show_message(self, title, body):
+        d = Adw.AlertDialog(heading=title, body=body)
+        d.add_response("ok", "OK")
+        d.present(self)
+
+
+# --------------------------------------------------------------------------
+# Add/Edit entry dialog
+# --------------------------------------------------------------------------
+
+
+class FieldRow(Gtk.ListBoxRow):
+    """A single draggable field row inside the Add/Edit dialog."""
+
+    def __init__(self, dialog, label="", value="", sensitive=None):
+        super().__init__()
+        self.dialog = dialog
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(4)
+        box.set_margin_end(4)
+
+        # Drag handle
+        handle = Gtk.Image(icon_name="list-drag-handle-symbolic")
+        handle.add_css_class("dim-label")
+        handle.set_tooltip_text("Drag to reorder")
+        box.append(handle)
+
+        self.label_entry = Gtk.Entry(placeholder_text="Label", text=label, hexpand=True)
+        self.label_entry.set_size_request(110, -1)
+        box.append(self.label_entry)
+
+        self.value_entry = Gtk.Entry(placeholder_text="Value", text=value, hexpand=True)
+        self.value_entry.set_size_request(160, -1)
+        box.append(self.value_entry)
+
+        if sensitive is None:
+            sensitive = is_sensitive_label(label)
+        self.sens_check = Gtk.CheckButton(label="Hide", active=sensitive)
+        box.append(self.sens_check)
+
+        if sensitive:
+            self.value_entry.set_visibility(False)
+
+        # Auto-detect sensitive on label change
+        def on_label_changed(entry):
+            text = entry.get_text()
+            if is_sensitive_label(text):
+                self.sens_check.set_active(True)
+                self.value_entry.set_visibility(False)
+            else:
+                self.value_entry.set_visibility(True)
+        self.label_entry.connect("changed", on_label_changed)
+
+        remove_btn = Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Remove field")
+        remove_btn.add_css_class("flat")
+        remove_btn.add_css_class("error")
+        remove_btn.connect("clicked", lambda b: self.dialog._remove_field_row(self))
+        box.append(remove_btn)
+
+        self.set_child(box)
+
+        # --- Drag source (on the handle) ---
+        drag_src = Gtk.DragSource()
+        drag_src.set_actions(Gdk.DragAction.MOVE)
+        drag_src.connect("prepare", self._on_drag_prepare)
+        drag_src.connect("drag-begin", self._on_drag_begin)
+        handle.add_controller(drag_src)
+
+        # --- Drop target (on the whole row) ---
+        drop = Gtk.DropTarget(actions=Gdk.DragAction.MOVE)
+        drop.set_gtypes([FieldRow])
+        drop.connect("drop", self._on_drop)
+        self.add_controller(drop)
+
+    def _on_drag_prepare(self, source, x, y):
+        return Gdk.ContentProvider.new_for_value(self)
+
+    def _on_drag_begin(self, source, drag):
+        icon = Gtk.DragIcon.get_for_drag(drag)
+        lbl = Gtk.Label(label=self.label_entry.get_text() or "Field")
+        lbl.add_css_class("caption")
+        lbl.set_margin_top(6)
+        lbl.set_margin_bottom(6)
+        lbl.set_margin_start(12)
+        lbl.set_margin_end(12)
+        icon.set_child(lbl)
+
+    def _on_drop(self, target, dragged_row, x, y):
+        if dragged_row is self:
+            return False
+        self.dialog._reorder_field(dragged_row, self)
+        return True
+
+
+class AddEditDialog(Adw.Dialog):
+    def __init__(self, main_win, title, entry_id=None, entry=None):
+        super().__init__()
+        self.main_win = main_win
+        self.entry_id = entry_id
+
+        self.set_title(title)
+        self.set_content_width(520)
+        self.set_content_height(560)
+
+        # Toolbar view with header
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda b: self.close())
+        header.pack_start(cancel_btn)
+
+        save_btn = Gtk.Button(label="Save")
+        save_btn.add_css_class("suggested-action")
+        save_btn.connect("clicked", self._on_save)
+        header.pack_end(save_btn)
+
+        toolbar.add_top_bar(header)
+
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        clamp = Adw.Clamp(maximum_size=500)
+        clamp.set_margin_top(16)
+        clamp.set_margin_bottom(16)
+        clamp.set_margin_start(16)
+        clamp.set_margin_end(16)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+
+        # Name
+        name_group = Adw.PreferencesGroup(title="Name")
+        self.name_entry = Adw.EntryRow(title="System / service name")
+        if entry:
+            self.name_entry.set_text(entry["name"])
+        name_group.add(self.name_entry)
+        vbox.append(name_group)
+
+        # Category dropdown
+        categories = main_win.vault.get("categories", [])
+        if categories:
+            cat_group = Adw.PreferencesGroup(title="Category")
+            cat_items = ["(None)"] + categories
+            string_list = Gtk.StringList.new(cat_items)
+            self.category_row = Adw.ComboRow(title="Category", model=string_list)
+            # Pre-select current category
+            if entry and entry.get("category"):
+                try:
+                    sel_idx = cat_items.index(entry["category"])
+                    self.category_row.set_selected(sel_idx)
+                except ValueError:
+                    self.category_row.set_selected(0)
+            else:
+                self.category_row.set_selected(0)
+            cat_group.add(self.category_row)
+            vbox.append(cat_group)
+        else:
+            self.category_row = None
+
+        # Fields header
+        fields_header = Gtk.Label(label="Fields", xalign=0)
+        fields_header.add_css_class("heading")
+        fields_header.set_margin_start(4)
+        vbox.append(fields_header)
+
+        hint = Gtk.Label(label="Drag the handle to reorder", xalign=0)
+        hint.add_css_class("dim-label")
+        hint.add_css_class("caption")
+        hint.set_margin_start(4)
+        vbox.append(hint)
+
+        # Reorderable field list
+        self.fields_listbox = Gtk.ListBox()
+        self.fields_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.fields_listbox.add_css_class("boxed-list")
+        self.fields_listbox.add_css_class("field-editor-list")
+
+        if entry:
+            for field in entry["fields"]:
+                row = FieldRow(self, field["label"], field["value"], field.get("sensitive", False))
+                self.fields_listbox.append(row)
+        else:
+            self.fields_listbox.append(FieldRow(self, "Username", ""))
+            self.fields_listbox.append(FieldRow(self, "Password", "", sensitive=True))
+
+        vbox.append(self.fields_listbox)
+
+        add_field_btn = Gtk.Button(label="Add Field", halign=Gtk.Align.START)
+        add_field_btn.add_css_class("flat")
+        add_field_btn.connect("clicked", self._on_add_field)
+        vbox.append(add_field_btn)
+
+        # Notes
+        notes_group = Adw.PreferencesGroup(title="Notes")
+        self.notes_view = Gtk.TextView()
+        self.notes_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.notes_view.set_top_margin(8)
+        self.notes_view.set_bottom_margin(8)
+        self.notes_view.set_left_margin(8)
+        self.notes_view.set_right_margin(8)
+        if entry and entry.get("notes"):
+            self.notes_view.get_buffer().set_text(entry["notes"])
+        notes_frame = Gtk.Frame()
+        notes_frame.set_child(self.notes_view)
+        notes_frame.set_size_request(-1, 80)
+        notes_group.add(notes_frame)
+        vbox.append(notes_group)
+
+        clamp.set_child(vbox)
+        scroll.set_child(clamp)
+        toolbar.set_content(scroll)
+        self.set_child(toolbar)
+
+    def _on_add_field(self, btn):
+        row = FieldRow(self, "", "")
+        self.fields_listbox.append(row)
+        row.label_entry.grab_focus()
+
+    def _remove_field_row(self, row):
+        self.fields_listbox.remove(row)
+
+    def _reorder_field(self, dragged_row, target_row):
+        """Move dragged_row to the position of target_row."""
+        # Collect current order
+        rows = self._get_field_rows()
+        if dragged_row not in rows or target_row not in rows:
+            return
+        rows.remove(dragged_row)
+        target_idx = rows.index(target_row)
+        rows.insert(target_idx, dragged_row)
+
+        # Rebuild listbox in new order
+        for r in list(self._get_field_rows()):
+            self.fields_listbox.remove(r)
+        for r in rows:
+            self.fields_listbox.append(r)
+
+    def _get_field_rows(self) -> list:
+        """Return all FieldRow children in current order."""
+        rows = []
+        idx = 0
+        while True:
+            row = self.fields_listbox.get_row_at_index(idx)
+            if row is None:
+                break
+            rows.append(row)
+            idx += 1
+        return rows
+
+    def _on_save(self, btn):
+        name = self.name_entry.get_text().strip()
+        if not name:
+            return
+
+        fields = []
+        for row in self._get_field_rows():
+            label = row.label_entry.get_text().strip()
+            value = row.value_entry.get_text().strip()
+            if label or value:
+                fields.append({
+                    "label": label or "Unlabeled",
+                    "value": value,
+                    "sensitive": row.sens_check.get_active(),
+                })
+
+        buf = self.notes_view.get_buffer()
+        notes = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False).strip()
+
+        # Extract category selection
+        category = ""
+        if self.category_row is not None:
+            sel = self.category_row.get_selected()
+            if sel > 0:  # 0 = "(None)"
+                item = self.category_row.get_model().get_string(sel)
+                if item:
+                    category = item
+
+        if self.entry_id:
+            self.main_win._finish_edit(self.entry_id, name, fields, notes, category)
+        else:
+            self.main_win._finish_add(name, fields, notes, category)
+
+        self.close()
+
+
+# --------------------------------------------------------------------------
+# Import preview dialog
+# --------------------------------------------------------------------------
+
+
+class ImportPreviewDialog(Adw.Dialog):
+    def __init__(self, main_win, parsed, filepath):
+        super().__init__()
+        self.main_win = main_win
+        self.parsed = parsed
+        self.filepath = filepath
+        self.checks = []
+
+        self.set_title("Import Preview")
+        self.set_content_width(500)
+        self.set_content_height(480)
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda b: self.close())
+        header.pack_start(cancel_btn)
+
+        import_btn = Gtk.Button(label="Import Selected")
+        import_btn.add_css_class("suggested-action")
+        import_btn.connect("clicked", self._on_import)
+        header.pack_end(import_btn)
+
+        toolbar.add_top_bar(header)
+
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        clamp = Adw.Clamp(maximum_size=460)
+        clamp.set_margin_top(12)
+        clamp.set_margin_bottom(12)
+        clamp.set_margin_start(12)
+        clamp.set_margin_end(12)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+
+        info = Gtk.Label(label=f"Found {len(parsed)} entries in file.", xalign=0)
+        info.add_css_class("heading")
+        vbox.append(info)
+
+        # Select all / none
+        ctrl_box = Gtk.Box(spacing=8)
+        sel_all = Gtk.Button(label="Select All")
+        sel_all.add_css_class("flat")
+        sel_all.connect("clicked", lambda b: self._set_all(True))
+        sel_none = Gtk.Button(label="Select None")
+        sel_none.add_css_class("flat")
+        sel_none.connect("clicked", lambda b: self._set_all(False))
+        ctrl_box.append(sel_all)
+        ctrl_box.append(sel_none)
+        vbox.append(ctrl_box)
+
+        listbox = Gtk.ListBox()
+        listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+
+        existing_names = {e["name"].lower() for e in main_win.vault["entries"].values()}
+
+        for i, entry in enumerate(parsed):
+            is_dup = entry["name"].lower() in existing_names
+            row = Adw.ActionRow()
+            row.set_title(GLib.markup_escape_text(entry["name"]))
+            field_count = len(entry["fields"])
+            notes_flag = " +notes" if entry.get("notes") else ""
+            subtitle = f"{field_count} fields{notes_flag}"
+            if is_dup:
+                subtitle += "  (duplicate)"
+            row.set_subtitle(subtitle)
+
+            check = Gtk.CheckButton(active=not is_dup)
+            row.add_prefix(check)
+            row.set_activatable_widget(check)
+            self.checks.append((check, i))
+
+            listbox.append(row)
+
+        vbox.append(listbox)
+        clamp.set_child(vbox)
+        scroll.set_child(clamp)
+        toolbar.set_content(scroll)
+        self.set_child(toolbar)
+
+    def _set_all(self, state):
+        for check, _ in self.checks:
+            check.set_active(state)
+
+    def _on_import(self, btn):
+        selected = [self.parsed[i] for check, i in self.checks if check.get_active()]
+        if not selected:
+            return
+        self.main_win._finish_import(selected)
+        self.close()
+
+
+# --------------------------------------------------------------------------
+# Change password dialog
+# --------------------------------------------------------------------------
+
+
+class ChangePasswordDialog(Adw.Dialog):
+    def __init__(self, main_win):
+        super().__init__()
+        self.main_win = main_win
+
+        self.set_title("Change Master Password")
+        self.set_content_width(380)
+        self.set_content_height(-1)
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda b: self.close())
+        header.pack_start(cancel_btn)
+
+        save_btn = Gtk.Button(label="Change")
+        save_btn.add_css_class("suggested-action")
+        save_btn.connect("clicked", self._on_save)
+        header.pack_end(save_btn)
+
+        toolbar.add_top_bar(header)
+
+        clamp = Adw.Clamp(maximum_size=340)
+        clamp.set_margin_top(24)
+        clamp.set_margin_bottom(24)
+        clamp.set_margin_start(24)
+        clamp.set_margin_end(24)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        pw_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        pw_list.add_css_class("boxed-list")
+
+        self.current_pw = Adw.PasswordEntryRow(title="Current password")
+        pw_list.append(self.current_pw)
+
+        vbox.append(pw_list)
+        vbox.append(Gtk.Separator())
+
+        new_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        new_list.add_css_class("boxed-list")
+
+        self.new_pw = Adw.PasswordEntryRow(title="New password")
+        new_list.append(self.new_pw)
+
+        self.confirm_pw = Adw.PasswordEntryRow(title="Confirm new password")
+        new_list.append(self.confirm_pw)
+
+        vbox.append(new_list)
+
+        self.status = Gtk.Label()
+        self.status.add_css_class("error")
+        self.status.set_visible(False)
+        vbox.append(self.status)
+
+        clamp.set_child(vbox)
+        toolbar.set_content(clamp)
+        self.set_child(toolbar)
+
+    def _on_save(self, btn):
+        current = self.current_pw.get_text()
+        if current != self.main_win.password:
+            self.status.set_text("Incorrect current password.")
+            self.status.set_visible(True)
+            return
+
+        new = self.new_pw.get_text()
+        if len(new) < MIN_PASSWORD_LENGTH:
+            self.status.set_text(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+            self.status.set_visible(True)
+            return
+
+        confirm = self.confirm_pw.get_text()
+        if new != confirm:
+            self.status.set_text("Passwords do not match.")
+            self.status.set_visible(True)
+            return
+
+        self.main_win._finish_change_password(new)
+        self.close()
+
+
+# --------------------------------------------------------------------------
+# Restore password prompt dialog
+# --------------------------------------------------------------------------
+
+
+class RestorePasswordDialog(Adw.Dialog):
+    def __init__(self, main_win):
+        super().__init__()
+        self.main_win = main_win
+
+        self.set_title("Restore from Backup")
+        self.set_content_width(380)
+        self.set_content_height(-1)
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda b: self.close())
+        header.pack_start(cancel_btn)
+
+        unlock_btn = Gtk.Button(label="Restore")
+        unlock_btn.add_css_class("suggested-action")
+        unlock_btn.connect("clicked", self._on_unlock)
+        self._unlock_btn = unlock_btn
+        header.pack_end(unlock_btn)
+
+        toolbar.add_top_bar(header)
+
+        clamp = Adw.Clamp(maximum_size=340)
+        clamp.set_margin_top(24)
+        clamp.set_margin_bottom(24)
+        clamp.set_margin_start(24)
+        clamp.set_margin_end(24)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        info = Gtk.Label(
+            label="Enter the master password for the backup vault.",
+            wrap=True, xalign=0,
+        )
+        info.add_css_class("dim-label")
+        vbox.append(info)
+
+        pw_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        pw_list.add_css_class("boxed-list")
+        self.pw_entry = Adw.PasswordEntryRow(title="Backup password")
+        self.pw_entry.connect("activate", self._on_unlock)
+        pw_list.append(self.pw_entry)
+        vbox.append(pw_list)
+
+        self.status = Gtk.Label()
+        self.status.add_css_class("error")
+        self.status.set_visible(False)
+        vbox.append(self.status)
+
+        clamp.set_child(vbox)
+        toolbar.set_content(clamp)
+        self.set_child(toolbar)
+
+    def _on_unlock(self, *_args):
+        pw = self.pw_entry.get_text()
+        if not pw:
+            self.status.set_text("Please enter the backup password.")
+            self.status.set_visible(True)
+            return
+
+        self._unlock_btn.set_sensitive(False)
+        self._unlock_btn.set_label("Decrypting...")
+
+        import threading
+        threading.Thread(
+            target=self._try_unlock, args=(pw,), daemon=True
+        ).start()
+
+    def _try_unlock(self, pw):
+        try:
+            vault, salt = load_vault(pw, self.main_win._restore_path)
+            GLib.idle_add(self._unlock_ok, vault, salt, pw)
+        except InvalidToken:
+            GLib.idle_add(self._unlock_fail, "Wrong password for this backup.")
+        except Exception as e:
+            GLib.idle_add(self._unlock_fail, str(e))
+
+    def _unlock_ok(self, vault, salt, pw):
+        self.main_win._finish_restore(vault, salt, pw)
+        self.close()
+
+    def _unlock_fail(self, msg):
+        self._unlock_btn.set_sensitive(True)
+        self._unlock_btn.set_label("Restore")
+        self.status.set_text(msg)
+        self.status.set_visible(True)
+
+
+# --------------------------------------------------------------------------
+# Category row for Manage Categories dialog
+# --------------------------------------------------------------------------
+
+
+class CategoryRow(Gtk.ListBoxRow):
+    """A single category row with drag handle, name, count, rename, delete."""
+
+    def __init__(self, dialog, name: str, count: int):
+        super().__init__()
+        self.dialog = dialog
+        self.cat_name = name
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(4)
+        box.set_margin_end(4)
+
+        # Drag handle
+        handle = Gtk.Image(icon_name="list-drag-handle-symbolic")
+        handle.add_css_class("dim-label")
+        handle.set_tooltip_text("Drag to reorder")
+        box.append(handle)
+
+        # Category name label
+        self.name_label = Gtk.Label(label=name, xalign=0, hexpand=True)
+        self.name_label.set_ellipsize(3)
+        box.append(self.name_label)
+
+        # Count badge
+        count_lbl = Gtk.Label(label=str(count))
+        count_lbl.add_css_class("category-count")
+        box.append(count_lbl)
+
+        # Rename button
+        rename_btn = Gtk.Button(icon_name="document-edit-symbolic", tooltip_text="Rename")
+        rename_btn.add_css_class("flat")
+        rename_btn.connect("clicked", lambda b: self.dialog._rename_category(self))
+        box.append(rename_btn)
+
+        # Delete button
+        del_btn = Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Delete")
+        del_btn.add_css_class("flat")
+        del_btn.add_css_class("error")
+        del_btn.connect("clicked", lambda b: self.dialog._delete_category(self))
+        box.append(del_btn)
+
+        self.set_child(box)
+
+        # Drag source on handle
+        drag_src = Gtk.DragSource()
+        drag_src.set_actions(Gdk.DragAction.MOVE)
+        drag_src.connect("prepare", self._on_drag_prepare)
+        drag_src.connect("drag-begin", self._on_drag_begin)
+        handle.add_controller(drag_src)
+
+        # Drop target on whole row
+        drop = Gtk.DropTarget(actions=Gdk.DragAction.MOVE)
+        drop.set_gtypes([CategoryRow])
+        drop.connect("drop", self._on_drop)
+        self.add_controller(drop)
+
+    def _on_drag_prepare(self, source, x, y):
+        return Gdk.ContentProvider.new_for_value(self)
+
+    def _on_drag_begin(self, source, drag):
+        icon = Gtk.DragIcon.get_for_drag(drag)
+        lbl = Gtk.Label(label=self.cat_name)
+        lbl.add_css_class("caption")
+        lbl.set_margin_top(6)
+        lbl.set_margin_bottom(6)
+        lbl.set_margin_start(12)
+        lbl.set_margin_end(12)
+        icon.set_child(lbl)
+
+    def _on_drop(self, target, dragged_row, x, y):
+        if dragged_row is self:
+            return False
+        self.dialog._reorder_category(dragged_row, self)
+        return True
+
+
+# --------------------------------------------------------------------------
+# Manage Categories dialog
+# --------------------------------------------------------------------------
+
+
+class ManageCategoriesDialog(Adw.Dialog):
+    def __init__(self, main_win):
+        super().__init__()
+        self.main_win = main_win
+
+        self.set_title("Manage Categories")
+        self.set_content_width(420)
+        self.set_content_height(460)
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        done_btn = Gtk.Button(label="Done")
+        done_btn.add_css_class("suggested-action")
+        done_btn.connect("clicked", lambda b: self.close())
+        header.pack_end(done_btn)
+        toolbar.add_top_bar(header)
+
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        clamp = Adw.Clamp(maximum_size=400)
+        clamp.set_margin_top(12)
+        clamp.set_margin_bottom(12)
+        clamp.set_margin_start(12)
+        clamp.set_margin_end(12)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        # Add new category row
+        add_box = Gtk.Box(spacing=8)
+        self.new_cat_entry = Gtk.Entry(placeholder_text="New category name...", hexpand=True)
+        self.new_cat_entry.connect("activate", lambda e: self._add_category())
+        add_box.append(self.new_cat_entry)
+        add_btn = Gtk.Button(label="Add")
+        add_btn.add_css_class("suggested-action")
+        add_btn.connect("clicked", lambda b: self._add_category())
+        add_box.append(add_btn)
+        vbox.append(add_box)
+
+        # Category list
+        self.cat_listbox = Gtk.ListBox()
+        self.cat_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.cat_listbox.add_css_class("boxed-list")
+        vbox.append(self.cat_listbox)
+
+        self._rebuild_list()
+
+        clamp.set_child(vbox)
+        scroll.set_child(clamp)
+        toolbar.set_content(scroll)
+        self.set_child(toolbar)
+
+    def _rebuild_list(self):
+        while True:
+            row = self.cat_listbox.get_row_at_index(0)
+            if row is None:
+                break
+            self.cat_listbox.remove(row)
+
+        groups = entries_by_category(self.main_win.vault)
+        for cat_name in self.main_win.vault["categories"]:
+            count = len(groups.get(cat_name, []))
+            row = CategoryRow(self, cat_name, count)
+            self.cat_listbox.append(row)
+
+    def _add_category(self):
+        name = self.new_cat_entry.get_text().strip()
+        if not name:
+            return
+        if add_category(self.main_win.vault, name):
+            self.main_win._save()
+            self.new_cat_entry.set_text("")
+            self._rebuild_list()
+            self.main_win._refresh_list()
+
+    def _rename_category(self, row):
+        dialog = Adw.AlertDialog(heading="Rename category", body=f'Enter a new name for "{row.cat_name}":')
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("rename", "Rename")
+        dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("rename")
+        dialog.set_close_response("cancel")
+
+        entry = Gtk.Entry(text=row.cat_name)
+        entry.set_margin_start(24)
+        entry.set_margin_end(24)
+        dialog.set_extra_child(entry)
+
+        def on_response(d, response):
+            if response == "rename":
+                new_name = entry.get_text().strip()
+                if new_name and new_name != row.cat_name and new_name not in self.main_win.vault["categories"]:
+                    old_name = row.cat_name
+                    rename_category(self.main_win.vault, old_name, new_name)
+                    # Update collapsed set
+                    if old_name in self.main_win._collapsed_categories:
+                        self.main_win._collapsed_categories.discard(old_name)
+                        self.main_win._collapsed_categories.add(new_name)
+                    self.main_win._save()
+                    self._rebuild_list()
+                    self.main_win._refresh_list()
+
+        dialog.connect("response", on_response)
+        dialog.present(self)
+
+    def _delete_category(self, row):
+        groups = entries_by_category(self.main_win.vault)
+        count = len(groups.get(row.cat_name, []))
+        body = f'Delete category "{row.cat_name}"?'
+        if count:
+            body += f"\n{count} entries will be moved to Uncategorised."
+
+        dialog = Adw.AlertDialog(heading="Delete category", body=body)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("delete", "Delete")
+        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        def on_response(d, response):
+            if response == "delete":
+                self.main_win._collapsed_categories.discard(row.cat_name)
+                delete_category(self.main_win.vault, row.cat_name)
+                self.main_win._save()
+                self._rebuild_list()
+                self.main_win._refresh_list()
+
+        dialog.connect("response", on_response)
+        dialog.present(self)
+
+    def _reorder_category(self, dragged_row, target_row):
+        cats = self.main_win.vault["categories"]
+        old_idx = cats.index(dragged_row.cat_name)
+        cats.pop(old_idx)
+        new_idx = cats.index(target_row.cat_name)
+        cats.insert(new_idx, dragged_row.cat_name)
+        self.main_win._save()
+        self._rebuild_list()
+        self.main_win._refresh_list()
+
+    def _get_cat_rows(self):
+        rows = []
+        idx = 0
+        while True:
+            row = self.cat_listbox.get_row_at_index(idx)
+            if row is None:
+                break
+            rows.append(row)
+            idx += 1
+        return rows
+
+
+# ===========================================================================
+# Application
+# ===========================================================================
+
+
+CUSTOM_CSS = """
+/* ── Accent overrides ── */
+@define-color accent_bg_color #3584e4;
+@define-color accent_color #78aeed;
+
+/* ══════════════════════════════════════════════
+   Gradient backgrounds
+   ══════════════════════════════════════════════ */
+
+/* Main window background: deep dark gradient */
+.main-paned {
+    background-image: linear-gradient(160deg, #0d1117 0%, #161b22 35%, #0f1923 65%, #0d1117 100%);
+}
+
+/* Sidebar: subtle darker panel */
+.sidebar-box {
+    background-image: linear-gradient(180deg, rgba(13,17,23,0.95) 0%, rgba(22,27,34,0.9) 100%);
+    border-right: 1px solid rgba(120,174,237,0.08);
+}
+
+/* Unlock dialog window */
+window.background {
+    background-image: linear-gradient(160deg, #0d1117 0%, #131a24 50%, #0d1117 100%);
+}
+
+/* ══════════════════════════════════════════════
+   Glass effect for cards & panels
+   ══════════════════════════════════════════════ */
+
+/* Boxed lists (field cards, import list, password rows) */
+.boxed-list {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    box-shadow:
+        0 4px 16px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.boxed-list row {
+    background: transparent;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.boxed-list row:last-child {
+    border-bottom: none;
+}
+
+/* ── Field category left-border colors ── */
+
+/*  Credential (password, pin, authenticator) — amber */
+.field-credential {
+    border-left: 3px solid rgba(229,165,10,0.7);
+}
+
+/*  Key / Token / Secret — purple */
+.field-key {
+    border-left: 3px solid rgba(145,65,172,0.7);
+}
+
+/*  Identity (username, email, account) — blue */
+.field-identity {
+    border-left: 3px solid rgba(53,132,228,0.7);
+}
+
+/*  URL / Link — green */
+.field-url {
+    border-left: 3px solid rgba(38,162,105,0.7);
+}
+
+/*  Date / Expiry / Subscription — orange */
+.field-date {
+    border-left: 3px solid rgba(230,97,0,0.7);
+}
+
+/*  Other / uncategorised — subtle grey */
+.field-other {
+    border-left: 3px solid rgba(94,92,100,0.5);
+}
+
+/* Notes frame: glass card — cyan, distinct from URL green & identity blue */
+.notes-frame {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(42,161,179,0.15);
+    border-left: 3px solid rgba(42,161,179,0.6);
+    border-radius: 10px;
+    padding: 4px 8px;
+    box-shadow:
+        0 2px 12px rgba(0,0,0,0.25),
+        inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* Navigation sidebar rows: glass on hover/select */
+.navigation-sidebar {
+    background: transparent;
+}
+
+.navigation-sidebar row {
+    border-radius: 8px;
+    margin: 2px 6px;
+    padding: 2px;
+    transition: background 150ms ease;
+}
+
+.navigation-sidebar row:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.navigation-sidebar row:selected {
+    background: rgba(53,132,228,0.15);
+    border-left: 3px solid #3584e4;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* Action buttons: glass pill style */
+.reveal-btn, .edit-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    padding: 6px 14px;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+
+.reveal-btn:hover {
+    background: rgba(245,194,17,0.1);
+    border-color: rgba(245,194,17,0.25);
+}
+
+.edit-btn:hover {
+    background: rgba(120,174,237,0.1);
+    border-color: rgba(120,174,237,0.25);
+}
+
+/* Search entry: glass style */
+.sidebar-box searchentry {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.sidebar-box searchentry:focus-within {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(53,132,228,0.4);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.03),
+        0 0 0 2px rgba(53,132,228,0.15);
+}
+
+/* ══════════════════════════════════════════════
+   Text & color accents
+   ══════════════════════════════════════════════ */
+
+/* Entry name in detail view */
+.entry-title {
+    color: #78aeed;
+    text-shadow: 0 0 20px rgba(53,132,228,0.3);
+}
+
+/* Sensitive field mask */
+.field-masked {
+    color: #555d6b;
+    font-style: italic;
+    letter-spacing: 2px;
+}
+
+/* Revealed sensitive value - amber glow */
+.field-revealed-sensitive {
+    color: #f5c211;
+    text-shadow: 0 0 12px rgba(245,194,17,0.2);
+}
+
+/* Copy button */
+.copy-btn {
+    border-radius: 6px;
+    transition: color 150ms ease, background 150ms ease;
+}
+
+.copy-btn:hover {
+    color: #78aeed;
+    background: rgba(120,174,237,0.1);
+}
+
+/* Timestamp styling */
+.timestamp {
+    color: #484f58;
+    font-size: 0.85em;
+}
+
+/* Reveal button */
+.reveal-btn {
+    color: #f5c211;
+}
+
+/* Edit button */
+.edit-btn {
+    color: #78aeed;
+}
+
+/* Count label */
+.count-label {
+    color: #78aeed;
+    font-weight: bold;
+    text-shadow: 0 0 16px rgba(53,132,228,0.2);
+}
+
+/* Unlock dialog title */
+.unlock-title {
+    color: #78aeed;
+    font-size: 1.6em;
+    font-weight: 800;
+    text-shadow: 0 0 24px rgba(53,132,228,0.35);
+}
+
+/* Separator gets a subtle glow */
+separator {
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(53,132,228,0.25) 50%,
+        transparent 100%);
+    min-height: 1px;
+}
+
+/* Header bar: blend with gradient */
+headerbar {
+    background: rgba(13,17,23,0.85);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* Suggested-action buttons (Create Vault, Unlock, Save, Import) */
+button.suggested-action {
+    background: linear-gradient(135deg, #2563b0 0%, #3584e4 100%);
+    border: 1px solid rgba(120,174,237,0.3);
+    box-shadow:
+        0 2px 8px rgba(53,132,228,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+button.suggested-action:hover {
+    background: linear-gradient(135deg, #2d6fbf 0%, #4a94e8 100%);
+    box-shadow:
+        0 4px 16px rgba(53,132,228,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+/* Destructive button glow */
+button.destructive-action {
+    box-shadow: 0 2px 8px rgba(224,27,36,0.25);
+}
+
+button.destructive-action:hover {
+    box-shadow: 0 4px 16px rgba(224,27,36,0.35);
+}
+
+/* Password entry rows: blend with glass */
+row.entry {
+    background: transparent;
+}
+
+/* ── Field editor (Add/Edit dialog) ── */
+.field-editor-list {
+    background: rgba(255,255,255,0.03);
+}
+
+.field-editor-list row {
+    background: transparent;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 150ms ease;
+}
+
+.field-editor-list row:hover {
+    background: rgba(255,255,255,0.02);
+}
+
+/* ── Category header rows in sidebar ── */
+.category-header-row {
+    background: transparent;
+}
+
+.category-header-row:hover {
+    background: rgba(255,255,255,0.02);
+}
+
+.navigation-sidebar .category-header-row:selected {
+    background: transparent;
+    border-left: none;
+    box-shadow: none;
+}
+
+.category-header-label {
+    color: #6e7681;
+    font-size: 0.75em;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+.category-count {
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    color: #6e7681;
+    font-size: 0.75em;
+    font-weight: 600;
+    min-width: 20px;
+    padding: 1px 6px;
+}
+
+.category-drop-hover {
+    background: rgba(53,132,228,0.15);
+    border-radius: 8px;
+    box-shadow: 0 0 8px rgba(53,132,228,0.3);
+}
+"""
+
+
+class RolodexApp(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
+        self.vault_path = VAULT_FILE
+
+    def do_startup(self):
+        Adw.Application.do_startup(self)
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_string(CUSTOM_CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+    def do_activate(self):
+        is_new = not os.path.exists(self.vault_path)
+        win = UnlockDialog(self, self.vault_path, is_new)
+        win.present()
+
+    def open_main(self, vault, salt, password, vault_path):
+        win = MainWindow(self, vault, salt, password, vault_path)
+        win.present()
+
+
+def main():
+    app = RolodexApp()
+    app.run(sys.argv)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Rolodex
+Comment=Encrypted credential manager
+# Replace /path/to/rolodex with the absolute path where you cloned this repo.
+Exec=python3 /path/to/rolodex/rolodex.py
+Icon=/path/to/rolodex/rolodex.svg
+Terminal=false
+StartupWMClass=com.rolodex.Contacts
+Categories=Utility;Security;
