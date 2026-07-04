@@ -79,9 +79,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath "out\${{ matrix.asset }}" -ArgumentList "--selftest" -Wait -PassThru
+          $p = Start-Process -FilePath "out\${{ matrix.asset }}" -ArgumentList "--selftest" -PassThru
+          if (-not $p.WaitForExit(120000)) {
+            $p.Kill($true)
+            Write-Error "selftest did not exit within 120s — a broken bundle blocks on a headless error dialog"
+            exit 1
+          }
+          Write-Host "exit code: $($p.ExitCode)"
           if ($p.ExitCode -ne 0) { Write-Error "binary failed to load GTK (exit $($p.ExitCode))"; exit 1 }
-          Write-Host "selftest OK (exit 0)"
+          Write-Host "Windows selftest OK (exit 0)"
 
       # ---- macOS: GTK stack from Homebrew (unsigned build) ----
       - name: Build (macOS)
