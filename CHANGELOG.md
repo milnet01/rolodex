@@ -6,6 +6,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-04
+
+First public release with prebuilt, self-contained binaries for Linux, Windows, and macOS,
+plus the full open-source documentation set and a round of review-driven bug fixes.
+
 ### Added
 - Public open-source release: MIT `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
   a `docs/` standards set, a `DESIGN.md`, retroactive feature specs under `docs/specs/`, and a
@@ -54,7 +59,7 @@ app reached this state, not a tagged release.)
 - Encrypted backup & restore, plaintext export, and master-password change.
 - Vault schema migration (v1 → v2) applied on load.
 
-<!-- No version tags are cut yet; these point at browsable pages. Once v1.0.0 is tagged,
-     switch [Unreleased] to .../compare/v1.0.0...HEAD and [1.0.0] to .../releases/tag/v1.0.0. -->
-[Unreleased]: https://github.com/milnet01/rolodex/commits/main
+[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/milnet01/rolodex/releases/tag/v1.1.0
+<!-- 1.0.0 predates the public repo and was never tagged; link points at the history. -->
 [1.0.0]: https://github.com/milnet01/rolodex/commits/main
