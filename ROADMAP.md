@@ -150,13 +150,14 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: in-session-2026-07-04.
 
-- 🚧 [ROLO-0030] **Self-contained Linux build (single AppImage, no system dependencies).**
+- ✅ [ROLO-0030] **Self-contained Linux build (single AppImage, no system dependencies).**
   Why: today Linux users must install GTK4, libadwaita, PyGObject and cryptography from their distro; the user wants a zero-dependency single file.
   Scope: bundle the Python runtime + GTK4/libadwaita + cryptography into one relocatable executable — AppImage (packaging the GNOME platform runtime) or PyInstaller/Nuitka one-file. Ship it as a release asset. The hard part is bundling the GTK stack and its typelib/GObject-introspection data, not the Python. Supersedes part of ROLO-0010 (Flatpak) as the dependency-free distribution path; keep Flatpak for software-center listing.
   **Layman:** A single Linux file you double-click to run — no installing Python or GTK first.
   Kind: package.
   Source: user-request-2026-07-04.
   Linux self-contained binary built and smoke-tested locally via PyInstaller (packaging/rolodex.spec, 72MB single file, GTK4/libadwaita bundled, launches; frozen build persists data to ~/.local/share/Rolodex). CI workflow (.github/workflows/build.yml) builds it on ubuntu-latest. Ships on the first v* tag.
+  Shipped in v1.1.0: rolodex-linux-x86_64 (single-file PyInstaller, GTK4/libadwaita bundled). CI builds on ubuntu-latest and gates on a native --selftest before publishing to the GitHub Release.
 
 - 🚧 [ROLO-0031] **Self-contained Windows build (single .exe, no dependencies to install).**
   Why: the user wants a Windows version that needs no separate downloads.
@@ -165,14 +166,16 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: package.
   Source: user-request-2026-07-04.
   CI job added (.github/workflows/build.yml, windows-latest via MSYS2 UCRT64: gtk4 + libadwaita + python-gobject + cryptography, PyInstaller). Best-effort/untested from the Linux dev box; needs CI-run iteration to confirm the GTK bundle launches on Windows.
+  Blocked (2026-07-04): CI builds the .exe on windows-latest (MSYS2 UCRT64) but the binary fails the --selftest gate — it hangs on launch (headless error dialog), meaning the GTK4/libadwaita typelibs/DLLs are not loading from the PyInstaller bundle. Withheld from v1.1.0. Next steps: force-collect the MSYS2 GI typelibs + GTK DLLs + GdkPixbuf loaders in the spec, and confirm on real Windows hardware (a Linux/Wine container does not help — it ships no GTK and Wine != real Windows). Needs a Windows tester for final verification.
 
-- 🚧 [ROLO-0032] **Self-contained macOS build (single .app bundle, no dependencies to install).**
+- ✅ [ROLO-0032] **Self-contained macOS build (single .app bundle, no dependencies to install).**
   Why: the user wants a macOS version that needs no separate downloads.
   Scope: produce a bundled .app (py2app / Briefcase / PyInstaller) with the GTK4 + libadwaita runtime (Homebrew/jhbuild) and cryptography embedded; code-sign and notarize for Gatekeeper. Same major caveat as the Windows build: GTK4/libadwaita on macOS is non-trivial to bundle and does not feel native. Investigate feasibility; shares the portable-toolkit question raised in ROLO-0031.
   **Layman:** A single macOS app you drag to Applications; everything is inside it.
   Kind: package.
   Source: user-request-2026-07-04.
   CI job added (.github/workflows/build.yml, macos-latest via Homebrew gtk4/libadwaita/pygobject3, PyInstaller, unsigned per user). Best-effort/untested; needs CI-run iteration. Unsigned .app requires right-click->Open past Gatekeeper (no Apple Developer account).
+  Shipped in v1.1.0: rolodex-macos-arm64 (unsigned; right-click->Open past Gatekeeper). CI builds on macos-latest via Homebrew and passes the native --selftest gate. Signing/notarization is future work if an Apple Developer account is obtained.
 
 ## Low priority / nice-to-have
 
