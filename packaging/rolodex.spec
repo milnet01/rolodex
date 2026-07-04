@@ -47,7 +47,9 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,  # GUI app — no terminal window on Windows
-    disable_windowed_traceback=False,
+    # A broken bundle should exit non-zero cleanly (so the CI --selftest gate catches it) rather
+    # than hang on a traceback dialog in a headless runner.
+    disable_windowed_traceback=True,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,

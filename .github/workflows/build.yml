@@ -41,12 +41,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            python3-gi python3-gi-cairo python3-cairo \
+            python3-gi python3-gi-cairo python3-cairo xvfb \
             gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-1 libadwaita-1-0
           python3 -m pip install --break-system-packages --upgrade pyinstaller cryptography
           python3 -m PyInstaller packaging/rolodex.spec --noconfirm
           mkdir -p out
           mv dist/rolodex "out/${{ matrix.asset }}"
+      - name: Self-test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          out=$(xvfb-run -a "out/${{ matrix.asset }}" --selftest)
+          echo "$out"
+          echo "$out" | grep -q "selftest: OK" || { echo "::error::binary failed to load GTK"; exit 1; }
 
       # ---- Windows: GTK stack + Python from MSYS2 (UCRT64) ----
       - name: Set up MSYS2 (Windows)
@@ -69,6 +75,13 @@ jobs:
           python -m PyInstaller packaging/rolodex.spec --noconfirm
           mkdir -p out
           mv dist/rolodex.exe "out/${{ matrix.asset }}"
+      - name: Self-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "out\${{ matrix.asset }}" -ArgumentList "--selftest" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Write-Error "binary failed to load GTK (exit $($p.ExitCode))"; exit 1 }
+          Write-Host "selftest OK (exit 0)"
 
       # ---- macOS: GTK stack from Homebrew (unsigned build) ----
       - name: Build (macOS)
@@ -81,6 +94,12 @@ jobs:
           pyinstaller packaging/rolodex.spec --noconfirm
           mkdir -p out
           mv dist/rolodex "out/${{ matrix.asset }}"
+      - name: Self-test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          out=$("out/${{ matrix.asset }}" --selftest)
+          echo "$out"
+          echo "$out" | grep -q "selftest: OK" || { echo "::error::binary failed to load GTK"; exit 1; }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

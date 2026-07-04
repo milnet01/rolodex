@@ -2492,6 +2492,14 @@ class RolodexApp(Adw.Application):
 
 
 def main():
+    if "--selftest" in sys.argv[1:]:
+        # Packaging smoke test. Reaching this line means every module-level import — including
+        # `from gi.repository import Adw, Gdk, Gio, GLib, Gtk` (which loads the GTK/libadwaita
+        # typelibs + shared libraries) and `cryptography` — succeeded, so the bundled runtime is
+        # intact on this OS. CI runs the built binary with --selftest to fail any build whose
+        # GTK stack didn't bundle correctly. Exits without starting the GUI (no display needed).
+        print("rolodex selftest: OK (GTK/Adw/cryptography loaded)")
+        return
     app = RolodexApp()
     app.run(sys.argv)
 
