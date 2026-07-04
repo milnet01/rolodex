@@ -11,10 +11,12 @@ internal checklist. When the two overlap, they must agree.
    Do not add logging, temp files, crash dumps, or caches that contain field values or the
    master password.
 
-2. **Every vault-bearing file is created `0600`.** Use
+2. **Every secret-bearing file (vault, export, backup) is created `0600`.** Use
    `os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)` and write through the returned
    fd. Never `open(path, "w")` for vault or export data — that respects the umask and can be
-   world-readable. Backups also `os.chmod(..., 0o600)` after copy.
+   world-readable. Backups also `os.chmod(..., 0o600)` after copy. (The non-secret
+   `.rolodex.conf` window-geometry file is deliberately written with plain `open` and is exempt —
+   it holds no secrets.)
 
 3. **Don't weaken the KDF.** `ITERATIONS = 600_000` PBKDF2-HMAC-SHA256 is the floor. It may be
    raised (with a migration path), never lowered. The salt stays 16 random bytes, unique per
@@ -51,7 +53,9 @@ Before merging anything that touches crypto, file I/O, import/export, or clipboa
 ## Dependencies & supply chain
 
 - Keep `cryptography` reasonably current; it is the one security-critical dependency. When
-  bumping it, skim its changelog for anything affecting Fernet/PBKDF2.
+  bumping it, skim its changelog for anything affecting Fernet/PBKDF2. `requirements.txt` pins a
+  floor of `>=44.0.0` because older releases carry known CVEs — never drop below it; prefer the
+  latest (see `dependency-management-standards.md`).
 - Adding any new dependency that handles secrets or does crypto requires explicit review — the
   default answer is "use the standard library or `cryptography`."
 

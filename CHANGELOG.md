@@ -8,19 +8,24 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 - Public open-source release: MIT `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
-  a `docs/` standards set, and a project `ROADMAP.md`.
+  a `docs/` standards set, a `DESIGN.md`, retroactive feature specs under `docs/specs/`, and a
+  project `ROADMAP.md`.
 - Dependency management standard (`docs/dependency-management-standards.md`) with a
-  known-incompatible-versions ledger, plus a `requirements.txt` (`cryptography`, latest).
+  known-incompatible-versions ledger, plus a `requirements.txt` (`cryptography>=44.0.0`, latest
+  preferred; 44.0.0 is the security floor).
 - Expanded roadmap covering UI, UX, performance, refactoring, accessibility, theming,
-  packaging, and tooling (ROLO-0001 … ROLO-0029), not just security.
+  packaging (incl. self-contained Linux/Windows/macOS builds), and tooling
+  (ROLO-0001 … ROLO-0032), not just security.
 
 ### Changed
 - Import file picker now opens in the user's home directory instead of a hardcoded personal path.
 - `rolodex.desktop` ships with a placeholder install path and a `Security` category.
 
-## [1.0.0] — 2026-02-27
+## [1.0.0] - 2026-02-27
 
-Initial versioned release of the app as it existed before open-sourcing.
+Initial versioned release of the app as it existed before open-sourcing. (This version
+predates the public repository, so no `v1.0.0` git tag exists yet; the date reflects when the
+app reached this state, not a tagged release.)
 
 ### Added
 - Encrypted vault: PBKDF2-HMAC-SHA256 (600k iterations) + Fernet, `0600` file permissions.
@@ -32,5 +37,7 @@ Initial versioned release of the app as it existed before open-sourcing.
 - Encrypted backup & restore, plaintext export, and master-password change.
 - Vault schema migration (v1 → v2) applied on load.
 
-[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/milnet01/rolodex/releases/tag/v1.0.0
+<!-- No version tags are cut yet; these point at browsable pages. Once v1.0.0 is tagged,
+     switch [Unreleased] to .../compare/v1.0.0...HEAD and [1.0.0] to .../releases/tag/v1.0.0. -->
+[Unreleased]: https://github.com/milnet01/rolodex/commits/main
+[1.0.0]: https://github.com/milnet01/rolodex/commits/main

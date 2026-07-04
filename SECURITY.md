@@ -33,7 +33,7 @@ describes both how it protects data and how to report a problem.
 | Salt | 16 random bytes per vault, stored in the clear in the file header |
 | Encryption | Fernet (AES-128-CBC + HMAC-SHA256, authenticated) |
 | File format | `VLT1` magic (4 B) + salt (16 B) + Fernet token |
-| File permissions | `0600` (owner read/write only), set atomically at creation |
+| File permissions | `0600` (owner read/write only) — set via the `os.open` mode when the vault/export is created; backups are `chmod 0600` right after the copy |
 
 Changing the master password rotates the salt and re-encrypts the entire vault.
 

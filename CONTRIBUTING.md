@@ -6,9 +6,10 @@ are the most welcome.
 
 ## Ground rules
 
-- **Never commit real credential data.** `contacts.vault`, `*.vault`, `.rolodex.conf`, and
-  export files are git-ignored. Double-check `git status` before every commit. If you need a
-  vault for testing, create a throwaway one with a junk password.
+- **Never commit real credential data.** `contacts.vault`, `*.vault`, `Backups/`,
+  `.rolodex.conf`, and export files are git-ignored (see `.gitignore`). Double-check
+  `git status` before every commit. If you need a vault for testing, create a throwaway one with
+  a junk password.
 - **Keep it one file.** `rolodex.py` is the whole app on purpose. Don't split it into a
   package or add a dependency without a strong reason discussed in an issue first.
 - **The pure-logic layer stays GTK-free.** Everything above the `GTK4 / Adwaita GUI` banner
@@ -42,7 +43,7 @@ Use a scratch vault, not your real one, while developing.
 2. Branch from `main`: `git checkout -b <topic>`.
 3. Make the change. Keep the diff scoped to one concern.
 4. Manually exercise the affected flow end to end (there is no automated test suite yet — see
-   the roadmap). At minimum: create a vault, add/edit/delete an entry, lock and re-unlock.
+   the roadmap). At minimum: create a vault, add/edit/delete an entry, quit and re-unlock.
 5. Update `CHANGELOG.md` under an *Unreleased* heading.
 6. Open a pull request describing what changed and how you verified it.
 

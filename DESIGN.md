@@ -44,35 +44,23 @@ lifetime. The GUI layer is "dumb": callbacks gather input, call a pure function,
 
 **Single-owner persistence.** `MainWindow` holds the only live copy of the decrypted vault,
 salt, and password. All mutations funnel through it and end with `self._save()` (re-encrypt
-and write the whole file) followed by `self._refresh_list()` (rebuild the sidebar from
-scratch). There is no autosave, no dirty tracking, and no partial writes — the whole vault is
-the unit of persistence. This trades write efficiency (irrelevant at this scale) for a design
-with no possible desync between memory and disk.
+and write the whole file), plus a `self._refresh_list()` when the sidebar contents change.
+There is no autosave, no dirty tracking, and no partial writes — the whole vault is the unit of
+persistence. This trades write efficiency (irrelevant at this scale) for a design with no
+possible desync between memory and disk.
 
 **Off-thread key derivation.** The KDF runs 600,000 iterations, which takes long enough to
-freeze the UI. Unlock, restore, and password-change therefore run the KDF on a daemon thread
-and marshal the result back with `GLib.idle_add`. This is the only concurrency in the app and
-it exists solely to keep the main loop responsive.
+freeze the UI. The initial **decrypt** paths — unlock and restore — therefore run the KDF on a
+daemon thread and marshal the result back with `GLib.idle_add`. Note that a `_save()`
+re-derives the key to *encrypt*, and that currently runs synchronously on the UI thread (so
+password-change and every edit briefly block the loop); moving saves off-thread is future work.
 
 ## Data model
 
-The decrypted vault is one JSON-serialisable dict:
-
-```
-{ "version": 2,
-  "categories": ["Email", "Games", ...],          # ordered; drives sidebar grouping
-  "entries": {
-    "<uuid4>": {
-      "name": "GitHub",
-      "category": "Dev",                            # "" = uncategorised
-      "fields": [ {"label": "Username", "value": "...", "sensitive": false},
-                  {"label": "Password", "value": "...", "sensitive": true} ],
-      "notes": "...",
-      "created": "<iso8601>",
-      "modified": "<iso8601>"
-    }
-  } }
-```
+The decrypted vault is one JSON-serialisable dict with keys `version`, `categories` (an ordered
+list), and `entries` (a UUID-keyed map). The literal shape — including the per-field records —
+is documented once, canonically, in `CLAUDE.md` (§ Data model); it is not repeated here to
+avoid the two copies drifting apart.
 
 Design choices:
 
@@ -81,11 +69,12 @@ Design choices:
 - **Ordered category list separate from entries.** Categories exist independently of whether
   any entry uses them, and their order is user-controlled (drag to reorder). An entry
   referencing a deleted category is treated as uncategorised rather than erroring.
-- **Two orthogonal notions of "category".** `entry["category"]` is the *user's* grouping.
+- **Three orthogonal axes.** `entry["category"]` is the *user's* grouping;
   `field_category(label)` is a *cosmetic* classifier (credential/key/identity/url/date/other)
-  that only picks a border colour. And `sensitive` is a third, separate axis (mask or not).
-  Keeping these independent avoids surprising coupling — e.g. a field can be an "identity"
-  colour and still be masked.
+  that only picks a border colour; and `sensitive` (mask or not) is a third, separate axis.
+  The first two both involve the word "category" but mean different things. Keeping all three
+  independent avoids surprising coupling — e.g. a field can be an "identity" colour and still
+  be masked.
 - **Versioned schema + idempotent migration.** `migrate_vault()` upgrades older vaults on
   load and must stay idempotent. New fields are added here with defaults, never assumed.
 
@@ -114,7 +103,7 @@ for password-based encryption); everything after is authenticated ciphertext. Se
 |----------|----------|------------|
 | App structure | One file, minimal deps | Modularity, plugin surface |
 | Persistence | Rewrite whole vault per change | Write efficiency (a non-issue at this scale) |
-| KDF | PBKDF2 600k (stdlib via `cryptography`) | Argon2's memory-hardness (see ROLO-0005) |
+| KDF | PBKDF2 600k (via `cryptography`) | Argon2's memory-hardness (see ROLO-0005) |
 | Theme | Bespoke dark CSS | System light/dark following (see ROLO-0011) |
 | Recovery | None — password is the only key | Convenience; in exchange, zero server-side attack surface |
 

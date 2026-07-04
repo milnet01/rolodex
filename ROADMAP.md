@@ -36,7 +36,8 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-07-04.
 
 - 📋 [ROLO-0018] **Replace the full-sidebar rebuild with a model-backed list and debounced search.**
-  Why: _refresh_list() tears down and recreates every sidebar row on every mutation AND on every search keystroke (search_entries scans all entries each time). Fine for a small vault, visibly wasteful for a large one.\nScope: move to a Gtk.ListView/GtkSelectionModel backed by a data model with incremental updates, and debounce the search-changed handler (e.g. 150ms) so typing doesn't recompute per character. Keep search_entries pure and covered by ROLO-0001 tests. Biggest efficiency win in the app.
+  Why: _refresh_list() tears down and recreates every sidebar row on every mutation AND on every search keystroke (search_entries scans all entries each time). Fine for a small vault, visibly wasteful for a large one.
+  Scope: move to a Gtk.ListView/GtkSelectionModel backed by a data model with incremental updates, and debounce the search-changed handler (e.g. 150ms) so typing doesn't recompute per character. Keep search_entries pure and covered by ROLO-0001 tests. Biggest efficiency win in the app.
   **Layman:** Make the list update smoothly instead of rebuilding the whole thing on every keystroke.
   Kind: perf.
   Source: in-session-2026-07-04.
@@ -148,6 +149,27 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: in-session-2026-07-04.
 
+- 📋 [ROLO-0030] **Self-contained Linux build (single AppImage, no system dependencies).**
+  Why: today Linux users must install GTK4, libadwaita, PyGObject and cryptography from their distro; the user wants a zero-dependency single file.
+  Scope: bundle the Python runtime + GTK4/libadwaita + cryptography into one relocatable executable — AppImage (packaging the GNOME platform runtime) or PyInstaller/Nuitka one-file. Ship it as a release asset. The hard part is bundling the GTK stack and its typelib/GObject-introspection data, not the Python. Supersedes part of ROLO-0010 (Flatpak) as the dependency-free distribution path; keep Flatpak for software-center listing.
+  **Layman:** A single Linux file you double-click to run — no installing Python or GTK first.
+  Kind: package.
+  Source: user-request-2026-07-04.
+
+- 📋 [ROLO-0031] **Self-contained Windows build (single .exe, no dependencies to install).**
+  Why: the user wants a Windows version that needs no separate downloads.
+  Scope: produce a bundled Windows executable via PyInstaller/Nuitka with the GTK4 + libadwaita runtime from MSYS2/gvsbuild and the cryptography wheel packed in. Major effort: GTK4/libadwaita on Windows is not turnkey (theme, DLLs, GI typelibs, icon themes must all be bundled), and libadwaita's Windows support lags. Investigate feasibility first; if bundling GTK proves impractical, this is the item where a more portable UI toolkit would be evaluated (a large architectural decision, flagged not decided).
+  **Layman:** A single Windows .exe that just runs, with everything bundled inside.
+  Kind: package.
+  Source: user-request-2026-07-04.
+
+- 📋 [ROLO-0032] **Self-contained macOS build (single .app bundle, no dependencies to install).**
+  Why: the user wants a macOS version that needs no separate downloads.
+  Scope: produce a bundled .app (py2app / Briefcase / PyInstaller) with the GTK4 + libadwaita runtime (Homebrew/jhbuild) and cryptography embedded; code-sign and notarize for Gatekeeper. Same major caveat as the Windows build: GTK4/libadwaita on macOS is non-trivial to bundle and does not feel native. Investigate feasibility; shares the portable-toolkit question raised in ROLO-0031.
+  **Layman:** A single macOS app you drag to Applications; everything is inside it.
+  Kind: package.
+  Source: user-request-2026-07-04.
+
 ## Low priority / nice-to-have
 
 - 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
@@ -163,6 +185,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   **Layman:** Let the app match your desktop's light or dark setting automatically.
   Kind: ux.
   Source: in-session-2026-07-04.
+  Folded into ROLO-0015 (user-selectable themes) as the 'Auto' / follow-system option; implement there rather than standalone.
 
 - 📋 [ROLO-0012] **CSV import and export for interoperability with other managers.**
   Why: the current importer only understands one bespoke text layout; CSV eases migration from other tools.

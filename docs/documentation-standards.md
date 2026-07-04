@@ -7,8 +7,8 @@ When a change touches these areas, update the docs in the *same* commit:
 | Change | Update |
 |--------|--------|
 | Any user-visible behaviour | `README.md` + `CHANGELOG.md` |
-| On-disk vault format / schema | `README.md` (format section), `SECURITY.md`, `CLAUDE.md`, `migrate_vault()` |
-| Crypto, permissions, or threat surface | `SECURITY.md` |
+| On-disk vault format / schema | `docs/specs/vault-format-and-crypto.md` (canonical contract), `CLAUDE.md` (canonical data-model shape), `README.md` (format one-liner), `SECURITY.md`, `migrate_vault()`. Touch `DESIGN.md` only for model-level *design* changes — it deliberately does not carry the literal field list |
+| Crypto, permissions, or threat surface | `SECURITY.md`, `docs/security-standards.md`, `docs/specs/vault-format-and-crypto.md`, `README.md`, `CLAUDE.md`, `DESIGN.md` — the KDF/`0600` facts are intentionally repeated per audience, so they move together |
 | New convention or rule for contributors | the relevant `docs/*.md` standard |
 | A shipped release | `CHANGELOG.md` (move *Unreleased* → version) |
 | Completed or reprioritised roadmap item | `ROADMAP.md` |
@@ -21,12 +21,16 @@ treated as a bug.
 - **README.md** — what the app is, install, run, security summary, file layout. First contact
   for a new user. Keep it skimmable.
 - **CHANGELOG.md** — [Keep a Changelog](https://keepachangelog.com/) format, newest first,
-  grouped by Added / Changed / Fixed / Removed / Security. Every user-facing change lands here.
+  grouped by Added / Changed / Deprecated / Removed / Fixed / Security (the canonical KaC
+  order; use only the groups a release needs). Every user-facing change lands here.
 - **SECURITY.md** — threat model, cryptographic design, and private reporting process.
 - **CONTRIBUTING.md** — how to set up, the ground rules, and the PR flow.
 - **ROADMAP.md** — planned work, grouped by priority, each item spec-ready.
+- **DESIGN.md** — the "why" behind the app: goals, non-goals, architecture rationale, and
+  trade-offs. The canonical data-model shape lives in CLAUDE.md; DESIGN links to it.
 - **CLAUDE.md** — orientation for AI coding assistants; the big-picture architecture that
   spans the file. Mirror any architectural change here.
+- **docs/specs/*.md** — per-feature behaviour specs (retroactive contracts), plus their index.
 - **docs/*.md** — the standards (this set). One concern per file, kebab-case names.
 
 ## Style

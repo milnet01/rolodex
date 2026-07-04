@@ -26,17 +26,22 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 
 - **INV-7** Plaintext is `json.dumps(vault_data, ensure_ascii=False)` UTF-8 encoded, encrypted
   with `Fernet(key)` (AES-128-CBC + HMAC-SHA256, authenticated).
-- **INV-8** Decrypting with the wrong password raises `cryptography.fernet.InvalidToken`
-  (surfaced to the user as "Wrong password."); a corrupted/tampered file also fails
-  authentication rather than returning garbage.
+- **INV-8** Decrypting with the wrong password raises `cryptography.fernet.InvalidToken`. The
+  unlock path surfaces this as "Wrong password."; the restore path surfaces "Wrong password for
+  this backup." A corrupted/tampered file also fails authentication rather than returning garbage.
 
 ### File permissions
 
-- **INV-9** Every vault write uses `os.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)` so the
-  file is owner-read/write only, regardless of umask. This applies to `save_vault`; backups
-  additionally `os.chmod(..., 0o600)`.
-- **INV-10** On write error the file descriptor is closed and the exception re-raised (no
-  silent swallow).
+- **INV-9** Every secret write creates the file owner-only (`0o600`), regardless of umask.
+  `save_vault` and the plaintext export use `os.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)`;
+  backups `shutil.copy2` then `os.chmod(..., 0o600)`. (Mode applies on creation — overwriting an
+  existing file keeps its permissions; see `import-export-backup.md` INV-15.)
+- **INV-10** A write error is never silently swallowed — it propagates to the caller.
+  (Implementation note: `save_vault`/export wrap the fd in `with os.fdopen(fd, ...)`, which
+  already closes it on both success and error; the handler's extra `os.close(fd)` on the error
+  path therefore hits an already-closed fd and raises `OSError(EBADF)`, which can *mask* the
+  original write error. This is a latent bug flagged for a code cleanup — the manual close is
+  only needed for the narrow case where `os.fdopen` itself fails.)
 
 ### Creation & migration
 
@@ -51,7 +56,7 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 ## Notes
 
 - There is no password recovery by design (see `SECURITY.md`); the password is never stored.
-- Changing the master password rotates the salt (`os.urandom(16)`) and re-encrypts on the next
-  `_save` — see `master-password.md`.
+- Changing the master password rotates the salt (`os.urandom(16)`) and re-encrypts immediately
+  (its handler calls `_save`) — see `master-password.md`.
 - Future KDF upgrade (Argon2id) is roadmap ROLO-0005 and will extend the header + INV-4/-5 with
   a recorded algorithm identifier and a `migrate_vault` upgrade branch.

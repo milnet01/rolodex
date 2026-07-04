@@ -18,8 +18,8 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
 
 - **INV-5** When a vault file exists, `UnlockDialog` is in "unlock" mode requiring only the
   password. Enter activates the primary action.
-- **INV-6** Decryption runs on a background thread; the button shows "Unlocking…" and is
-  disabled while it runs, so the 600k-iteration KDF never freezes the UI.
+- **INV-6** Decryption runs on a background thread; the button shows `"Unlocking..."` (three
+  ASCII dots) and is disabled while it runs, so the 600k-iteration KDF never freezes the UI.
 - **INV-7** A wrong password (`InvalidToken`) shows "Wrong password.", re-enables the button,
   and refocuses the password field. Other errors show their message.
 - **INV-8** On success the vault is migrated (`migrate_vault`) before use and the main window
@@ -28,11 +28,14 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
 ## Change master password
 
 - **INV-9** Changing the password requires the correct current password, verified against the
-  in-memory session password (`self.password`), not by re-decrypting the file.
+  in-memory session password (`self.password`), not by re-decrypting the file. A wrong current
+  password shows "Incorrect current password." and aborts.
 - **INV-10** The new password must be ≥ 8 characters and match its confirmation; violations
   show an inline error and abort.
 - **INV-11** On success the session password is replaced, a **new random salt** is generated,
-  and the vault is re-encrypted and saved with the new password + salt.
+  and the vault is re-encrypted and saved with the new password + salt. The old salt/password no
+  longer decrypt `contacts.vault`, but any backup made *before* the change still opens with the
+  old password.
 
 ## Notes
 

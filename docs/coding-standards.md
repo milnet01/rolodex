@@ -33,8 +33,10 @@ stop and move it across the boundary.
 
 - The decrypted vault is a single dict with keys `version`, `categories`, `entries`. Do not
   invent parallel state that can drift from it.
-- Every mutation goes through the `MainWindow` owner and ends with `self._save()` followed by
-  `self._refresh_list()`. There is no autosave and no dirty-flag — persistence is explicit.
+- Every mutation goes through the `MainWindow` owner and ends with `self._save()`, plus a
+  `self._refresh_list()` (and/or `_show_detail()`) when the visible list or detail changes.
+  A few save-only paths (password change, backup) don't refresh. There is no autosave and no
+  dirty-flag — persistence is explicit.
 - Any code path that writes a file containing vault data must create it with mode `0600`
   (`os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)`). Never rely on the umask.
 - If you change the on-disk shape, **bump `version` and extend `migrate_vault()`** rather than
@@ -42,14 +44,20 @@ stop and move it across the boundary.
 
 ## Concurrency
 
-- Anything that runs the KDF (unlock, restore, password change) must run off the UI thread on
-  a `threading.Thread`, and marshal results back with `GLib.idle_add`. Never block the main
-  loop on `derive_key`.
+- The initial **decrypt** paths (unlock, restore) run the KDF on a `threading.Thread` and
+  marshal results back with `GLib.idle_add`, so the 600k-iteration derive doesn't freeze the
+  UI. Preserve that for any new password-*checking* (decrypt) flow.
+- Be aware of the current gap: `_save()` re-derives the key to encrypt and runs **synchronously**
+  on the UI thread, so password-change and every edit briefly block the loop. Don't add new
+  synchronous KDF calls on hot paths; moving saves off-thread is tracked as future work.
 
 ## Error handling
 
-- No bare `except:` and no silent `except Exception: pass` around real logic. Catch the
-  specific exception you expect (`InvalidToken`, `GLib.Error`, `OSError`).
+- No bare `except:` and no silent `except Exception: pass` around real logic. Prefer catching
+  the specific exception you expect (`InvalidToken`, `GLib.Error`, `OSError`). A broad
+  `except Exception as e:` is acceptable only as a top-level GUI handler that *surfaces* the
+  error (dialog/toast) rather than swallowing it — the existing unlock/import/backup handlers
+  follow this surface-and-show pattern.
 - User-facing failures surface through an `Adw.AlertDialog` or a toast — never a traceback to
   stdout that the user won't see.
 

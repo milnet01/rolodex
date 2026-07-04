@@ -16,7 +16,8 @@ Retroactive spec for sidebar search (`search_entries`, `MainWindow._on_search_ch
 - **INV-6** The count label reads "`N` of `M` entries" during an active search (matches out of
   total); with no active query it reads "`M` entries".
 - **INV-7** Clearing the search restores the normal view (grouped if categories exist, else
-  flat) and re-selects the current entry if it is still visible.
+  flat) and re-selects the current entry if it is still visible. The query is stripped first, so
+  a whitespace-only query counts as no active search (normal view).
 
 ## Notes
 

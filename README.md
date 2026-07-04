@@ -7,7 +7,7 @@ until you reveal them.
 
 No cloud, no sync, no telemetry. Your data lives in one encrypted file on your machine.
 
-![Categories, masked fields, and one-click copy in a dark glass UI.](rolodex.svg)
+![Rolodex application icon.](rolodex.svg)
 
 ## Features
 
@@ -73,7 +73,7 @@ path where you cloned this repo, then install it:
 
 ```bash
 # from the repo directory:
-sed -i "s|/path/to|$PWD|g" rolodex.desktop   # adjust to your layout
+sed -i "s|/path/to/rolodex|$PWD|g" rolodex.desktop   # point Exec/Icon at this clone
 cp rolodex.desktop ~/.local/share/applications/
 ```
 
@@ -82,11 +82,15 @@ cp rolodex.desktop ~/.local/share/applications/
 | File | Purpose |
 |------|---------|
 | `rolodex.py` | The entire application. |
+| `requirements.txt` | The single pip dependency (`cryptography`). |
+| `rolodex.desktop` | Desktop launcher template (edit its paths — see above). |
 | `contacts.vault` | Your encrypted vault (created on first run; **git-ignored**). |
+| `Backups/`, `rolodex_export_*.txt` | Backup copies and plaintext exports you create (git-ignored). |
 | `.rolodex.conf` | Window size/position only, plaintext (git-ignored). |
 | `rolodex.svg` | Application icon. |
 
-The vault format is `VLT1` magic bytes + 16-byte salt + Fernet ciphertext.
+The vault format is `VLT1` magic bytes + 16-byte salt + Fernet ciphertext (canonical spec:
+`docs/specs/vault-format-and-crypto.md`).
 
 ## Security notes
 
@@ -94,6 +98,12 @@ The vault format is `VLT1` magic bytes + 16-byte salt + Fernet ciphertext.
   strength ultimately rests on your master password — choose a strong one.
 - This is a personal-use tool, not audited security software. Review the code (it's one
   readable file) before trusting it with anything critical.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules
+(one-file app, minimal dependencies) and [SECURITY.md](SECURITY.md) for reporting security
+issues privately.
 
 ## License
 

@@ -6,15 +6,20 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 ## Text import
 
 - **INV-1** The importer splits the file into blocks separated by blank lines. Each block is
-  one entry: the first line is the `name` (a trailing colon is stripped).
-- **INV-2** Within a block, a line matching `^<label>:<whitespace><value>$` becomes a field
-  `{label, value, sensitive}`; `sensitive` is auto-detected from the label via the same
+  one entry: the first line is the `name`, with `rstrip(":")` then `strip()` applied — so all
+  trailing colons are removed, but a colon followed by whitespace (e.g. `"Name: "`) is not.
+- **INV-2** Within a block, a line matching the regex `^([^:]+?):\s+(.+)$` becomes a field
+  `{label, value, sensitive}`. Consequences: the label may **not** contain a colon (the first
+  colon splits label from value), and there must be at least one whitespace character (space or
+  tab) after the colon. The captured value is then `strip()`ped, so a colon followed by only
+  whitespace yields an empty value. `sensitive` is auto-detected from the label via the same
   `SENSITIVE_KEYWORDS` rule used elsewhere.
 - **INV-3** Non-matching non-empty lines in a block are collected into the entry's `notes`
   (joined by newlines).
 - **INV-4** The import file picker opens in the user's home directory (no hardcoded path).
-- **INV-5** Parse failure surfaces as an error dialog; an empty parse shows an informational
-  message. Neither modifies the vault.
+- **INV-5** Both parse failure and an empty parse surface via the same `_show_message` dialog —
+  parse failure with title "Import Error" (the exception text), an empty parse with title
+  "Import" and body "No entries found in file." Neither modifies the vault.
 
 ## Import preview & commit
 
@@ -23,8 +28,9 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
   already exists. Duplicates are unchecked by default; non-duplicates checked.
 - **INV-7** "Select All" / "Select None" toggle every checkbox; only checked entries import.
 - **INV-8** `import_entries` skips entries whose name (case-insensitive) already exists when
-  `skip_duplicates` is true, counting imported vs skipped. Imported entries are added via
-  `add_entry` (fresh UUID + timestamps) and the vault is saved.
+  `skip_duplicates` is true, counting imported vs skipped. Entries are added via `add_entry`
+  (fresh UUID + timestamps) inside `import_entries`; `import_entries` itself does not persist —
+  the caller `_finish_import` saves the vault afterwards.
 
 ## Encrypted backup
 
@@ -47,10 +53,15 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 
 - **INV-14** Export requires confirmation because it writes **unencrypted** data.
 - **INV-15** The export is a human-readable text dump (name, optional category, aligned
-  label/value pairs, optional notes) written with `os.open(..., 0o600)`.
+  label/value pairs, optional notes) written with `os.open(..., 0o600)`, so the `0600` mode
+  applies when the file is created. Overwriting an existing file keeps that file's current
+  permissions — the export path does not additionally `chmod` (unlike the backup path).
 - **INV-16** The default export filename is `rolodex_export_<YYYYMMDD>_<HHMMSS>.txt`.
 
 ## Notes
 
 - Backup/restore round-trips ciphertext; export is a deliberate one-way plaintext escape hatch.
+- Interaction gotcha: the preview lets you tick a name marked "(duplicate)", but `_finish_import`
+  calls `import_entries` with `skip_duplicates=True`, so a manually re-checked duplicate is still
+  skipped. This surprises users — a candidate fix, not yet scheduled.
 - CSV import/export is roadmap ROLO-0012.

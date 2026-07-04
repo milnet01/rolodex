@@ -23,7 +23,8 @@ or adding a dep), run the freshness check on the way past:
 ```bash
 python3 -m pip list --outdated          # PyPI deps
 python3 -c "import cryptography; print(cryptography.__version__)"   # current crypto
-# newest cryptography on PyPI:
+# newest cryptography on PyPI (pip index is an experimental subcommand and prints a
+# warning; if it changes, `pip install cryptography==` also lists available versions):
 python3 -m pip index versions cryptography | head -1
 ```
 
