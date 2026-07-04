@@ -67,27 +67,23 @@ jobs:
             mingw-w64-ucrt-x86_64-python-gobject
             mingw-w64-ucrt-x86_64-python-cryptography
             mingw-w64-ucrt-x86_64-python-pip
-      - name: Build (Windows)
+      - name: Build + self-test (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           python -m pip install --upgrade pyinstaller
+          # Console build so --selftest output / any traceback is visible in the CI log.
+          export ROLODEX_CONSOLE=1
           python -m PyInstaller packaging/rolodex.spec --noconfirm
+          echo "===== SELFTEST (console build) ====="
+          set +e
+          ./dist/rolodex.exe --selftest
+          rc=$?
+          echo "===== selftest exit=$rc ====="
+          set -e
           mkdir -p out
           mv dist/rolodex.exe "out/${{ matrix.asset }}"
-      - name: Self-test (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $p = Start-Process -FilePath "out\${{ matrix.asset }}" -ArgumentList "--selftest" -PassThru
-          if (-not $p.WaitForExit(120000)) {
-            $p.Kill($true)
-            Write-Error "selftest did not exit within 120s — a broken bundle blocks on a headless error dialog"
-            exit 1
-          }
-          Write-Host "exit code: $($p.ExitCode)"
-          if ($p.ExitCode -ne 0) { Write-Error "binary failed to load GTK (exit $($p.ExitCode))"; exit 1 }
-          Write-Host "Windows selftest OK (exit 0)"
+          [ "$rc" -eq 0 ] || { echo "::error::Windows selftest failed (rc=$rc)"; exit 1; }
 
       # ---- macOS: GTK stack from Homebrew (unsigned build) ----
       - name: Build (macOS)

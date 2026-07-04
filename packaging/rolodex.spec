@@ -8,7 +8,13 @@
 #
 # Build locally:  pyinstaller packaging/rolodex.spec --noconfirm
 
+import os
+
 from PyInstaller.utils.hooks import collect_all
+
+# Console vs windowed. Shipped builds are windowed (no terminal). Setting ROLODEX_CONSOLE=1
+# builds a console exe so --selftest output/tracebacks are visible in CI logs (Windows diag).
+CONSOLE = os.environ.get("ROLODEX_CONSOLE") == "1"
 
 # collect_all('gi') pulls the GObject-introspection namespace: shared libs, typelibs, and the
 # hidden gi.repository.* submodules. The gi runtime hook then points GI_TYPELIB_PATH at them.
@@ -46,7 +52,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=False,  # GUI app — no terminal window on Windows
+    console=CONSOLE,  # windowed by default; console when ROLODEX_CONSOLE=1 (CI diagnostics)
     # A broken bundle should exit non-zero cleanly (so the CI --selftest gate catches it) rather
     # than hang on a traceback dialog in a headless runner.
     disable_windowed_traceback=True,
