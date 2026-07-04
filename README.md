@@ -22,6 +22,24 @@ No cloud, no sync, no telemetry. Your data lives in one encrypted file on your m
 - **Colour-coded fields** — credentials, keys, identities, URLs, and dates each get a
   distinct accent so a card is scannable at a glance.
 
+## Download (prebuilt binaries)
+
+Self-contained builds for Linux, Windows, and macOS are published on the
+[Releases page](https://github.com/milnet01/rolodex/releases) — each is a single file with
+Python, GTK, and all dependencies bundled in, so there's nothing else to install.
+
+| Platform | File | Notes |
+|----------|------|-------|
+| Linux (x86-64) | `rolodex-linux-x86_64` | `chmod +x` it, then run it. |
+| Windows (x64) | `rolodex-windows-x86_64.exe` | Double-click to run. |
+| macOS (Apple Silicon) | `rolodex-macos-arm64` | Unsigned — the first time, **right-click → Open** to get past Gatekeeper, then confirm. |
+
+The packaged app stores your vault in a per-user data directory (`~/.local/share/Rolodex` on
+Linux, `~/Library/Application Support/Rolodex` on macOS, `%APPDATA%\Rolodex` on Windows), not
+next to the executable.
+
+Prefer to run from source instead? Read on.
+
 ## Requirements
 
 - Python 3.10+

@@ -19,11 +19,18 @@ All notable changes to Rolodex are documented here. The format is based on
 - Seed automated test suite (`tests/test_vault.py`, pytest) covering the encryption round-trip,
   wrong-password handling, `0600` permissions, migration idempotency, and the write-error
   regression. Broader coverage is tracked as ROLO-0001.
+- Cross-platform packaging: a PyInstaller spec (`packaging/rolodex.spec`) and a GitHub Actions
+  workflow (`.github/workflows/build.yml`) that build a single-file, self-contained binary for
+  Linux, Windows, and macOS and publish them to a Release on `v*` tags. The Linux build is
+  verified; the Windows/macOS jobs are best-effort (GTK bundling) pending CI iteration.
 
 ### Changed
 - Import file picker now opens in the user's home directory instead of a hardcoded personal path.
 - `rolodex.desktop` ships with a placeholder install path and a `Security` category.
 - Entry count label now singularises ("1 entry" instead of "1 entries").
+- Packaged (frozen) builds store the vault and config in a per-user data directory
+  (`~/.local/share/Rolodex` etc.) instead of next to the executable, so data survives across
+  runs. Running from source is unchanged (data stays next to `rolodex.py`).
 
 ### Fixed
 - Vault save and plaintext export no longer double-close the file descriptor on a write error,

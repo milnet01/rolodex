@@ -11,5 +11,14 @@ rolodex_export_*.txt
 __pycache__/
 *.pyc
 
+# PyInstaller / build output
+/dist/
+/build/
+/build_pyi/
+/out/
+/packaging/build/
+/packaging/dist/
+*.spec.bak
+
 # Editor / OS cruft
 .claude/settings.local.json

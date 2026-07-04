@@ -1,0 +1,96 @@
+name: Build binaries
+
+# Builds a self-contained, single-file Rolodex binary for Linux, Windows, and macOS with
+# PyInstaller (packaging/rolodex.spec). Run it manually from the Actions tab (workflow_dispatch)
+# to get downloadable artifacts, or push a `v*` tag to also publish them to a GitHub Release.
+#
+# The hard part on every OS is installing the GTK 4 / libadwaita + PyGObject runtime so
+# PyInstaller can bundle it: Linux uses apt, Windows uses MSYS2, macOS uses Homebrew. The
+# Windows and macOS jobs are best-effort and may need iteration — GTK is Linux-first.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to attach binaries to a Release on tag builds
+
+jobs:
+  build:
+    name: ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # one OS failing must not cancel the others
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: rolodex-linux-x86_64
+          - os: windows-latest
+            asset: rolodex-windows-x86_64.exe
+          - os: macos-latest
+            asset: rolodex-macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Linux: GTK stack from apt, PyInstaller from pip ----
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi python3-gi-cairo python3-cairo \
+            gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-1 libadwaita-1-0
+          python3 -m pip install --break-system-packages --upgrade pyinstaller cryptography
+          python3 -m PyInstaller packaging/rolodex.spec --noconfirm
+          mkdir -p out
+          mv dist/rolodex "out/${{ matrix.asset }}"
+
+      # ---- Windows: GTK stack + Python from MSYS2 (UCRT64) ----
+      - name: Set up MSYS2 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-python-cryptography
+            mingw-w64-ucrt-x86_64-python-pip
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          python -m pip install --upgrade pyinstaller
+          python -m PyInstaller packaging/rolodex.spec --noconfirm
+          mkdir -p out
+          mv dist/rolodex.exe "out/${{ matrix.asset }}"
+
+      # ---- macOS: GTK stack from Homebrew (unsigned build) ----
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install gtk4 libadwaita pygobject3 py3cairo pyinstaller
+          # Use the Homebrew Python that pygobject3 linked `gi` into.
+          BREW_PY="$(brew --prefix)/bin/python3"
+          "$BREW_PY" -m pip install --break-system-packages --upgrade cryptography || true
+          pyinstaller packaging/rolodex.spec --noconfirm
+          mkdir -p out
+          mv dist/rolodex "out/${{ matrix.asset }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+          if-no-files-found: error
+
+      - name: Attach to Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/${{ matrix.asset }}

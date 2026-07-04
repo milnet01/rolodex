@@ -26,7 +26,15 @@ from cryptography.hazmat.primitives import hashes
 # ---------------------------------------------------------------------------
 
 APP_ID = "com.rolodex.Contacts"
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, "frozen", False):
+    # Packaged (PyInstaller) build: __file__ lives in a temp extraction dir that is deleted on
+    # exit, so persist user data in the per-user data directory — ~/.local/share/Rolodex on
+    # Linux, ~/Library/Application Support/Rolodex on macOS, %APPDATA%\Rolodex on Windows.
+    APP_DIR = os.path.join(GLib.get_user_data_dir(), "Rolodex")
+    os.makedirs(APP_DIR, exist_ok=True)
+else:
+    # Running from source: keep data next to the script (portable, unchanged behaviour).
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
 VAULT_FILE = os.path.join(APP_DIR, "contacts.vault")
 CONFIG_FILE = os.path.join(APP_DIR, ".rolodex.conf")
 MAGIC = b"VLT1"
