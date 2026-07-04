@@ -1,0 +1,10 @@
+# Python (PyPI) dependencies for Rolodex.
+# Policy: keep on the latest stable version — see docs/dependency-management-standards.md.
+#
+# GTK 4, libadwaita, and PyGObject (gi) are provided by the system, not pip —
+# see the README for the per-distro install commands.
+
+# Security-critical: authenticated encryption (Fernet) + PBKDF2 key derivation.
+# Unpinned so `pip install -U` always pulls the latest. 44.0.0 is the security floor
+# (older releases carry known CVEs); prefer the newest available.
+cryptography>=44.0.0

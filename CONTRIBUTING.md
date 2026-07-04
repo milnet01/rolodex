@@ -23,6 +23,7 @@ Before writing code or docs, read the relevant standard in [`docs/`](docs/):
 - [`docs/file-naming.md`](docs/file-naming.md)
 - [`docs/documentation-standards.md`](docs/documentation-standards.md)
 - [`docs/security-standards.md`](docs/security-standards.md)
+- [`docs/dependency-management-standards.md`](docs/dependency-management-standards.md)
 
 ## Development setup
 

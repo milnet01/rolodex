@@ -35,6 +35,12 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: in-session-2026-07-04.
 
+- 📋 [ROLO-0018] **Replace the full-sidebar rebuild with a model-backed list and debounced search.**
+  Why: _refresh_list() tears down and recreates every sidebar row on every mutation AND on every search keystroke (search_entries scans all entries each time). Fine for a small vault, visibly wasteful for a large one.\nScope: move to a Gtk.ListView/GtkSelectionModel backed by a data model with incremental updates, and debounce the search-changed handler (e.g. 150ms) so typing doesn't recompute per character. Keep search_entries pure and covered by ROLO-0001 tests. Biggest efficiency win in the app.
+  **Layman:** Make the list update smoothly instead of rebuilding the whole thing on every keystroke.
+  Kind: perf.
+  Source: in-session-2026-07-04.
+
 ## Medium priority
 
 - 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
@@ -93,6 +99,55 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: accessibility.
   Source: user-request-2026-07-04.
 
+- 📋 [ROLO-0019] **Extract shared dialog scaffolding and a single 0600 file-write helper.**
+  Why: every dialog rebuilds the same ToolbarView + HeaderBar + Clamp boilerplate, the sidebar/field/category lists each hand-roll the same 'remove all rows' loop, and the secure 0600 os.open pattern is duplicated in save_vault and the export path. Duplication invites drift — and the file-write duplication is a security-consistency risk.
+  Scope: a small make_dialog_scaffold() helper, a clear_listbox() helper, and one write_private_file() helper used by every secret-writing path. Pure refactor, no behaviour change; lean on ROLO-0001 tests to prove it.
+  **Layman:** Tidy up repeated code so the app is easier to maintain and less error-prone.
+  Kind: refactor.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0020] **Add GitHub Actions CI: lint (ruff) plus the test suite.**
+  Why: there is no CI; nothing currently guards a PR. Public repo = free Linux runner minutes.
+  Scope: a workflow running ruff (style/lint) and the ROLO-0001 pytest suite on push/PR, on the current stable Python. Pin actions to current major versions per dependency standards. Depends on ROLO-0001 for the test half; the lint half can land immediately.
+  **Layman:** Automatic checks on every change so mistakes get caught before merge.
+  Kind: chore.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0021] **Show-password (eye) toggle on sensitive fields in the editor.**
+  Why: sensitive field values are hidden while editing with only the 'Hide' checkbox to flip visibility of the whole row; users expect a per-field reveal eye.
+  Scope: add a peek toggle to sensitive FieldRow value entries (Gtk.Entry secondary icon) that flips visibility without changing the saved sensitive flag. Small, self-contained UI change.
+  **Layman:** An eye icon to peek at what you're typing into a password field.
+  Kind: ux.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0022] **Warn before discarding unsaved changes in the add/edit dialog.**
+  Why: Cancel/close on AddEditDialog discards everything with no confirmation — easy to lose work.
+  Scope: track a dirty flag on the editor; on cancel/close with changes, show an Adw.AlertDialog to confirm discard. Applies to add and edit.
+  **Layman:** Ask 'are you sure?' if you close the editor with unsaved edits.
+  Kind: ux.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0023] **Warn when a new entry duplicates an existing entry name.**
+  Why: the importer detects duplicate names, but manually adding a duplicate is silent — inconsistent and confusing.
+  Scope: on save in AddEditDialog for a new entry, if the name (case-insensitive) already exists, prompt to confirm/rename. Reuse the same case-insensitive comparison used by import_entries.
+  **Layman:** Flag it when you add an entry with the same name as one you already have.
+  Kind: ux.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0024] **Adaptive layout for narrow windows using libadwaita breakpoints.**
+  Why: the fixed two-pane Gtk.Paned doesn't collapse; on a narrow window the sidebar and detail fight for space.
+  Scope: migrate to Adw.NavigationSplitView with an Adw.Breakpoint so the sidebar and detail become a single navigable stack below a width threshold. Presentational restructure of MainWindow.
+  **Layman:** Make the app usable when the window is small or on a phone-sized screen.
+  Kind: enhancement.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0025] **Multi-select entries for bulk delete and bulk move-to-category.**
+  Why: every operation is one-entry-at-a-time; tidying a large vault is tedious.
+  Scope: a selection mode in the sidebar (checkboxes / Ctrl-click) with a bulk action bar for delete (single confirm) and move-to-category. Interacts with _refresh_list selection handling — best sequenced after ROLO-0018.
+  **Layman:** Select several entries at once to delete or re-file them together.
+  Kind: feature.
+  Source: in-session-2026-07-04.
+
 ## Low priority / nice-to-have
 
 - 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
@@ -128,4 +183,32 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Scope: a per-entry 'pinned' flag (schema addition — version bump + migrate_vault) and a pinned group rendered first in _refresh_list.
   **Layman:** Keep your most-used logins pinned at the top of the list.
   Kind: feature.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0026] **Remember and restore the last-selected entry across sessions.**
+  Why: the app already persists window geometry to .rolodex.conf; restoring the last selection is a cheap continuity win.
+  Scope: store the last-selected entry id (and optionally scroll position / collapsed-category state) in .rolodex.conf and reselect on launch. Config-only; no vault change.
+  **Layman:** Reopen the app where you left off, on the same entry.
+  Kind: ux.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0027] **Ship AppStream metainfo so the app appears properly in software centers.**
+  Why: a com.rolodex.Contacts.metainfo.xml is needed for GNOME Software / KDE Discover listings and pairs with the Flatpak (ROLO-0010).
+  Scope: author the AppStream metainfo XML with summary, description, categories, and screenshots, and mirror release notes from CHANGELOG.md into its <releases> block (per documentation standards).
+  **Layman:** Make the app show up nicely (name, screenshots, description) in Linux app stores.
+  Kind: package.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
+  Why: all UI text is hardcoded English; internationalization widens reach and is expected of a desktop app.
+  Scope: wrap user-facing strings in gettext _(), add a translation template (.pot) and a build step, and document the workflow. Touches every UI string — do it as one deliberate pass.
+  **Layman:** Prepare the app so it can be translated into other languages.
+  Kind: accessibility.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0029] **Provide a documented sample import file and format reference.**
+  Why: the text-import format (blank-line-separated blocks, 'Label: value' lines) is only described in the import spec; new users have nothing to copy.
+  Scope: add examples/sample-import.txt plus a short format section in the README, kept in sync with parse_text_file (spec: docs/specs/import-export-backup.md).
+  **Layman:** A ready-made example file showing exactly how to format data for import.
+  Kind: doc.
   Source: in-session-2026-07-04.

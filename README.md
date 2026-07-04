@@ -46,6 +46,13 @@ On Fedora:
 sudo dnf install python3-gobject gtk4 libadwaita python3-cryptography
 ```
 
+The GTK stack must come from the system (it's not on PyPI). The one pure-Python dependency,
+`cryptography`, can alternatively be installed with pip — always the latest version:
+
+```bash
+pip install -U -r requirements.txt
+```
+
 ## Running
 
 ```bash

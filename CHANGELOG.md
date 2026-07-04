@@ -9,6 +9,10 @@ All notable changes to Rolodex are documented here. The format is based on
 ### Added
 - Public open-source release: MIT `LICENSE`, `README.md`, `SECURITY.md`, `CONTRIBUTING.md`,
   a `docs/` standards set, and a project `ROADMAP.md`.
+- Dependency management standard (`docs/dependency-management-standards.md`) with a
+  known-incompatible-versions ledger, plus a `requirements.txt` (`cryptography`, latest).
+- Expanded roadmap covering UI, UX, performance, refactoring, accessibility, theming,
+  packaging, and tooling (ROLO-0001 … ROLO-0029), not just security.
 
 ### Changed
 - Import file picker now opens in the user's home directory instead of a hardcoded personal path.
