@@ -36,14 +36,36 @@ python3 rolodex.py
 
 Use a scratch vault, not your real one, while developing.
 
+## Building release binaries
+
+Releases are single self-contained files (Python + GTK + `cryptography` bundled by
+PyInstaller) built per-OS. Each OS has a build+self-test script under `packaging/` that mirrors
+its GitHub Actions job:
+
+- `packaging/linux-build.sh` — runs on Linux (and the `ubuntu-latest` CI job).
+- `packaging/windows-build.sh` — runs in an **MSYS2 UCRT64** shell on Windows (and `windows-latest`).
+- `packaging/macos-build.sh` — runs on **macOS / Apple hardware** (and `macos-latest`).
+
+Windows and macOS **cannot** be built on Linux (no MSYS2 GTK under Wine; no macOS build
+environment off Apple hardware — see `ROADMAP.md` ROLO-0031). Build those on their native
+runners: push a `v*` tag to build + publish all three to a Release, or run the workflow without
+publishing via `gh workflow run "Build binaries"`.
+
+**Before every push, run the local CI gate** — it runs the test suite and the Linux
+build+self-test using the same script CI uses, catching failures before they reach GitHub:
+
+```bash
+./CI-local.sh
+```
+
 ## Making a change
 
 1. Open an issue describing the change first for anything non-trivial — it's cheaper to
    agree on the approach before code exists.
 2. Branch from `main`: `git checkout -b <topic>`.
 3. Make the change. Keep the diff scoped to one concern.
-4. Run the tests (`pytest tests/`) and manually exercise the affected flow end to end (test
-   coverage is still a seed — see ROLO-0001). At minimum, manually: create a vault,
+4. Run the local CI gate (`./CI-local.sh` — tests + Linux build/self-test) and manually
+   exercise the affected flow end to end. At minimum, manually: create a vault,
    add/edit/delete an entry, quit and re-unlock.
 5. Update `CHANGELOG.md` under an *Unreleased* heading.
 6. Open a pull request describing what changed and how you verified it.

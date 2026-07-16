@@ -4,9 +4,11 @@ name: Build binaries
 # PyInstaller (packaging/rolodex.spec). Run it manually from the Actions tab (workflow_dispatch)
 # to get downloadable artifacts, or push a `v*` tag to also publish them to a GitHub Release.
 #
-# The hard part on every OS is installing the GTK 4 / libadwaita + PyGObject runtime so
-# PyInstaller can bundle it: Linux uses apt, Windows uses MSYS2, macOS uses Homebrew. The
-# Windows and macOS jobs are best-effort and may need iteration — GTK is Linux-first.
+# Each OS installs its GTK 4 / libadwaita + PyGObject runtime (Linux: apt, Windows: MSYS2,
+# macOS: Homebrew), then calls the SAME build+self-test script a developer runs locally
+# (packaging/{linux,windows,macos}-build.sh). Keeping the build logic in those scripts means
+# CI-local.sh and this workflow can't drift. The Windows and macOS jobs are best-effort — GTK
+# is Linux-first.
 
 on:
   workflow_dispatch:
@@ -36,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # ---- Linux: GTK stack from apt, PyInstaller from pip ----
-      - name: Build (Linux)
+      - name: Install GTK stack (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -44,15 +46,9 @@ jobs:
             python3-gi python3-gi-cairo python3-cairo xvfb \
             gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-1 libadwaita-1-0
           python3 -m pip install --break-system-packages --upgrade pyinstaller cryptography
-          python3 -m PyInstaller packaging/rolodex.spec --noconfirm
-          mkdir -p out
-          mv dist/rolodex "out/${{ matrix.asset }}"
-      - name: Self-test (Linux)
+      - name: Build + self-test (Linux)
         if: runner.os == 'Linux'
-        run: |
-          out=$(xvfb-run -a "out/${{ matrix.asset }}" --selftest)
-          echo "$out"
-          echo "$out" | grep -q "selftest: OK" || { echo "::error::binary failed to load GTK"; exit 1; }
+        run: bash packaging/linux-build.sh "${{ matrix.asset }}"
 
       # ---- Windows: GTK stack + Python from MSYS2 (UCRT64) ----
       - name: Set up MSYS2 (Windows)
@@ -67,44 +63,20 @@ jobs:
             mingw-w64-ucrt-x86_64-python-gobject
             mingw-w64-ucrt-x86_64-python-cryptography
             mingw-w64-ucrt-x86_64-python-pip
-      - name: Build (Windows)
+      - name: Build + self-test (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           python -m pip install --upgrade pyinstaller
-          # Windows-form MSYS2 prefix so the spec can bundle the GTK typelibs (the automatic
-          # collection misses them on MSYS2 → "Namespace Gtk not available" at runtime).
-          export ROLODEX_MINGW="$(cygpath -w "$MINGW_PREFIX")"
-          echo "MINGW prefix: $ROLODEX_MINGW"
-          python -m PyInstaller packaging/rolodex.spec --noconfirm
-          mkdir -p out
-          mv dist/rolodex.exe "out/${{ matrix.asset }}"
-      - name: Self-test (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $p = Start-Process -FilePath "out\${{ matrix.asset }}" -ArgumentList "--selftest" -PassThru
-          if (-not $p.WaitForExit(120000)) { $p.Kill($true); Write-Error "selftest timed out — GTK failed to load"; exit 1 }
-          if ($p.ExitCode -ne 0) { Write-Error "selftest failed (exit $($p.ExitCode))"; exit 1 }
-          Write-Host "Windows selftest OK (exit 0)"
+          bash packaging/windows-build.sh "${{ matrix.asset }}"
 
       # ---- macOS: GTK stack from Homebrew (unsigned build) ----
-      - name: Build (macOS)
+      - name: Build + self-test (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install gtk4 libadwaita pygobject3 py3cairo pyinstaller
-          # Use the Homebrew Python that pygobject3 linked `gi` into.
-          BREW_PY="$(brew --prefix)/bin/python3"
-          "$BREW_PY" -m pip install --break-system-packages --upgrade cryptography || true
-          pyinstaller packaging/rolodex.spec --noconfirm
-          mkdir -p out
-          mv dist/rolodex "out/${{ matrix.asset }}"
-      - name: Self-test (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          out=$("out/${{ matrix.asset }}" --selftest)
-          echo "$out"
-          echo "$out" | grep -q "selftest: OK" || { echo "::error::binary failed to load GTK"; exit 1; }
+          "$(brew --prefix)/bin/python3" -m pip install --break-system-packages --upgrade cryptography || true
+          bash packaging/macos-build.sh "${{ matrix.asset }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

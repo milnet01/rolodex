@@ -1,0 +1,26 @@
+{
+  "$comment": "Recipe consumed by ~/.claude/skills/bump/SKILL.md (and /release). Rolodex carries its version in CHANGELOG.md + the git tag only (no __version__ in the single-file app), so the 'source of truth' is the topmost dated CHANGELOG heading. The bump cuts the accumulated [Unreleased] block into a dated [{NEW}] section and advances the compare-link footer. post_check asserts the new section + footer links are present and agree. Tag v{NEW} is what triggers .github/workflows/build.yml to build + attach the self-contained Linux/Windows/macOS binaries.",
+  "version_source": "CHANGELOG.md",
+  "version_pattern": "## \\[([0-9]+\\.[0-9]+\\.[0-9]+)\\] - ",
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "$comment": "Cut [Unreleased] into a dated release section, leaving a fresh empty [Unreleased] above it.",
+      "pattern": "## [Unreleased]\n\n",
+      "replace": "## [Unreleased]\n\n## [{NEW}] - {TODAY}\n\n"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "$comment": "Advance the Unreleased compare range to the new tag and add the new release's tag link.",
+      "pattern": "[Unreleased]: https://github.com/milnet01/rolodex/compare/v{OLD}...HEAD\n",
+      "replace": "[Unreleased]: https://github.com/milnet01/rolodex/compare/v{NEW}...HEAD\n[{NEW}]: https://github.com/milnet01/rolodex/releases/tag/v{NEW}\n"
+    }
+  ],
+  "post_check": "V=$(sed -n 's/^## \\[\\([0-9.]*\\)\\] - .*/\\1/p' CHANGELOG.md | head -1); test -n \"$V\" && grep -q \"^## \\[$V\\] - \" CHANGELOG.md && grep -qF \"compare/v$V...HEAD\" CHANGELOG.md && grep -qE \"^\\[$V\\]: .*releases/tag/v$V\" CHANGELOG.md && echo \"version lockstep OK: $V\" || { echo \"VERSION DRIFT: expected a dated ## [$V] section plus matching compare + tag footer links in CHANGELOG.md\"; exit 1; }",
+  "tag": "v{NEW}",
+  "todos": [
+    "Confirm the new ## [{NEW}] CHANGELOG section reads correctly — its bullets were authored during development via changelog_log, so the bump only cuts the [Unreleased] block into a dated section (no body to write from scratch).",
+    "Publish: after the release commit lands on origin/main, run `git tag v{NEW} && git push origin v{NEW}`. That triggers .github/workflows/build.yml, which builds the self-contained single-file Linux/Windows/macOS binaries on their native runners and attaches them to the GitHub Release. (A normal push to main does NOT trigger a build.)",
+    "Optional pre-publish validation (free on a public repo): `gh workflow run \"Build binaries\"` builds + self-tests all three OSes WITHOUT publishing (the release-attach step only fires on a v* tag). Confirm all three are green before tagging."
+  ]
+}
