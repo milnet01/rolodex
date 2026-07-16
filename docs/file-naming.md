@@ -8,7 +8,7 @@
 | Documentation (root) | `UPPERCASE.md` for the well-known set (`LICENSE` is extensionless by convention) | `README.md`, `LICENSE`, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `ROADMAP.md`, `CLAUDE.md` |
 | Documentation (topic) | `kebab-case.md` under `docs/` | `docs/coding-standards.md` |
 | Desktop integration | reverse-DNS app id for `StartupWMClass`, plain name for the file | `rolodex.desktop`, id `com.rolodex.Contacts` |
-| Icons | app name + extension | `rolodex.svg` |
+| Icons | app name + extension | `rolodex.png` |
 
 ## Generated / user data (never committed)
 

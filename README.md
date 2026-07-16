@@ -7,7 +7,7 @@ until you reveal them.
 
 No cloud, no sync, no telemetry. Your data lives in one encrypted file on your machine.
 
-![Rolodex application icon.](rolodex.svg)
+![Rolodex application icon.](rolodex.png)
 
 ## Features
 
@@ -105,7 +105,7 @@ cp rolodex.desktop ~/.local/share/applications/
 | `contacts.vault` | Your encrypted vault (created on first run; **git-ignored**). |
 | `Backups/`, `rolodex_export_*.txt` | Backup copies and plaintext exports you create (git-ignored). |
 | `.rolodex.conf` | Window size/position only, plaintext (git-ignored). |
-| `rolodex.svg` | Application icon. |
+| `rolodex.png` | Application icon. |
 
 The vault format is `VLT1` magic bytes + 16-byte salt + Fernet ciphertext (canonical spec:
 `docs/specs/vault-format-and-crypto.md`).

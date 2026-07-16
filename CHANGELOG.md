@@ -6,6 +6,13 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **New application icon — a glossy Rolodex card-file design (`rolodex.png`), replacing the flat `rolodex.svg`.**
+  Corners are transparent (rounded-square silhouette), so the icon renders
+  cleanly on any desktop background. `rolodex.desktop`, the README, and the
+  file-naming doc now reference the PNG.
+
 ## [1.1.0] - 2026-07-04
 
 First public release with prebuilt, self-contained binaries for **Linux and macOS** (a Windows
