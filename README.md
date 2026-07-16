@@ -1,129 +1,130 @@
 # Rolodex
 
-A minimal, single-file **encrypted credential manager** for the Linux desktop, built with
-GTK 4 and libadwaita. One master password unlocks a local, encrypted vault of logins,
-API keys, and notes — organised into categories, searchable, with sensitive fields masked
-until you reveal them.
+**A safe, simple place to keep your passwords, keys, and private notes — on your own computer.**
 
-No cloud, no sync, no telemetry. Your data lives in one encrypted file on your machine.
+Rolodex tucks all your logins, API keys, and secret notes inside a single encrypted file. One
+master password unlocks it. There's no cloud, no account to sign up for, and no tracking — your
+data never leaves your machine. It runs on Linux, Windows, and macOS.
 
 ![Rolodex application icon.](rolodex.png)
 
-## Features
+## What it does
 
-- **Encrypted-at-rest vault** — AES (via Fernet) with a key derived from your master
-  password using PBKDF2-HMAC-SHA256 (600,000 iterations) and a per-vault random salt.
-- **Categories** — group entries, collapse/expand sections, drag entries between categories.
-- **Sensitive-field masking** — password/token/secret fields are hidden behind dots and
-  auto-detected from their label; reveal per-entry when you need them.
-- **Password generator** — generate a strong random password (length + character-class
-  options) right in the add/edit editor, powered by Python's `secrets` module.
-- **One-click copy** to the clipboard (Wayland `wl-copy`, or X11 `xclip`/`xsel`), which is
-  **cleared automatically** a few seconds later so secrets don't linger.
-- **Auto-lock on idle** — the vault re-locks itself after a period of inactivity (and on
-  demand via a Lock button / `Ctrl+L`), wiping the decrypted data from memory.
-- **Import** from a simple `Name:` / `Label: value` text format, with a preview + de-dupe step.
-- **Encrypted backup & restore**, plus an optional plaintext export.
-- **Colour-coded fields** — credentials, keys, identities, URLs, and dates each get a
-  distinct accent so a card is scannable at a glance.
+- **Everything stays encrypted.** Your whole vault is scrambled with strong, industry-standard
+  encryption and can only be opened with your master password. *(For the technically curious:
+  AES via Fernet, with the key derived from your password using PBKDF2-HMAC-SHA256 at 600,000
+  rounds and a random per-vault salt.)*
+- **Organise into categories.** Group entries (Email, Banking, Games…), collapse the sections
+  you're not using, and drag entries from one category to another.
+- **Find anything fast.** Search as you type across names, fields, and notes.
+- **Secrets stay hidden.** Passwords and keys are masked behind dots and reveal only when you
+  ask. Rolodex recognises sensitive-looking fields on its own.
+- **Built-in password generator.** Create a strong random password in a click, with control
+  over its length and which kinds of characters to include.
+- **Safer copying.** Copy a password with one click — and Rolodex wipes it from the clipboard a
+  few seconds later, so it doesn't sit there for other apps to read.
+- **Auto-locks when you step away.** After a stretch of inactivity (or instantly with the Lock
+  button or `Ctrl+L`), Rolodex re-locks and forgets your master password until you unlock again.
+- **Import your existing list** from a plain text file, with a preview and a skip-duplicates step.
+- **Backup & restore**, plus a plain-text export if you ever want to move your data elsewhere.
+- **Change your master password** whenever you like.
+- **Easy to scan.** Different kinds of fields — logins, keys, web addresses, dates — each get
+  their own colour accent so a card reads at a glance.
 
-## Download (prebuilt binaries)
+## Download & run
 
-Self-contained builds for Linux, Windows, and macOS are published on the
-[Releases page](https://github.com/milnet01/rolodex/releases) — each is a single file with
-Python, GTK, and all dependencies bundled in, so there's nothing else to install.
+Ready-to-run downloads for **Linux, Windows, and macOS** are on the
+[**Releases page**](https://github.com/milnet01/rolodex/releases). Each is a **single file**
+with everything bundled inside — there's nothing else to install.
 
-| Platform | File | Notes |
-|----------|------|-------|
-| Linux (x86-64) | `rolodex-linux-x86_64` | `chmod +x` it, then run it. Built on Ubuntu 24.04; needs a reasonably recent glibc. |
-| macOS (Apple Silicon) | `rolodex-macos-arm64` | Unsigned — the first time, **right-click → Open** to get past Gatekeeper, then confirm. |
-| Windows (x64) | `rolodex-windows-x86_64.exe` | Download and run it. Unsigned — SmartScreen may warn on first launch; choose **More info → Run anyway**. |
+| Your system | Download | How to start it |
+|-------------|----------|-----------------|
+| **Linux** (x86-64) | [`rolodex-linux-x86_64`](https://github.com/milnet01/rolodex/releases/latest/download/rolodex-linux-x86_64) | Make it runnable — `chmod +x rolodex-linux-x86_64` — then run it. Works on most current Linux systems. |
+| **Windows** (64-bit) | [`rolodex-windows-x86_64.exe`](https://github.com/milnet01/rolodex/releases/latest/download/rolodex-windows-x86_64.exe) | Double-click it. It isn't signed yet, so Windows may show a blue "protected your PC" box — click **More info → Run anyway**. |
+| **macOS** (Apple Silicon) | [`rolodex-macos-arm64`](https://github.com/milnet01/rolodex/releases/latest/download/rolodex-macos-arm64) | It isn't signed yet, so the first time **right-click → Open**, then confirm. After that it opens normally. |
 
-The packaged app stores your vault in a per-user data directory (`~/.local/share/Rolodex` on
-Linux, `~/Library/Application Support/Rolodex` on macOS, `%APPDATA%\Rolodex` on Windows), not
-next to the executable.
+Your vault is saved in your personal data folder (`~/.local/share/Rolodex` on Linux,
+`~/Library/Application Support/Rolodex` on macOS, `%APPDATA%\Rolodex` on Windows), not next to
+the download.
 
-Prefer to run from source instead? Read on.
+## First launch
 
-## Requirements
+The first time you open Rolodex, you'll create your **master password** (at least 8
+characters). This one password protects everything.
 
-- Python 3.10+
-- GTK 4 and libadwaita with GObject introspection (PyGObject / `gi`)
+> ⚠️ **There is no way to recover a forgotten master password.** It is never saved anywhere —
+> it's the only key to your data. If you lose it, the data is gone for good. Make a backup you
+> can restore from (menu → *Backup vault…*) and keep your master password somewhere safe.
+
+## Run from source instead (optional)
+
+Prefer to run the code directly? You'll need a few things first:
+
+- Python 3.10 or newer
+- GTK 4 and libadwaita — the desktop toolkit Rolodex is built with — via PyGObject
 - The Python [`cryptography`](https://pypi.org/project/cryptography/) package
 
-On openSUSE:
+Install the toolkit from your system's package manager:
 
 ```bash
+# openSUSE
 sudo zypper install python3-gobject gtk4 libadwaita python3-cryptography
-```
 
-On Debian/Ubuntu:
-
-```bash
+# Debian / Ubuntu
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-cryptography
-```
 
-On Fedora:
-
-```bash
+# Fedora
 sudo dnf install python3-gobject gtk4 libadwaita python3-cryptography
 ```
 
-The GTK stack must come from the system (it's not on PyPI). The one pure-Python dependency,
-`cryptography`, can alternatively be installed with pip — always the latest version:
+The desktop toolkit has to come from your system (it isn't on PyPI). The one remaining piece,
+`cryptography`, can also be installed with pip — always the latest version:
 
 ```bash
 pip install -U -r requirements.txt
 ```
 
-## Running
+Then start it:
 
 ```bash
 python3 rolodex.py
 ```
 
-On first launch you'll be asked to create a master password (minimum 8 characters). The
-vault file `contacts.vault` is created next to the script with `0600` permissions.
+## Add it to your app menu (Linux)
 
-> **There is no password recovery.** The master password is never stored — it only exists
-> as the key that decrypts your vault. If you forget it, the data is unrecoverable. Keep an
-> encrypted backup (menu → *Backup vault…*).
-
-## Desktop launcher
-
-A `rolodex.desktop` file is included. Edit its `Exec=` and `Icon=` lines to the absolute
-path where you cloned this repo, then install it:
+A `rolodex.desktop` launcher is included. Point it at your copy of the repo and install it:
 
 ```bash
-# from the repo directory:
-sed -i "s|/path/to/rolodex|$PWD|g" rolodex.desktop   # point Exec/Icon at this clone
+# from the folder where you cloned this repo:
+sed -i "s|/path/to/rolodex|$PWD|g" rolodex.desktop   # point it at this copy
 cp rolodex.desktop ~/.local/share/applications/
 ```
 
-## Data & files
+## Where your things are kept
 
-| File | Purpose |
-|------|---------|
-| `rolodex.py` | The entire application. |
+| File | What it is |
+|------|------------|
+| `rolodex.py` | The whole application (it's a single file). |
+| `contacts.vault` | Your encrypted vault — created on first run. Never shared or committed. |
+| `.rolodex.conf` | Window size plus a couple of non-secret settings (see below). Plain text, no secrets. |
+| `Backups/`, `rolodex_export_*.txt` | Backups and exports you create. |
 | `requirements.txt` | The single pip dependency (`cryptography`). |
-| `rolodex.desktop` | Desktop launcher template (edit its paths — see above). |
-| `contacts.vault` | Your encrypted vault (created on first run; **git-ignored**). |
-| `Backups/`, `rolodex_export_*.txt` | Backup copies and plaintext exports you create (git-ignored). |
-| `.rolodex.conf` | Window geometry and non-secret preferences (security timeouts), plaintext (git-ignored). |
-| `rolodex.png` | Application icon. |
+| `rolodex.desktop` | The app-menu launcher (edit its paths — see above). |
+| `rolodex.png` | The app icon. |
 
-The vault format is `VLT1` magic bytes + 16-byte salt + Fernet ciphertext (canonical spec:
-`docs/specs/vault-format-and-crypto.md`).
+## Security & privacy
 
-## Security notes
-
-- The vault is encrypted with a modern authenticated cipher and a slow KDF, but its
-  strength ultimately rests on your master password — choose a strong one.
-- This is a personal-use tool, not audited security software. Review the code (it's one
-  readable file) before trusting it with anything critical.
-- Two hardening timeouts are configurable in `.rolodex.conf` (plaintext JSON, no secrets):
-  `idle_lock_seconds` (auto-lock delay, default 300; `0` disables) and `clipboard_clear_seconds`
-  (clipboard wipe delay, default 20; `0` disables).
+- Your vault is protected with well-established encryption, but its real strength is **your
+  master password** — pick a strong one.
+- The vault file can be read only by your own user account, and your master password is never
+  written to disk.
+- Two safety timers can be tuned in `.rolodex.conf` (plain text, no secrets): how long before it
+  auto-locks (`idle_lock_seconds`, default 300 seconds; set `0` to turn off) and how soon a
+  copied password is wiped from the clipboard (`clipboard_clear_seconds`, default 20; `0` to
+  turn off).
+- This is a personal-use tool, not audited security software. It's one readable file — feel free
+  to look before trusting it with anything critical. The nuts-and-bolts of the vault format are
+  documented in [`docs/specs/vault-format-and-crypto.md`](docs/specs/vault-format-and-crypto.md).
 
 ## Contributing
 
