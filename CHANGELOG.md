@@ -6,12 +6,25 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Built-in password generator (ROLO-0004) — a button on sensitive fields in the add/edit editor opens a popover to generate a strong random password, with length and character-class options.**
+  Uses Python's `secrets` module and guarantees at least one character from each selected class.
+
 ### Changed
 
 - **New application icon — a glossy Rolodex card-file design (`rolodex.png`), replacing the flat `rolodex.svg`.**
   Corners are transparent (rounded-square silhouette), so the icon renders
   cleanly on any desktop background. `rolodex.desktop`, the README, and the
   file-naming doc now reference the PNG.
+
+### Security
+
+- **Automatic clipboard clearing (ROLO-0003) — a copied secret is wiped from the clipboard a few seconds later, but only if you haven't copied something else in the meantime.**
+  Delay is configurable via `clipboard_clear_seconds` in `.rolodex.conf` (default 20s; 0 disables).
+
+- **Automatic vault lock on idle (ROLO-0002) — after a period of inactivity the vault re-locks, wiping the decrypted data and master password from memory. Adds a Lock button (Ctrl+L) for locking on demand.**
+  Idle timeout is configurable via `idle_lock_seconds` in `.rolodex.conf` (default 300s; 0 disables).
 
 ## [1.1.0] - 2026-07-04
 

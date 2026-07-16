@@ -16,7 +16,12 @@ No cloud, no sync, no telemetry. Your data lives in one encrypted file on your m
 - **Categories** — group entries, collapse/expand sections, drag entries between categories.
 - **Sensitive-field masking** — password/token/secret fields are hidden behind dots and
   auto-detected from their label; reveal per-entry when you need them.
-- **One-click copy** to the clipboard (Wayland `wl-copy`, or X11 `xclip`/`xsel`).
+- **Password generator** — generate a strong random password (length + character-class
+  options) right in the add/edit editor, powered by Python's `secrets` module.
+- **One-click copy** to the clipboard (Wayland `wl-copy`, or X11 `xclip`/`xsel`), which is
+  **cleared automatically** a few seconds later so secrets don't linger.
+- **Auto-lock on idle** — the vault re-locks itself after a period of inactivity (and on
+  demand via a Lock button / `Ctrl+L`), wiping the decrypted data from memory.
 - **Import** from a simple `Name:` / `Label: value` text format, with a preview + de-dupe step.
 - **Encrypted backup & restore**, plus an optional plaintext export.
 - **Colour-coded fields** — credentials, keys, identities, URLs, and dates each get a
@@ -104,7 +109,7 @@ cp rolodex.desktop ~/.local/share/applications/
 | `rolodex.desktop` | Desktop launcher template (edit its paths — see above). |
 | `contacts.vault` | Your encrypted vault (created on first run; **git-ignored**). |
 | `Backups/`, `rolodex_export_*.txt` | Backup copies and plaintext exports you create (git-ignored). |
-| `.rolodex.conf` | Window size/position only, plaintext (git-ignored). |
+| `.rolodex.conf` | Window geometry and non-secret preferences (security timeouts), plaintext (git-ignored). |
 | `rolodex.png` | Application icon. |
 
 The vault format is `VLT1` magic bytes + 16-byte salt + Fernet ciphertext (canonical spec:
@@ -116,6 +121,9 @@ The vault format is `VLT1` magic bytes + 16-byte salt + Fernet ciphertext (canon
   strength ultimately rests on your master password — choose a strong one.
 - This is a personal-use tool, not audited security software. Review the code (it's one
   readable file) before trusting it with anything critical.
+- Two hardening timeouts are configurable in `.rolodex.conf` (plaintext JSON, no secrets):
+  `idle_lock_seconds` (auto-lock delay, default 300; `0` disables) and `clipboard_clear_seconds`
+  (clipboard wipe delay, default 20; `0` disables).
 
 ## Contributing
 

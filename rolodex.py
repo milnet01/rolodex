@@ -5,7 +5,9 @@ import base64
 import json
 import os
 import re
+import secrets
 import shutil
+import string
 import subprocess
 import sys
 import uuid
@@ -42,6 +44,20 @@ ITERATIONS = 600_000
 SENSITIVE_KEYWORDS = {"password", "pass", "secret", "key", "token", "pin", "authenticator"}
 MIN_PASSWORD_LENGTH = 8
 MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+
+# Password generator (ROLO-0004): character classes and default length.
+PW_GEN_LENGTH = 20
+PW_GEN_SYMBOLS = "!@#$%^&*()-_=+[]{};:,.?"
+PW_GEN_CLASSES = {
+    "lower": string.ascii_lowercase,
+    "upper": string.ascii_uppercase,
+    "digits": string.digits,
+    "symbols": PW_GEN_SYMBOLS,
+}
+
+# Security timeouts, both user-configurable via .rolodex.conf (0 disables).
+DEFAULT_CLIPBOARD_CLEAR_SECONDS = 20  # ROLO-0003: wipe a copied secret after this delay
+DEFAULT_IDLE_LOCK_SECONDS = 300  # ROLO-0002: auto-lock after this much inactivity
 
 # ---------------------------------------------------------------------------
 # Encryption layer
@@ -282,8 +298,66 @@ def import_entries(vault, parsed, skip_duplicates=True):
 
 
 # ---------------------------------------------------------------------------
+# Password generation
+# ---------------------------------------------------------------------------
+
+
+def generate_password(
+    length: int = PW_GEN_LENGTH,
+    lower: bool = True,
+    upper: bool = True,
+    digits: bool = True,
+    symbols: bool = True,
+) -> str:
+    """Return a cryptographically-random password from the selected character classes.
+
+    Uses the `secrets` module (never `random`). Every selected class is guaranteed to appear
+    at least once when the length allows it, then the remainder is filled from the combined
+    pool and shuffled so the guaranteed characters aren't stuck at the front.
+    """
+    pools = [
+        PW_GEN_CLASSES[name]
+        for name, wanted in (("lower", lower), ("upper", upper), ("digits", digits), ("symbols", symbols))
+        if wanted
+    ]
+    if not pools:
+        raise ValueError("at least one character class must be enabled")
+    if length < 1:
+        raise ValueError("length must be at least 1")
+
+    combined = "".join(pools)
+    # One char from each class first (up to length), then fill from the combined pool.
+    chars = [secrets.choice(pool) for pool in pools][:length]
+    chars += [secrets.choice(combined) for _ in range(length - len(chars))]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
+
+
+# ---------------------------------------------------------------------------
 # Clipboard
 # ---------------------------------------------------------------------------
+
+
+def read_clipboard() -> str | None:
+    """Return the current clipboard text, or None if no reader tool is available / it fails.
+
+    Mirrors copy_to_clipboard's tool priority (Wayland first, then X11) so a read pairs with
+    the writer used for the copy. Used by the auto-clear timer to only wipe the clipboard when
+    its contents are still the secret we put there.
+    """
+    for cmd in [
+        ["wl-paste", "--no-newline"],
+        ["xclip", "-selection", "clipboard", "-o"],
+        ["xsel", "--clipboard", "--output"],
+    ]:
+        if shutil.which(cmd[0]):
+            try:
+                proc = subprocess.run(cmd, capture_output=True, timeout=5)
+                if proc.returncode == 0:
+                    return proc.stdout.decode("utf-8", "replace")
+            except (subprocess.TimeoutExpired, OSError):
+                continue
+    return None
 
 
 def copy_to_clipboard(text: str) -> bool:
@@ -592,6 +666,12 @@ class MainWindow(Adw.ApplicationWindow):
         if conf.get("window_maximized"):
             self.maximize()
 
+        # Security timeouts (0 disables either). Read once at unlock; edit .rolodex.conf to change.
+        self._clipboard_clear_s = int(conf.get("clipboard_clear_seconds", DEFAULT_CLIPBOARD_CLEAR_SECONDS))
+        self._idle_timeout_s = int(conf.get("idle_lock_seconds", DEFAULT_IDLE_LOCK_SECONDS))
+        self._idle_source_id = None
+        self._last_activity = 0
+
         self.connect("close-request", self._on_close_request)
 
         # --- Header bar with actions ---
@@ -613,6 +693,11 @@ class MainWindow(Adw.ApplicationWindow):
         menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu)
         header.pack_end(menu_btn)
 
+        # Manual Lock button (ROLO-0002), also on Ctrl+L.
+        lock_btn = Gtk.Button(icon_name="changes-prevent-symbolic", tooltip_text="Lock vault (Ctrl+L)")
+        lock_btn.connect("clicked", self._lock)
+        header.pack_end(lock_btn)
+
         # Actions
         for name, callback in [
             ("manage-categories", self._on_manage_categories),
@@ -630,6 +715,12 @@ class MainWindow(Adw.ApplicationWindow):
         move_action = Gio.SimpleAction(name="move-to-category", parameter_type=GLib.VariantType.new("(ss)"))
         move_action.connect("activate", self._on_move_to_category_action)
         self.add_action(move_action)
+
+        # Lock action + Ctrl+L accelerator (ROLO-0002).
+        lock_action = Gio.SimpleAction(name="lock")
+        lock_action.connect("activate", self._lock)
+        self.add_action(lock_action)
+        app.set_accels_for_action("win.lock", ["<Control>l"])
 
         # --- Paned: sidebar | detail ---
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
@@ -704,6 +795,17 @@ class MainWindow(Adw.ApplicationWindow):
         self._collapsed_categories: set[str] = set()
         migrate_vault(self.vault)
         self._refresh_list()
+
+        # Auto-lock on idle (ROLO-0002): any pointer motion or key press resets the activity
+        # clock; a periodic check locks the vault once the idle timeout is exceeded.
+        self._last_activity = GLib.get_monotonic_time()
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._bump_activity)
+        self.add_controller(motion)
+        keyctl = Gtk.EventControllerKey()
+        keyctl.connect("key-pressed", self._bump_activity)
+        self.add_controller(keyctl)
+        self._start_idle_timer()
 
     # ------------------------------------------------------------------
     # Vault persistence
@@ -964,14 +1066,71 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _make_copy_handler(self, value, label):
         def handler(_btn):
-            if copy_to_clipboard(value):
-                self._toast(f"Copied {label}")
-            else:
+            if not copy_to_clipboard(value):
                 self._toast("Clipboard not available")
+                return
+            delay = self._clipboard_clear_s
+            if delay > 0:
+                self._toast(f"Copied {label} — clipboard clears in {delay}s")
+                GLib.timeout_add_seconds(delay, self._clear_clipboard_if_unchanged, value)
+            else:
+                self._toast(f"Copied {label}")
         return handler
+
+    def _clear_clipboard_if_unchanged(self, value):
+        """Wipe the clipboard, but only if it still holds the secret we copied (ROLO-0003)."""
+        current = read_clipboard()
+        # If a reader is available and the clipboard has moved on, leave the user's new copy alone.
+        if current is not None and current != value:
+            return False
+        copy_to_clipboard("")
+        return False  # one-shot timeout
 
     def _toast(self, msg):
         self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=2))
+
+    # ------------------------------------------------------------------
+    # Auto-lock (ROLO-0002)
+    # ------------------------------------------------------------------
+
+    def _bump_activity(self, *_args):
+        self._last_activity = GLib.get_monotonic_time()
+        return False  # never swallow the event
+
+    def _start_idle_timer(self):
+        if self._idle_source_id is not None:
+            GLib.source_remove(self._idle_source_id)
+            self._idle_source_id = None
+        if self._idle_timeout_s <= 0:
+            return
+        # Check a handful of times within the window; no need to poll every second.
+        interval = max(5, min(30, self._idle_timeout_s))
+        self._idle_source_id = GLib.timeout_add_seconds(interval, self._idle_check)
+
+    def _idle_check(self):
+        if self._idle_timeout_s <= 0 or self.vault is None:
+            self._idle_source_id = None
+            return False
+        idle_us = GLib.get_monotonic_time() - self._last_activity
+        if idle_us >= self._idle_timeout_s * 1_000_000:
+            self._idle_source_id = None  # this source is removed by the False return below
+            self._lock()
+            return False
+        return True
+
+    def _lock(self, *_args):
+        """Discard the decrypted vault + master password and return to the unlock screen."""
+        if self._idle_source_id is not None:
+            GLib.source_remove(self._idle_source_id)
+            self._idle_source_id = None
+        # Wipe secrets from memory before showing the lock screen. Every mutation already saves
+        # via _save(), so there is nothing unsaved to lose here.
+        self.vault = None
+        self.salt = None
+        self.password = None
+        app, path = self.app_ref, self.vault_path
+        self.close()
+        UnlockDialog(app, path, is_new=False).present()
 
     def _on_toggle_reveal(self, btn, entry_id):
         self._revealed = not self._revealed
@@ -1381,6 +1540,16 @@ class FieldRow(Gtk.ListBoxRow):
 
         if sensitive is None:
             sensitive = is_sensitive_label(label)
+
+        # Password generator (ROLO-0004): only offered on sensitive fields, since generating a
+        # strong secret only makes sense for passwords/keys.
+        self.gen_btn = Gtk.MenuButton(icon_name="view-refresh-symbolic",
+                                      tooltip_text="Generate a strong password")
+        self.gen_btn.add_css_class("flat")
+        self.gen_btn.set_popover(self._build_generator_popover())
+        self.gen_btn.set_visible(sensitive)
+        box.append(self.gen_btn)
+
         self.sens_check = Gtk.CheckButton(label="Hide", active=sensitive)
         box.append(self.sens_check)
 
@@ -1388,9 +1557,11 @@ class FieldRow(Gtk.ListBoxRow):
             self.value_entry.set_visibility(False)
 
         # Value visibility always tracks the "Hide" checkbox, so a field is never shown in
-        # cleartext while it will be saved as sensitive.
+        # cleartext while it will be saved as sensitive. The generator button follows the same
+        # flag — it appears exactly when the field is marked sensitive.
         def on_sens_toggled(check):
             self.value_entry.set_visibility(not check.get_active())
+            self.gen_btn.set_visible(check.get_active())
         self.sens_check.connect("toggled", on_sens_toggled)
 
         # Auto-check "Hide" when the label gains a sensitive keyword (one-way; the user can
@@ -1420,6 +1591,49 @@ class FieldRow(Gtk.ListBoxRow):
         drop.set_gtypes([FieldRow])
         drop.connect("drop", self._on_drop)
         self.add_controller(drop)
+
+    def _build_generator_popover(self) -> Gtk.Popover:
+        """A small popover with length + character-class options and a Generate button."""
+        pop = Gtk.Popover()
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(box, f"set_margin_{side}")(12)
+
+        len_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        len_row.append(Gtk.Label(label="Length", xalign=0, hexpand=True))
+        adj = Gtk.Adjustment(value=PW_GEN_LENGTH, lower=MIN_PASSWORD_LENGTH, upper=128,
+                             step_increment=1, page_increment=4)
+        length_spin = Gtk.SpinButton(adjustment=adj, numeric=True)
+        len_row.append(length_spin)
+        box.append(len_row)
+
+        checks = {}
+        for key, lbl in (("lower", "Lowercase (a–z)"), ("upper", "Uppercase (A–Z)"),
+                         ("digits", "Digits (0–9)"), ("symbols", "Symbols (!@#…)")):
+            check = Gtk.CheckButton(label=lbl, active=True)
+            checks[key] = check
+            box.append(check)
+
+        gen = Gtk.Button(label="Generate")
+        gen.add_css_class("suggested-action")
+        box.append(gen)
+
+        def do_generate(_btn):
+            opts = {k: c.get_active() for k, c in checks.items()}
+            pw = generate_password(length=int(length_spin.get_value()), **opts)
+            self.value_entry.set_text(pw)
+            self.sens_check.set_active(True)  # a generated value is a secret — save it masked
+            pop.popdown()
+        gen.connect("clicked", do_generate)
+
+        # Can't generate with no character class selected — disable the button instead.
+        def sync_gen_sensitive(*_a):
+            gen.set_sensitive(any(c.get_active() for c in checks.values()))
+        for c in checks.values():
+            c.connect("toggled", sync_gen_sensitive)
+
+        pop.set_child(box)
+        return pop
 
     def _on_drag_prepare(self, source, x, y):
         return Gdk.ContentProvider.new_for_value(self)

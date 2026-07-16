@@ -79,7 +79,8 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
 
 - `contacts.vault` — the user's real encrypted vault. **Never** read, move, or overwrite it
   without explicit instruction; it's live user data.
-- `.rolodex.conf` — plaintext JSON window geometry only (no secrets).
+- `.rolodex.conf` — plaintext JSON: window geometry plus non-secret preferences
+  (`idle_lock_seconds`, `clipboard_clear_seconds`). No secrets.
 - `Backups/` — a user-maintained folder for backup copies (git-ignored). The app never writes
   here automatically; its Backup action just defaults the save-dialog filename to
   `contacts_backup_<timestamp>.vault` at a location the user picks.

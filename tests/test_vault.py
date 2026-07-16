@@ -92,3 +92,135 @@ def test_entries_noun_singular_plural():
     assert rolodex.entries_noun(0) == "entries"
     assert rolodex.entries_noun(1) == "entry"
     assert rolodex.entries_noun(2) == "entries"
+
+
+# --- Password generator (ROLO-0004) -------------------------------------------------------
+
+
+def test_generate_password_length_and_default_classes():
+    pw = rolodex.generate_password(length=24)
+    assert len(pw) == 24
+    # Default enables every class; each guaranteed at least once at this length.
+    assert any(c.islower() for c in pw)
+    assert any(c.isupper() for c in pw)
+    assert any(c.isdigit() for c in pw)
+    assert any(c in rolodex.PW_GEN_SYMBOLS for c in pw)
+
+
+def test_generate_password_respects_disabled_classes():
+    pw = rolodex.generate_password(length=40, upper=False, digits=False, symbols=False)
+    assert pw and all(c.islower() for c in pw)
+
+
+def test_generate_password_guarantees_each_selected_class():
+    # length == number of selected classes → exactly one of each, no room for filler.
+    pw = rolodex.generate_password(length=2, lower=True, upper=False, digits=True, symbols=False)
+    assert len(pw) == 2
+    assert any(c.islower() for c in pw) and any(c.isdigit() for c in pw)
+
+
+def test_generate_password_requires_a_class():
+    with pytest.raises(ValueError):
+        rolodex.generate_password(lower=False, upper=False, digits=False, symbols=False)
+
+
+def test_generate_password_rejects_zero_length():
+    with pytest.raises(ValueError):
+        rolodex.generate_password(length=0)
+
+
+def test_generate_password_is_random():
+    # Two 32-char draws colliding by chance is astronomically unlikely; a match means a bug.
+    assert rolodex.generate_password(length=32) != rolodex.generate_password(length=32)
+
+
+# --- Import parser (ROLO-0001 scope) ------------------------------------------------------
+
+
+def test_parse_text_file(tmp_path):
+    path = tmp_path / "import.txt"
+    path.write_text(
+        "GitHub:\n"
+        "Username: octocat\n"
+        "Password: hunter2\n"
+        "a free-form note\n"
+        "\n"
+        "Email\n"
+        "Address: me@example.com\n",
+        encoding="utf-8",
+    )
+    entries = rolodex.parse_text_file(str(path))
+    assert [e["name"] for e in entries] == ["GitHub", "Email"]
+
+    gh = entries[0]
+    assert gh["fields"] == [
+        {"label": "Username", "value": "octocat", "sensitive": False},
+        {"label": "Password", "value": "hunter2", "sensitive": True},
+    ]
+    assert gh["notes"] == "a free-form note"
+    assert entries[1]["fields"][0]["label"] == "Address"
+
+
+# --- Search (ROLO-0001 scope) -------------------------------------------------------------
+
+
+def _vault_with(entries):
+    vault = {"version": 2, "categories": [], "entries": {}}
+    for name, fields, notes, category in entries:
+        rolodex.add_entry(vault, name, fields, notes, category)
+    return vault
+
+
+def test_search_entries_matches_name_field_category_notes():
+    vault = _vault_with([
+        ("GitHub", [{"label": "Password", "value": "hunter2", "sensitive": True}], "", ""),
+        ("GitLab", [], "", "Work"),
+        ("Bank", [], "savings account", ""),
+    ])
+    # Name matches, returned sorted by name.
+    names = [e["name"] for _eid, e in rolodex.search_entries(vault, "git")]
+    assert names == ["GitHub", "GitLab"]
+    # Field value, category, and notes each match.
+    assert [e["name"] for _e, e in rolodex.search_entries(vault, "hunter")] == ["GitHub"]
+    assert [e["name"] for _e, e in rolodex.search_entries(vault, "work")] == ["GitLab"]
+    assert [e["name"] for _e, e in rolodex.search_entries(vault, "savings")] == ["Bank"]
+    assert rolodex.search_entries(vault, "no-such-thing") == []
+
+
+# --- Category helpers (ROLO-0001 scope) ---------------------------------------------------
+
+
+def test_add_category_rejects_duplicates():
+    vault = _vault_with([])
+    assert rolodex.add_category(vault, "Work") is True
+    assert rolodex.add_category(vault, "Work") is False
+    assert vault["categories"] == ["Work"]
+
+
+def test_rename_category_updates_member_entries():
+    vault = _vault_with([("Job login", [], "", "Work")])
+    rolodex.add_category(vault, "Work")
+    rolodex.rename_category(vault, "Work", "Job")
+    assert vault["categories"] == ["Job"]
+    assert next(iter(vault["entries"].values()))["category"] == "Job"
+
+
+def test_delete_category_orphans_member_entries():
+    vault = _vault_with([("Thing", [], "", "Work")])
+    rolodex.add_category(vault, "Work")
+    rolodex.delete_category(vault, "Work")
+    assert vault["categories"] == []
+    assert next(iter(vault["entries"].values()))["category"] == ""
+
+
+def test_entries_by_category_groups_and_treats_orphans_as_uncategorised():
+    vault = _vault_with([
+        ("A-entry", [], "", "Real"),
+        ("B-entry", [], "", ""),
+        ("C-entry", [], "", "Ghost"),  # category not in categories list
+    ])
+    rolodex.add_category(vault, "Real")
+    groups = rolodex.entries_by_category(vault)
+    assert [e["name"] for _eid, e in groups["Real"]] == ["A-entry"]
+    # Uncategorised and orphaned-category entries both land under "".
+    assert sorted(e["name"] for _eid, e in groups[""]) == ["B-entry", "C-entry"]

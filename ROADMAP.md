@@ -7,34 +7,38 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
 ## High priority
 
-- 📋 [ROLO-0001] **Add an automated test suite for the pure-logic layer.**
+- ✅ [ROLO-0001] **Add an automated test suite for the pure-logic layer.**
   Why: there are zero automated tests today, so every change is verified by hand and refactors are risky.
   Scope: pytest over the GTK-free functions — derive_key/save_vault/load_vault round-trip, migrate_vault idempotency, parse_text_file, search_entries, category helpers. No GUI harness needed because the logic layer is already GTK-free.
   **Layman:** Safety net that checks the encryption and data code still works after any change.
   Kind: test.
   Source: in-session-2026-07-04.
   Seeded (2026-07-04): tests/test_vault.py added with round-trip, wrong-password, 0600, migrate-idempotency, and the save-vault write-error regression. Remaining: parse_text_file, search_entries, category helpers, and CI wiring (ROLO-0020).
+  Resolved (2026-07-16): broadened the pure-logic suite to cover parse_text_file, search_entries, the category helpers (add/rename/delete + entries_by_category), and the new generate_password(). Suite now 18 tests. CI wiring remains tracked separately as ROLO-0020.
 
-- 📋 [ROLO-0002] **Auto-lock the vault on idle and add a manual Lock button.**
+- ✅ [ROLO-0002] **Auto-lock the vault on idle and add a manual Lock button.**
   Why: once unlocked, the vault and master password stay in memory indefinitely — a real gap if the user walks away. This is the biggest security improvement available.
   Scope: a configurable idle timeout that returns to UnlockDialog and clears the decrypted vault + password from memory, plus a toolbar Lock action. Interacts with the session lifetime in MainWindow.
   **Layman:** Re-locks the app after a period of inactivity so an unlocked vault can't sit open.
   Kind: security.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-16): configurable idle auto-lock (idle_lock_seconds, default 300s; 0 disables) that wipes vault+salt+password from memory and returns to UnlockDialog. Activity tracked via motion + key EventControllers; plus a header Lock button and Ctrl+L accelerator. Smoke-tested end-to-end.
 
-- 📋 [ROLO-0003] **Clear the clipboard automatically a few seconds after a copy.**
+- ✅ [ROLO-0003] **Clear the clipboard automatically a few seconds after a copy.**
   Why: copied secrets currently sit in the system clipboard until overwritten, readable by any app.
   Scope: after copy_to_clipboard, schedule a GLib timeout that clears the clipboard if its contents are unchanged. Make the delay configurable; show a countdown in the toast.
   **Layman:** Wipes a copied password from the clipboard shortly after, so it doesn't linger.
   Kind: security.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-16): a successful copy schedules a GLib timeout (configurable clipboard_clear_seconds, default 20s; 0 disables) that clears the clipboard only when its contents are unchanged (new read_clipboard helper mirrors the wl/xclip/xsel writer priority). Toast shows the clear delay.
 
-- 📋 [ROLO-0004] **Built-in password generator in the add/edit field editor.**
+- ✅ [ROLO-0004] **Built-in password generator in the add/edit field editor.**
   Why: a credential manager should help create strong secrets, not just store them.
   Scope: a generator control on sensitive FieldRows with length and character-class options, using the secrets module. Pure-logic function generate_password() below the boundary; small popover UI above it.
   **Layman:** A button that fills a field with a strong random password.
   Kind: feature.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-16): pure generate_password() using the secrets module — length + per-class toggles, guarantees one char from each selected class. Popover generator control (view-refresh button) on sensitive FieldRows in the add/edit editor; disables Generate when no class is selected. Unit-tested.
 
 - 📋 [ROLO-0018] **Replace the full-sidebar rebuild with a model-backed list and debounced search.**
   Why: _refresh_list() tears down and recreates every sidebar row on every mutation AND on every search keystroke (search_entries scans all entries each time). Fine for a small vault, visibly wasteful for a large one.
