@@ -163,7 +163,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Linux self-contained binary built and smoke-tested locally via PyInstaller (packaging/rolodex.spec, 72MB single file, GTK4/libadwaita bundled, launches; frozen build persists data to ~/.local/share/Rolodex). CI workflow (.github/workflows/build.yml) builds it on ubuntu-latest. Ships on the first v* tag.
   Shipped in v1.1.0: rolodex-linux-x86_64 (single-file PyInstaller, GTK4/libadwaita bundled). CI builds on ubuntu-latest and gates on a native --selftest before publishing to the GitHub Release.
 
-- 🚧 [ROLO-0031] **Self-contained Windows build (single .exe, no dependencies to install).**
+- ✅ [ROLO-0031] **Self-contained Windows build (single .exe, no dependencies to install).**
   Why: the user wants a Windows version that needs no separate downloads.
   Scope: produce a bundled Windows executable via PyInstaller/Nuitka with the GTK4 + libadwaita runtime from MSYS2/gvsbuild and the cryptography wheel packed in. Major effort: GTK4/libadwaita on Windows is not turnkey (theme, DLLs, GI typelibs, icon themes must all be bundled), and libadwaita's Windows support lags. Investigate feasibility first; if bundling GTK proves impractical, this is the item where a more portable UI toolkit would be evaluated (a large architectural decision, flagged not decided).
   **Layman:** A single Windows .exe that just runs, with everything bundled inside.
@@ -171,6 +171,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: user-request-2026-07-04.
   CI job added (.github/workflows/build.yml, windows-latest via MSYS2 UCRT64: gtk4 + libadwaita + python-gobject + cryptography, PyInstaller). Best-effort/untested from the Linux dev box; needs CI-run iteration to confirm the GTK bundle launches on Windows.
   Blocked (2026-07-04): CI builds the .exe on windows-latest (MSYS2 UCRT64) but the binary fails the --selftest gate — it hangs on launch (headless error dialog), meaning the GTK4/libadwaita typelibs/DLLs are not loading from the PyInstaller bundle. Withheld from v1.1.0. Next steps: force-collect the MSYS2 GI typelibs + GTK DLLs + GdkPixbuf loaders in the spec, and confirm on real Windows hardware (a Linux/Wine container does not help — it ships no GTK and Wine != real Windows). Needs a Windows tester for final verification.
+  Resolved (2026-07-16): the MSYS2 GTK typelib/DLL bundling was fixed in the spec + workflow and the windows-latest --selftest now passes. Verified green on a GitHub native-runner build of all three OSes. Shipping in v1.2.0 as rolodex-windows-x86_64.exe (self-contained single .exe; unsigned). Build recipe extracted to packaging/windows-build.sh.
 
 - ✅ [ROLO-0032] **Self-contained macOS build (single .app bundle, no dependencies to install).**
   Why: the user wants a macOS version that needs no separate downloads.

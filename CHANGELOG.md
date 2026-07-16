@@ -6,7 +6,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-16
+
 ### Added
+
+- **Prebuilt Windows binary (`rolodex-windows-x86_64.exe`) is now available (ROLO-0031) — the GTK-bundling issue that withheld it from v1.1.0 is resolved, so all three platforms now ship self-contained single-file binaries.**
 
 - **Built-in password generator (ROLO-0004) — a button on sensitive fields in the add/edit editor opens a popover to generate a strong random password, with length and character-class options.**
   Uses Python's `secrets` module and guarantees at least one character from each selected class.
@@ -81,7 +85,8 @@ app reached this state, not a tagged release.)
 - Encrypted backup & restore, plaintext export, and master-password change.
 - Vault schema migration (v1 → v2) applied on load.
 
-[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/milnet01/rolodex/releases/tag/v1.2.0
 [1.1.0]: https://github.com/milnet01/rolodex/releases/tag/v1.1.0
 <!-- 1.0.0 predates the public repo and was never tagged; link points at the history. -->
 [1.0.0]: https://github.com/milnet01/rolodex/commits/main

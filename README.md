@@ -37,7 +37,7 @@ Python, GTK, and all dependencies bundled in, so there's nothing else to install
 |----------|------|-------|
 | Linux (x86-64) | `rolodex-linux-x86_64` | `chmod +x` it, then run it. Built on Ubuntu 24.04; needs a reasonably recent glibc. |
 | macOS (Apple Silicon) | `rolodex-macos-arm64` | Unsigned — the first time, **right-click → Open** to get past Gatekeeper, then confirm. |
-| Windows (x64) | _in progress_ | Not yet available — the GTK bundle doesn't load on Windows yet (tracked as ROLO-0031). Run from source for now. |
+| Windows (x64) | `rolodex-windows-x86_64.exe` | Download and run it. Unsigned — SmartScreen may warn on first launch; choose **More info → Run anyway**. |
 
 The packaged app stores your vault in a per-user data directory (`~/.local/share/Rolodex` on
 Linux, `~/Library/Application Support/Rolodex` on macOS, `%APPDATA%\Rolodex` on Windows), not
