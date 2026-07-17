@@ -6,6 +6,14 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Vault saves are now atomic — an interrupted save can no longer corrupt your vault**
+  save_vault (and the plaintext export) now write to a temporary file in the
+  same folder, flush it to disk, then atomically rename it into place. An
+  interrupted write — a crash, a full disk, or a power cut mid-save — leaves the
+  previous vault intact instead of truncating your only copy of your credentials.
+
 ## [1.3.0] - 2026-07-17
 
 ### Added

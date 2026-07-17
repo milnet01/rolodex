@@ -14,6 +14,7 @@ import string
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 import uuid
@@ -87,19 +88,30 @@ def derive_key(password: str, salt: bytes) -> bytes:
 
 
 def write_private_file(path: str, data: bytes) -> None:
-    """Write bytes to path with owner-only (0600) permissions, creating or truncating it.
+    """Atomically write bytes to path with owner-only (0600) permissions.
 
     Every secret-writing path (the vault, the plaintext export) goes through here so the
-    0600 mode and the fd-ownership dance live in exactly one place (ROLO-0019).
+    0600 mode and the write live in exactly one place (ROLO-0019). The write is atomic:
+    data lands in a temp file in the same directory, is fsync'd, then os.replace()'d into
+    place — so an interrupted write (crash, disk-full, power loss) can never truncate or
+    partially overwrite an existing file. That matters most for the vault, which is the
+    user's only copy of their credentials. mkstemp creates the temp 0600, and os.replace
+    carries that mode onto the destination.
     """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".rolodex-", suffix=".tmp")
     try:
-        fp = os.fdopen(fd, "wb")
+        with os.fdopen(fd, "wb") as fp:
+            fp.write(data)
+            fp.flush()
+            os.fsync(fp.fileno())
+        os.replace(tmp, path)
     except Exception:
-        os.close(fd)  # fdopen didn't take ownership of the fd; close it ourselves
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
         raise
-    with fp:
-        fp.write(data)
 
 
 def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
@@ -574,6 +586,9 @@ def save_config(data: dict) -> None:
         with open(CONFIG_FILE, "w") as f:
             json.dump(existing, f)
     except OSError:
+        # Best-effort: .rolodex.conf holds only non-secret prefs (window geometry,
+        # timeouts). If it can't be written we drop the update rather than interrupt
+        # the user — there is nothing here worth surfacing an error or losing work over.
         pass
 
 
@@ -1094,7 +1109,6 @@ class MainWindow(Adw.ApplicationWindow):
         elif categories:
             # Grouped view
             groups = entries_by_category(self.vault)
-            shown = 0
             for cat_name in categories:
                 cat_entries = groups.get(cat_name, [])
                 collapsed = cat_name in self._collapsed_categories
@@ -1107,7 +1121,6 @@ class MainWindow(Adw.ApplicationWindow):
                         self.listbox.append(row)
                         if eid == select_id:
                             select_row = row
-                shown += len(cat_entries)
 
             # Uncategorised last
             uncat = groups.get("", [])
@@ -1122,7 +1135,6 @@ class MainWindow(Adw.ApplicationWindow):
                         self.listbox.append(row)
                         if eid == select_id:
                             select_row = row
-                shown += len(uncat)
 
             self.count_label.set_text(f"{total} {entries_noun(total)}")
 
@@ -2709,17 +2721,6 @@ class ManageCategoriesDialog(Adw.Dialog):
         self.main_win._save()
         self._rebuild_list()
         self.main_win._refresh_list()
-
-    def _get_cat_rows(self):
-        rows = []
-        idx = 0
-        while True:
-            row = self.cat_listbox.get_row_at_index(idx)
-            if row is None:
-                break
-            rows.append(row)
-            idx += 1
-        return rows
 
 
 # ===========================================================================

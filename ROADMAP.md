@@ -14,7 +14,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: test.
   Source: in-session-2026-07-04.
   Seeded (2026-07-04): tests/test_vault.py added with round-trip, wrong-password, 0600, migrate-idempotency, and the save-vault write-error regression. Remaining: parse_text_file, search_entries, category helpers, and CI wiring (ROLO-0020).
-  Resolved (2026-07-16): broadened the pure-logic suite to cover parse_text_file, search_entries, the category helpers (add/rename/delete + entries_by_category), and the new generate_password(). Suite now 18 tests. CI wiring remains tracked separately as ROLO-0020.
+  Resolved (2026-07-16): broadened the pure-logic suite to cover parse_text_file, search_entries, the category helpers (add/rename/delete + entries_by_category), and the new generate_password(). CI wiring remains tracked separately as ROLO-0020.
 
 - ✅ [ROLO-0002] **Auto-lock the vault on idle and add a manual Lock button.**
   Why: once unlocked, the vault and master password stay in memory indefinitely — a real gap if the user walks away. This is the biggest security improvement available.
@@ -263,3 +263,15 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   **Layman:** Write down the rule for version numbers so it's clear when to bump the big, middle, or last number.
   Kind: doc.
   Source: user-request-2026-07-17.
+
+- 📋 [ROLO-0034] **Track and cancel the clipboard auto-clear timer on lock/close.**
+  The clipboard auto-clear GLib.timeout (ROLO-0003) is fire-and-forget: its source id is never stored, so it isn't cancelled when the vault locks or the window closes. Harmless today (the callback clears the clipboard safely regardless), but fragile if the callback ever grows to touch window state. Track the source id alongside the TOTP/search timers and cancel it in the same lock/close paths. Surfaced by the 2026-07-17 debt sweep (source-audit lane).
+  **Layman:** Tidy up a background timer so it can't fire after the window it belongs to is gone.
+  Kind: refactor.
+  Source: debt-sweep-2026-07-17.
+
+- 📋 [ROLO-0035] **Fill remaining info-level pure-logic test gaps (derive_key KAT, delete_entry, list_entries).**
+  The 2026-07-17 debt sweep added tests for field_category, load_vault magic-byte reject, is_sensitive_label, import_entries, parse_text_file edge rules, update_entry/rename_category timestamp behaviour, tampered-ciphertext, create_vault, and atomic write_private_file (suite 36 -> 49). Remaining info-level gaps deferred: a derive_key known-answer test on a fixed salt/password (locks the exact PBKDF2 contract), and trivial delete_entry / list_entries coverage.
+  **Layman:** A few more small safety-net tests for the least-risky helper functions.
+  Kind: test.
+  Source: debt-sweep-2026-07-17.

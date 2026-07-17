@@ -2,8 +2,8 @@
 # Local pre-push gate. Run this before every push to catch what GitHub CI would catch, without
 # waiting on (or paying for) a round-trip:
 #
-#   1. pytest                 — the pure-logic test suite (a regression net; CI doesn't yet run
-#                               it — that's ROADMAP ROLO-0020 — so this is extra safety).
+#   1. pytest                 — the pure-logic test suite (a regression net; CI runs this too
+#                               via ci.yml (ROLO-0020), so this is a local mirror of that gate).
 #   2. Linux build + selftest — via packaging/linux-build.sh, the SAME script the GitHub
 #                               'ubuntu-latest' job runs. A green run here means the Linux
 #                               release binary will build on CI too.

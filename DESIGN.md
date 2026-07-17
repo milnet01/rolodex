@@ -39,7 +39,7 @@ The app is a single file, `rolodex.py`, split by a banner comment into two layer
 
 **Why the split?** It keeps every security-critical decision (key derivation, file writes,
 parsing) in code that has no UI entanglement — easy to reason about, easy to test in
-isolation (see roadmap ROLO-0001), and impossible to accidentally couple to a widget's
+isolation (see `tests/`), and impossible to accidentally couple to a widget's
 lifetime. The GUI layer is "dumb": callbacks gather input, call a pure function, and refresh.
 
 **Single-owner persistence.** `MainWindow` holds the only live copy of the decrypted vault,

@@ -294,3 +294,134 @@ def test_audit_passwords_ignores_non_sensitive_and_empty_fields():
     ])
     # Non-sensitive duplicate usernames and the empty password produce no findings.
     assert rolodex.audit_passwords(vault) == []
+
+
+# --- Vault format guards (ROLO-0001 scope) ------------------------------------------------
+
+
+def test_load_vault_rejects_bad_magic(tmp_path):
+    # A file that doesn't start with the VLT1 magic is rejected before any decryption.
+    path = tmp_path / "bad.vault"
+    path.write_bytes(b"XXXX" + b"\x00" * 32)
+    with pytest.raises(ValueError, match="Not a valid vault file"):
+        rolodex.load_vault(PW, str(path))
+
+
+def test_create_vault_writes_empty_structure(tmp_path):
+    path = str(tmp_path / "v.vault")
+    vault, salt = rolodex.create_vault(PW, path)
+    assert vault == {"version": 2, "categories": [], "entries": {}}
+    assert len(salt) == 16
+
+
+def test_tampered_ciphertext_raises_invalid_token(tmp_path):
+    # Fernet authenticates the ciphertext; flipping any byte must fail closed, not decrypt.
+    path = str(tmp_path / "v.vault")
+    rolodex.create_vault(PW, path)
+    with open(path, "rb") as f:
+        raw = bytearray(f.read())
+    raw[-1] ^= 0xFF
+    with open(path, "wb") as f:
+        f.write(raw)
+    with pytest.raises(InvalidToken):
+        rolodex.load_vault(PW, str(path))
+
+
+def test_write_private_file_atomically_overwrites_at_0600(tmp_path):
+    path = str(tmp_path / "secret.bin")
+    rolodex.write_private_file(path, b"first")
+    rolodex.write_private_file(path, b"second")  # overwrite an existing file
+    with open(path, "rb") as f:
+        assert f.read() == b"second"
+    assert (os.stat(path).st_mode & 0o777) == 0o600
+    # The temp-file-then-rename write must leave no stray temp files behind.
+    assert [p for p in os.listdir(tmp_path) if p != "secret.bin"] == []
+
+
+# --- Field classification (entries-and-fields spec) ---------------------------------------
+
+
+def test_field_category_classifies_by_first_match():
+    assert rolodex.field_category("Password") == "credential"
+    assert rolodex.field_category("API Key") == "key"
+    assert rolodex.field_category("Email") == "identity"
+    assert rolodex.field_category("Website URL") == "url"
+    assert rolodex.field_category("Expiry Date") == "date"
+    assert rolodex.field_category("Colour") == "other"
+
+
+def test_field_category_first_match_wins():
+    # "password" (credential, bucket 0) is checked before "token" (key, bucket 1).
+    assert rolodex.field_category("Password reset token") == "credential"
+
+
+def test_is_sensitive_label_matches_keywords_case_insensitively():
+    for label in ("Password", "PIN", "Secret", "API Key", "Token", "Authenticator", "passphrase"):
+        assert rolodex.is_sensitive_label(label) is True
+    for label in ("Username", "Email", "URL", "Nickname"):
+        assert rolodex.is_sensitive_label(label) is False
+
+
+# --- Entry / import edge behavior (entries-and-fields + import-export specs) ---------------
+
+
+def test_update_entry_bumps_modified_not_created():
+    vault = _vault_with([("X", [], "", "")])
+    (eid,) = vault["entries"].keys()
+    entry = vault["entries"][eid]
+    entry["created"] = entry["modified"] = "2000-01-01T00:00:00"
+    rolodex.update_entry(vault, eid, name="Y")
+    assert entry["name"] == "Y"
+    assert entry["created"] == "2000-01-01T00:00:00"
+    assert entry["modified"] != "2000-01-01T00:00:00"
+
+
+def test_rename_category_does_not_bump_member_modified():
+    vault = _vault_with([("Job", [], "", "Work")])
+    rolodex.add_category(vault, "Work")
+    entry = next(iter(vault["entries"].values()))
+    entry["modified"] = "2000-01-01T00:00:00"
+    rolodex.rename_category(vault, "Work", "Career")
+    assert entry["category"] == "Career"
+    assert entry["modified"] == "2000-01-01T00:00:00"
+
+
+def test_import_entries_skips_case_insensitive_duplicates_and_counts():
+    vault = _vault_with([("GitHub", [], "", "")])
+    (existing_id,) = list(vault["entries"].keys())
+    parsed = [
+        {"name": "github", "fields": [], "notes": ""},  # duplicate (case-insensitive)
+        {"name": "NewSite", "fields": [{"label": "User", "value": "z", "sensitive": False}], "notes": ""},
+    ]
+    imported, skipped = rolodex.import_entries(vault, parsed)
+    assert (imported, skipped) == (1, 1)
+    # The imported entry got a fresh UUID distinct from the pre-existing one.
+    new_ids = [i for i in vault["entries"] if i != existing_id]
+    assert len(new_ids) == 1
+    assert vault["entries"][new_ids[0]]["name"] == "NewSite"
+
+
+def test_parse_text_file_strips_trailing_colons_from_name(tmp_path):
+    path = tmp_path / "i.txt"
+    path.write_text("MyName:::\nUser: bob\n", encoding="utf-8")
+    (entry,) = rolodex.parse_text_file(str(path))
+    assert entry["name"] == "MyName"
+
+
+def test_parse_text_file_label_splits_at_first_colon_only(tmp_path):
+    # Colons inside the value survive; only the first colon separates label from value.
+    path = tmp_path / "i.txt"
+    path.write_text("Site\nURL: http://example.com:8080/x\n", encoding="utf-8")
+    (entry,) = rolodex.parse_text_file(str(path))
+    assert entry["fields"] == [
+        {"label": "URL", "value": "http://example.com:8080/x", "sensitive": False}
+    ]
+
+
+def test_parse_text_file_colon_without_space_becomes_notes(tmp_path):
+    # "label:value" with no whitespace after the colon is not a field — it falls to notes.
+    path = tmp_path / "i.txt"
+    path.write_text("Site\nfoo:bar\n", encoding="utf-8")
+    (entry,) = rolodex.parse_text_file(str(path))
+    assert entry["fields"] == []
+    assert entry["notes"] == "foo:bar"

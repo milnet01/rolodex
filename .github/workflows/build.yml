@@ -35,7 +35,7 @@ jobs:
             asset: rolodex-macos-arm64
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # ---- Linux: GTK stack from apt, PyInstaller from pip ----
       - name: Install GTK stack (Linux)
@@ -79,7 +79,7 @@ jobs:
           bash packaging/macos-build.sh "${{ matrix.asset }}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset }}
           path: out/${{ matrix.asset }}
@@ -87,6 +87,6 @@ jobs:
 
       - name: Attach to Release (tag builds only)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: out/${{ matrix.asset }}

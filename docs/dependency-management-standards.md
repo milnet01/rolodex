@@ -67,11 +67,13 @@ and move the row to "Resolved".
 
 ## Verifying an upgrade
 
-Because the app has no automated tests yet (roadmap ROLO-0001), a dependency bump is verified
-by manually exercising the affected flow. For a `cryptography` bump specifically, at minimum:
+The pure-logic test suite (`pytest tests/`) runs in CI on every push (ROLO-0001 / ROLO-0020),
+so a dependency bump's KDF + Fernet round-trip and vault migration are checked automatically.
+For a `cryptography` bump specifically, also manually exercise the affected flow, at minimum:
 
 1. Create a fresh vault, add an entry, quit.
 2. Re-launch and unlock — confirms KDF + Fernet round-trip across the new version.
 3. Back up and restore — confirms the file-format path.
 
-Once ROLO-0001 lands, these become automated and run in CI on every dependency bump.
+The automated suite catches a broken round-trip on every push; the manual steps above cover
+the file-format and GUI-adjacent paths a unit test doesn't reach.

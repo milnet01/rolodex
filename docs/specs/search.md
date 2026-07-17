@@ -24,4 +24,4 @@ Retroactive spec for sidebar search (`search_entries`, `MainWindow._on_search_ch
 
 - Matching stops at the first matching field per entry (no duplicate rows).
 - Fuzzy/token matching and a category filter are roadmap ROLO-0009; `search_entries` is a pure
-  function and is a primary target of the ROLO-0001 test suite.
+  function and is covered by the test suite (`tests/test_vault.py`).

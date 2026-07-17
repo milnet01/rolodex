@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Rolodex is a single-file GTK4/Adwaita desktop app (`rolodex.py`, ~2480 lines) that stores
+Rolodex is a single-file GTK4/Adwaita desktop app (`rolodex.py`, ~3190 lines) that stores
 credentials in one AES-encrypted vault file. There is no build system; the only manifest is
 `requirements.txt` (the single pip dependency, `cryptography`). Tests are a seed suite in
 `tests/` (pytest — run `pytest tests/`); broader coverage is ROLO-0001. The project is a git
@@ -27,7 +27,8 @@ section). Don't hardcode a machine-specific absolute path into it.
 ## Architecture
 
 The file is organised top-to-bottom as **pure logic → GUI**. The pure layer (roughly the
-first 300 lines) has no GTK imports and is the safest place to make and reason about changes.
+first 590 lines, up to the `# GTK4 / Adwaita GUI` banner) has no GTK imports and is the safest
+place to make and reason about changes.
 
 **Encryption layer** (`derive_key`, `save_vault`, `load_vault`, `create_vault`) — canonical
 contract: `docs/specs/vault-format-and-crypto.md`:
