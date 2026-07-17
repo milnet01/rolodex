@@ -25,6 +25,9 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **Extract shared helpers: single 0600 file-write, container-clear, dialog scaffold** (ROLO-0019)
+  Internal refactor, no behaviour change. The owner-only (0600) write now lives in one write_private_file() used by both the vault save and the plaintext export; a clear_container() replaces three hand-rolled "remove all rows" loops; and make_dialog_scaffold() collapses the ToolbarView+HeaderBar+Clamp boilerplate repeated across all six dialogs. Net 53 fewer lines.
+
 - **Debounced sidebar search (ROLO-0018) — the list rebuilds once typing pauses (~150ms) instead of on every keystroke.**
 
 ## [1.2.0] - 2026-07-16

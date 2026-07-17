@@ -80,11 +80,12 @@ def derive_key(password: str, salt: bytes) -> bytes:
     return base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
 
 
-def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
-    key = derive_key(password, salt)
-    f = Fernet(key)
-    plaintext = json.dumps(vault_data, ensure_ascii=False).encode("utf-8")
-    ciphertext = f.encrypt(plaintext)
+def write_private_file(path: str, data: bytes) -> None:
+    """Write bytes to path with owner-only (0600) permissions, creating or truncating it.
+
+    Every secret-writing path (the vault, the plaintext export) goes through here so the
+    0600 mode and the fd-ownership dance live in exactly one place (ROLO-0019).
+    """
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         fp = os.fdopen(fd, "wb")
@@ -92,9 +93,15 @@ def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
         os.close(fd)  # fdopen didn't take ownership of the fd; close it ourselves
         raise
     with fp:
-        fp.write(MAGIC)
-        fp.write(salt)
-        fp.write(ciphertext)
+        fp.write(data)
+
+
+def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
+    key = derive_key(password, salt)
+    f = Fernet(key)
+    plaintext = json.dumps(vault_data, ensure_ascii=False).encode("utf-8")
+    ciphertext = f.encrypt(plaintext)
+    write_private_file(path, MAGIC + salt + ciphertext)
 
 
 def load_vault(password: str, path: str) -> tuple[dict, bytes]:
@@ -421,6 +428,48 @@ def save_config(data: dict) -> None:
 # ===========================================================================
 # GTK4 / Adwaita GUI
 # ===========================================================================
+
+
+def clear_container(container) -> None:
+    """Remove every child from a GTK container (ListBox rows, Box children, ...) (ROLO-0019)."""
+    child = container.get_first_child()
+    while child:
+        nxt = child.get_next_sibling()
+        container.remove(child)
+        child = nxt
+
+
+def make_dialog_scaffold(dialog, title, *, width=None, height=None,
+                         clamp_max=500, margin=16, scrolled=False):
+    """Build the common Adw.Dialog shell: ToolbarView + HeaderBar + (optional scroll) + Clamp.
+
+    Returns (header, clamp). The caller packs its own buttons into `header` and sets the body
+    via clamp.set_child(...). Centralises the wiring every Adw.Dialog otherwise repeats (ROLO-0019).
+    """
+    dialog.set_title(title)
+    if width is not None:
+        dialog.set_content_width(width)
+    if height is not None:
+        dialog.set_content_height(height)
+
+    toolbar = Adw.ToolbarView()
+    header = Adw.HeaderBar()
+    toolbar.add_top_bar(header)
+
+    clamp = Adw.Clamp(maximum_size=clamp_max)
+    clamp.set_margin_top(margin)
+    clamp.set_margin_bottom(margin)
+    clamp.set_margin_start(margin)
+    clamp.set_margin_end(margin)
+
+    if scrolled:
+        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+        scroll.set_child(clamp)
+        toolbar.set_content(scroll)
+    else:
+        toolbar.set_content(clamp)
+    dialog.set_child(toolbar)
+    return header, clamp
 
 
 class UnlockDialog(Gtk.Window):
@@ -868,11 +917,7 @@ class MainWindow(Adw.ApplicationWindow):
         categories = self.vault.get("categories", [])
 
         # Clear list
-        while True:
-            row = self.listbox.get_row_at_index(0)
-            if row is None:
-                break
-            self.listbox.remove(row)
+        clear_container(self.listbox)
 
         select_row = None
         total = len(self.vault["entries"])
@@ -1000,11 +1045,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.detail_stack.set_visible_child_name("detail")
 
         # Clear old contents
-        child = self.detail_box.get_first_child()
-        while child:
-            next_child = child.get_next_sibling()
-            self.detail_box.remove(child)
-            child = next_child
+        clear_container(self.detail_box)
 
         clamp = Adw.Clamp(maximum_size=560)
         clamp.set_margin_top(20)
@@ -1466,14 +1507,7 @@ class MainWindow(Adw.ApplicationWindow):
             lines.append("")
 
         content = "\n".join(lines)
-        fd = os.open(filepath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        try:
-            fp = os.fdopen(fd, "w", encoding="utf-8")
-        except Exception:
-            os.close(fd)  # fdopen didn't take ownership of the fd; close it ourselves
-            raise
-        with fp:
-            fp.write(content)
+        write_private_file(filepath, content.encode("utf-8"))
 
         self._toast(f"Exported {len(entries)} entries")
 
@@ -1762,13 +1796,9 @@ class AddEditDialog(Adw.Dialog):
         self.main_win = main_win
         self.entry_id = entry_id
 
-        self.set_title(title)
-        self.set_content_width(520)
-        self.set_content_height(560)
+        header, clamp = make_dialog_scaffold(
+            self, title, width=520, height=560, clamp_max=500, margin=16, scrolled=True)
 
-        # Toolbar view with header
-        toolbar = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         cancel_btn = Gtk.Button(label="Cancel")
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
@@ -1777,15 +1807,6 @@ class AddEditDialog(Adw.Dialog):
         save_btn.add_css_class("suggested-action")
         save_btn.connect("clicked", self._on_save)
         header.pack_end(save_btn)
-
-        toolbar.add_top_bar(header)
-
-        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
-        clamp = Adw.Clamp(maximum_size=500)
-        clamp.set_margin_top(16)
-        clamp.set_margin_bottom(16)
-        clamp.set_margin_start(16)
-        clamp.set_margin_end(16)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
 
@@ -1868,9 +1889,6 @@ class AddEditDialog(Adw.Dialog):
         vbox.append(notes_group)
 
         clamp.set_child(vbox)
-        scroll.set_child(clamp)
-        toolbar.set_content(scroll)
-        self.set_child(toolbar)
 
         # Unsaved-changes guard (ROLO-0022): take over the close request so an accidental
         # Esc / close-button / Cancel with edits in flight prompts before discarding. A
@@ -2017,12 +2035,9 @@ class ImportPreviewDialog(Adw.Dialog):
         self.filepath = filepath
         self.checks = []
 
-        self.set_title("Import Preview")
-        self.set_content_width(500)
-        self.set_content_height(480)
+        header, clamp = make_dialog_scaffold(
+            self, "Import Preview", width=500, height=480, clamp_max=460, margin=12, scrolled=True)
 
-        toolbar = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         cancel_btn = Gtk.Button(label="Cancel")
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
@@ -2031,15 +2046,6 @@ class ImportPreviewDialog(Adw.Dialog):
         import_btn.add_css_class("suggested-action")
         import_btn.connect("clicked", self._on_import)
         header.pack_end(import_btn)
-
-        toolbar.add_top_bar(header)
-
-        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
-        clamp = Adw.Clamp(maximum_size=460)
-        clamp.set_margin_top(12)
-        clamp.set_margin_bottom(12)
-        clamp.set_margin_start(12)
-        clamp.set_margin_end(12)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
 
@@ -2085,9 +2091,6 @@ class ImportPreviewDialog(Adw.Dialog):
 
         vbox.append(listbox)
         clamp.set_child(vbox)
-        scroll.set_child(clamp)
-        toolbar.set_content(scroll)
-        self.set_child(toolbar)
 
     def _set_all(self, state):
         for check, _ in self.checks:
@@ -2111,12 +2114,9 @@ class ChangePasswordDialog(Adw.Dialog):
         super().__init__()
         self.main_win = main_win
 
-        self.set_title("Change Master Password")
-        self.set_content_width(380)
-        self.set_content_height(-1)
+        header, clamp = make_dialog_scaffold(
+            self, "Change Master Password", width=380, height=-1, clamp_max=340, margin=24)
 
-        toolbar = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         cancel_btn = Gtk.Button(label="Cancel")
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
@@ -2125,14 +2125,6 @@ class ChangePasswordDialog(Adw.Dialog):
         save_btn.add_css_class("suggested-action")
         save_btn.connect("clicked", self._on_save)
         header.pack_end(save_btn)
-
-        toolbar.add_top_bar(header)
-
-        clamp = Adw.Clamp(maximum_size=340)
-        clamp.set_margin_top(24)
-        clamp.set_margin_bottom(24)
-        clamp.set_margin_start(24)
-        clamp.set_margin_end(24)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
 
@@ -2162,8 +2154,6 @@ class ChangePasswordDialog(Adw.Dialog):
         vbox.append(self.status)
 
         clamp.set_child(vbox)
-        toolbar.set_content(clamp)
-        self.set_child(toolbar)
 
     def _on_save(self, btn):
         current = self.current_pw.get_text()
@@ -2198,12 +2188,9 @@ class RestorePasswordDialog(Adw.Dialog):
         super().__init__()
         self.main_win = main_win
 
-        self.set_title("Restore from Backup")
-        self.set_content_width(380)
-        self.set_content_height(-1)
+        header, clamp = make_dialog_scaffold(
+            self, "Restore from Backup", width=380, height=-1, clamp_max=340, margin=24)
 
-        toolbar = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         cancel_btn = Gtk.Button(label="Cancel")
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
@@ -2213,14 +2200,6 @@ class RestorePasswordDialog(Adw.Dialog):
         unlock_btn.connect("clicked", self._on_unlock)
         self._unlock_btn = unlock_btn
         header.pack_end(unlock_btn)
-
-        toolbar.add_top_bar(header)
-
-        clamp = Adw.Clamp(maximum_size=340)
-        clamp.set_margin_top(24)
-        clamp.set_margin_bottom(24)
-        clamp.set_margin_start(24)
-        clamp.set_margin_end(24)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
 
@@ -2244,8 +2223,6 @@ class RestorePasswordDialog(Adw.Dialog):
         vbox.append(self.status)
 
         clamp.set_child(vbox)
-        toolbar.set_content(clamp)
-        self.set_child(toolbar)
 
     def _on_unlock(self, *_args):
         pw = self.pw_entry.get_text()
@@ -2375,24 +2352,13 @@ class ManageCategoriesDialog(Adw.Dialog):
         super().__init__()
         self.main_win = main_win
 
-        self.set_title("Manage Categories")
-        self.set_content_width(420)
-        self.set_content_height(460)
+        header, clamp = make_dialog_scaffold(
+            self, "Manage Categories", width=420, height=460, clamp_max=400, margin=12, scrolled=True)
 
-        toolbar = Adw.ToolbarView()
-        header = Adw.HeaderBar()
         done_btn = Gtk.Button(label="Done")
         done_btn.add_css_class("suggested-action")
         done_btn.connect("clicked", lambda b: self.close())
         header.pack_end(done_btn)
-        toolbar.add_top_bar(header)
-
-        scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
-        clamp = Adw.Clamp(maximum_size=400)
-        clamp.set_margin_top(12)
-        clamp.set_margin_bottom(12)
-        clamp.set_margin_start(12)
-        clamp.set_margin_end(12)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
 
@@ -2416,16 +2382,9 @@ class ManageCategoriesDialog(Adw.Dialog):
         self._rebuild_list()
 
         clamp.set_child(vbox)
-        scroll.set_child(clamp)
-        toolbar.set_content(scroll)
-        self.set_child(toolbar)
 
     def _rebuild_list(self):
-        while True:
-            row = self.cat_listbox.get_row_at_index(0)
-            if row is None:
-                break
-            self.cat_listbox.remove(row)
+        clear_container(self.cat_listbox)
 
         groups = entries_by_category(self.main_win.vault)
         for cat_name in self.main_win.vault["categories"]:
@@ -2856,18 +2815,8 @@ class ShortcutsDialog(Adw.Dialog):
 
     def __init__(self):
         super().__init__()
-        self.set_title("Keyboard Shortcuts")
-        self.set_content_width(380)
-        self.set_content_height(-1)
-
-        toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(Adw.HeaderBar())
-
-        clamp = Adw.Clamp(maximum_size=340)
-        clamp.set_margin_top(24)
-        clamp.set_margin_bottom(24)
-        clamp.set_margin_start(24)
-        clamp.set_margin_end(24)
+        _, clamp = make_dialog_scaffold(
+            self, "Keyboard Shortcuts", width=380, height=-1, clamp_max=340, margin=24)
 
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
@@ -2877,8 +2826,6 @@ class ShortcutsDialog(Adw.Dialog):
             listbox.append(row)
 
         clamp.set_child(listbox)
-        toolbar.set_content(clamp)
-        self.set_child(toolbar)
 
 
 class RolodexApp(Adw.Application):

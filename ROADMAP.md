@@ -108,12 +108,13 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: accessibility.
   Source: user-request-2026-07-04.
 
-- 📋 [ROLO-0019] **Extract shared dialog scaffolding and a single 0600 file-write helper.**
+- ✅ [ROLO-0019] **Extract shared dialog scaffolding and a single 0600 file-write helper.**
   Why: every dialog rebuilds the same ToolbarView + HeaderBar + Clamp boilerplate, the sidebar/field/category lists each hand-roll the same 'remove all rows' loop, and the secure 0600 os.open pattern is duplicated in save_vault and the export path. Duplication invites drift — and the file-write duplication is a security-consistency risk.
   Scope: a small make_dialog_scaffold() helper, a clear_listbox() helper, and one write_private_file() helper used by every secret-writing path. Pure refactor, no behaviour change; lean on ROLO-0001 tests to prove it.
   **Layman:** Tidy up repeated code so the app is easier to maintain and less error-prone.
   Kind: refactor.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): three helpers extracted. write_private_file(path, data) centralises the 0600 os.open/fdopen dance — used by save_vault and the plaintext export (backup path left as copy2+chmod, a different op). clear_container(widget) replaces the sidebar / detail_box / category-list clear loops (works on ListBox and Box alike). make_dialog_scaffold(dialog, title, *, width, height, clamp_max, margin, scrolled) collapses the ToolbarView+HeaderBar+[scroll]+Clamp boilerplate across all 6 Adw.Dialogs, returning (header, clamp) with each dialog's exact original params so there is zero visual change. UnlockDialog (Gtk.Window) and MainWindow layout untouched. Net -53 lines. Verified: ruff clean, 20/20 pytest, selftest OK, and a headless smoke test that constructs MainWindow + all 6 dialogs (8/8) — each builds with a valid child + title.
 
 - ✅ [ROLO-0020] **Add GitHub Actions CI: lint (ruff) plus the test suite.**
   Why: there is no CI; nothing currently guards a PR. Public repo = free Linux runner minutes.
