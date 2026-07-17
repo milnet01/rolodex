@@ -58,12 +58,13 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: security.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0006] **Generate TOTP 2FA codes from stored authenticator secrets.**
+- ✅ [ROLO-0006] **Generate TOTP 2FA codes from stored authenticator secrets.**
   Why: 'authenticator' is already a recognised sensitive keyword; users store 2FA seeds but must go elsewhere to use them.
   Scope: detect otpauth:// or base32 seeds in a field, render a live 6-digit code with a countdown ring, one-click copy. Pure-logic TOTP (RFC 6238) using hmac/hashlib — no new dependency.
   **Layman:** Show the rotating 6-digit login codes right next to the account they belong to.
   Kind: feature.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): TOTP pure-logic layer (parse_totp_field/totp_code/totp_remaining, RFC 6238) + live "Code" row in _show_detail with countdown ring and one-click copy. 12 new tests (RFC 6238 vectors + detection rule); verified end-to-end against the running app. No new dependency.
 
 - ✅ [ROLO-0007] **Keyboard shortcuts for the common actions.**
   Why: a keyboard-driven tool is faster and expected on the Linux desktop.

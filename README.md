@@ -21,6 +21,9 @@ data never leaves your machine. It runs on Linux, Windows, and macOS.
   ask. Rolodex recognises sensitive-looking fields on its own.
 - **Built-in password generator.** Create a strong random password in a click, with control
   over its length and which kinds of characters to include.
+- **Live 2FA codes.** Store an authenticator secret (a `otpauth://` link or the plain setup
+  key) and Rolodex shows the rotating 6-digit login code right on the card, with a countdown
+  ring and one-click copy — no separate phone app needed.
 - **Safer copying.** Copy a password with one click — and Rolodex wipes it from the clipboard a
   few seconds later, so it doesn't sit there for other apps to read.
 - **Auto-locks when you step away.** After a stretch of inactivity (or instantly with the Lock

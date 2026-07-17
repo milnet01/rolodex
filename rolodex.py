@@ -2,14 +2,20 @@
 """Rolodex - Encrypted credential manager with GTK4/Adwaita GUI."""
 
 import base64
+import hashlib
+import hmac
 import json
+import math
 import os
 import re
 import secrets
 import shutil
 import string
+import struct
 import subprocess
 import sys
+import time
+import urllib.parse
 import uuid
 from datetime import datetime
 
@@ -162,6 +168,88 @@ def field_category(label: str) -> str:
         if any(kw in label_lower for kw in keywords):
             return category
     return "other"
+
+
+# TOTP / 2FA codes (ROLO-0006) — pure RFC 6238, no new dependency (stdlib hmac/hashlib).
+# A bare base32 seed only becomes a live code when its label hints 2FA; an otpauth:// URI
+# always qualifies. This keeps a random base32-looking password from sprouting a fake code.
+TOTP_LABEL_KEYWORDS = {"authenticator", "2fa", "totp", "otp", "one-time", "one time"}
+_TOTP_HASHES = {"sha1": hashlib.sha1, "sha256": hashlib.sha256, "sha512": hashlib.sha512}
+
+
+def _decode_base32(s: str) -> bytes | None:
+    """Decode a base32 secret, tolerating lower-case, spaces/dashes, and missing padding.
+
+    Returns None (rather than raising) on anything that isn't valid base32, so the detection
+    path can treat "not a seed" and "malformed seed" identically.
+    """
+    cleaned = s.strip().replace(" ", "").replace("-", "").upper()
+    if not cleaned:
+        return None
+    padded = cleaned + "=" * (-len(cleaned) % 8)
+    try:
+        decoded = base64.b32decode(padded, casefold=True)  # binascii.Error subclasses ValueError
+    except ValueError:
+        return None
+    return decoded or None
+
+
+def totp_code(secret: bytes, timestamp: float, digits: int = 6,
+              period: int = 30, algorithm: str = "sha1") -> str:
+    """Compute the RFC 6238 TOTP code for a raw (base32-decoded) secret at a unix time."""
+    counter = int(timestamp) // period
+    mac = hmac.new(secret, struct.pack(">Q", counter), _TOTP_HASHES[algorithm]).digest()
+    offset = mac[-1] & 0x0F
+    binary = struct.unpack(">I", mac[offset:offset + 4])[0] & 0x7FFFFFFF
+    return str(binary % (10 ** digits)).zfill(digits)
+
+
+def totp_remaining(timestamp: float, period: int = 30) -> int:
+    """Seconds left in the current code's window (equals period exactly on a boundary)."""
+    return period - int(timestamp) % period
+
+
+def _parse_otpauth_uri(uri: str) -> dict | None:
+    parsed = urllib.parse.urlparse(uri)
+    if parsed.scheme != "otpauth" or parsed.netloc.lower() != "totp":
+        return None  # only time-based OTP; HOTP (counter-based) is out of scope
+    q = urllib.parse.parse_qs(parsed.query)
+    secret = _decode_base32((q.get("secret") or [""])[0])
+    if not secret:
+        return None
+    algorithm = (q.get("algorithm") or ["SHA1"])[0].lower()
+    if algorithm not in _TOTP_HASHES:
+        return None
+    try:
+        digits = int((q.get("digits") or ["6"])[0])
+        period = int((q.get("period") or ["30"])[0])
+    except ValueError:
+        return None
+    if not (6 <= digits <= 10) or period < 1:
+        return None
+    return {"secret": secret, "digits": digits, "period": period, "algorithm": algorithm}
+
+
+def parse_totp_field(label: str, value: str) -> dict | None:
+    """Return a TOTP config {secret, digits, period, algorithm} if this field holds a 2FA seed.
+
+    An otpauth://totp/... URI always qualifies (any label); a bare base32 seed qualifies only
+    when the label contains a 2FA keyword. Returns None for everything else. Pure and total —
+    never raises on user data.
+    """
+    if not value or not value.strip():
+        return None
+    value = value.strip()
+    if value.lower().startswith("otpauth://"):
+        return _parse_otpauth_uri(value)
+    if not any(kw in label.lower() for kw in TOTP_LABEL_KEYWORDS):
+        return None
+    secret = _decode_base32(value)
+    # Require ≥80 bits (RFC 4226's minimum secret size). This keeps short base32-valid prose
+    # like "just some words" from being mistaken for a seed when guessing off a bare value.
+    if not secret or len(secret) < 10:
+        return None
+    return {"secret": secret, "digits": 6, "period": 30, "algorithm": "sha1"}
 
 
 # Password health (ROLO-0008) — all analysis runs in-process over the decrypted vault.
@@ -789,6 +877,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.password = password
         self.vault_path = vault_path
         self._revealed = False
+        # TOTP live-code tick (ROLO-0006): one 1s timer refreshes every code row on screen.
+        self._totp_tick_id = None
+        self._totp_widgets = []
 
         # Restore saved window size or use defaults
         conf = load_config()
@@ -967,6 +1058,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_close_request(self, *_args):
         self._cancel_search_debounce()
+        self._cancel_totp_tick()  # covers _lock too, which routes through close()
         save_config({
             "window_width": self.get_width(),
             "window_height": self.get_height(),
@@ -1104,6 +1196,7 @@ class MainWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _show_detail(self, entry_id):
+        self._cancel_totp_tick()  # stop any prior entry's live-code timer before rebuilding
         if entry_id not in self.vault["entries"]:
             self.detail_stack.set_visible_child_name("empty")
             return
@@ -1166,6 +1259,11 @@ class MainWindow(Adw.ApplicationWindow):
 
             fields_group.append(row)
 
+            # ROLO-0006: a 2FA seed gets a live-code row right beneath it.
+            totp_cfg = parse_totp_field(field["label"], field["value"])
+            if totp_cfg:
+                fields_group.append(self._build_totp_row(totp_cfg))
+
         vbox.append(fields_group)
 
         # Notes
@@ -1221,6 +1319,82 @@ class MainWindow(Adw.ApplicationWindow):
 
         clamp.set_child(vbox)
         self.detail_box.append(clamp)
+
+        # Start the shared 1s ticker only if this entry actually shows a code. The first tick
+        # runs now so codes appear immediately rather than after a blank second.
+        if self._totp_widgets:
+            self._totp_tick()
+            self._totp_tick_id = GLib.timeout_add_seconds(1, self._totp_tick)
+
+    def _cancel_totp_tick(self):
+        """Stop the live-code timer and drop the tracked rows (called on every rebuild/close)."""
+        if self._totp_tick_id is not None:
+            GLib.source_remove(self._totp_tick_id)
+            self._totp_tick_id = None
+        self._totp_widgets = []
+
+    def _build_totp_row(self, cfg):
+        """A 'Code' row: grouped live digits, a depleting ring, seconds left, and copy."""
+        state = {"code": "", "fraction": 1.0}
+        row = Adw.ActionRow()
+        row.set_title("Code")
+        row.add_css_class("totp-row")
+
+        code_label = Gtk.Label(valign=Gtk.Align.CENTER, selectable=True)
+        code_label.add_css_class("totp-code")
+        row.add_suffix(code_label)
+
+        ring = Gtk.DrawingArea(valign=Gtk.Align.CENTER)
+        ring.set_content_width(18)
+        ring.set_content_height(18)
+        ring.set_draw_func(self._draw_totp_ring, state)
+        row.add_suffix(ring)
+
+        rem_label = Gtk.Label(valign=Gtk.Align.CENTER)
+        rem_label.add_css_class("totp-remaining")
+        row.add_suffix(rem_label)
+
+        copy_btn = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
+                              tooltip_text="Copy 2FA code")
+        copy_btn.add_css_class("flat")
+        copy_btn.add_css_class("copy-btn")
+        copy_btn.connect("clicked", lambda _b: self._copy_value(state["code"], "2FA code"))
+        row.add_suffix(copy_btn)
+
+        self._totp_widgets.append({
+            "cfg": cfg, "state": state, "code_label": code_label,
+            "ring": ring, "rem_label": rem_label,
+        })
+        return row
+
+    def _totp_tick(self):
+        """Recompute the code + remaining window for every visible code row, once per second."""
+        now = time.time()
+        for w in self._totp_widgets:
+            cfg = w["cfg"]
+            code = totp_code(cfg["secret"], now, cfg["digits"], cfg["period"], cfg["algorithm"])
+            rem = totp_remaining(now, cfg["period"])
+            w["state"]["code"] = code
+            w["state"]["fraction"] = rem / cfg["period"]
+            mid = len(code) // 2  # group as two halves for readability (492 831 / 4920 8317)
+            w["code_label"].set_text(f"{code[:mid]} {code[mid:]}")
+            w["rem_label"].set_text(f"{rem}s")
+            w["ring"].queue_draw()
+        return True  # repeat; cancelled explicitly via _cancel_totp_tick
+
+    def _draw_totp_ring(self, _area, cr, width, height, state):
+        """Draw a ring that empties clockwise from the top as the code's window elapses."""
+        frac = state.get("fraction", 1.0)
+        cx, cy = width / 2, height / 2
+        radius = min(width, height) / 2 - 2
+        cr.set_line_width(2.5)
+        cr.set_source_rgba(1, 1, 1, 0.15)  # faint full-circle track
+        cr.arc(cx, cy, radius, 0, 2 * math.pi)
+        cr.stroke()
+        cr.set_source_rgba(0.36, 0.66, 1.0, 0.95)  # remaining arc, in the accent blue
+        start = -math.pi / 2
+        cr.arc(cx, cy, radius, start, start + frac * 2 * math.pi)
+        cr.stroke()
 
     def _copy_value(self, value, label):
         """Copy a secret to the clipboard with the auto-clear timer + toast (ROLO-0003)."""
@@ -2724,6 +2898,23 @@ window.background {
 .field-revealed-sensitive {
     color: #f5c211;
     text-shadow: 0 0 12px rgba(245,194,17,0.2);
+}
+
+/* TOTP live code row (ROLO-0006) */
+.totp-row {
+    opacity: 0.92;
+}
+.totp-code {
+    font-family: monospace;
+    font-size: 1.25em;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: #5ca8ff;
+}
+.totp-remaining {
+    font-size: 0.85em;
+    color: #8b93a1;
+    min-width: 26px;
 }
 
 /* Copy button */

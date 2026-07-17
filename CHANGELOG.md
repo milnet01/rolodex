@@ -8,6 +8,9 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Generate TOTP 2FA codes from stored authenticator secrets.** (ROLO-0006)
+  Store an otpauth:// URI or a 2FA-labelled base32 setup key and Rolodex renders the rotating RFC 6238 code inline with a countdown ring and one-click copy. Pure-stdlib TOTP — no new dependency.
+
 - **Password health checkup: flag weak and reused secrets** (ROLO-0008)
   A new "Password health..." menu item opens a read-only report that scores every stored secret on length and character-class variety (Weak/Fair/Good/Strong) and flags any secret reused across entries, worst first. All analysis runs in-process over the decrypted vault — nothing leaves the app.
 

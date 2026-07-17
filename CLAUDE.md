@@ -70,6 +70,11 @@ version and extend this function rather than assuming fields exist.
   when adding any password-checking flow.
 - Drag-and-drop is used in two places: entries → category headers (sidebar), and reordering
   fields/categories inside dialogs (`Gtk.DragSource`/`Gtk.DropTarget` with typed content).
+- TOTP live codes (ROLO-0006): `parse_totp_field()` (pure layer) decides which fields get a
+  code; `_show_detail` injects a "Code" row per match and runs one shared 1-second
+  `GLib.timeout` (`_totp_tick`) that refreshes every visible code + countdown ring. The timer
+  is cancelled in `_cancel_totp_tick` on every rebuild and on close/lock — keep that lifecycle
+  intact if you touch the detail pane, or the timer leaks across entries.
 
 **Styling** — all visual design lives in one `CUSTOM_CSS` string near the bottom, loaded once
 in `do_startup`. It's a hardcoded dark "glass" theme; the field-category border colors there
