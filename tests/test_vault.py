@@ -245,3 +245,52 @@ def test_entries_by_category_groups_and_treats_orphans_as_uncategorised():
     assert [e["name"] for _eid, e in groups["Real"]] == ["A-entry"]
     # Uncategorised and orphaned-category entries both land under "".
     assert sorted(e["name"] for _eid, e in groups[""]) == ["B-entry", "C-entry"]
+
+
+# --- Password health (ROLO-0008) ---
+
+def test_password_strength_tiers():
+    assert rolodex.password_strength("") == 0             # empty
+    assert rolodex.password_strength("abc") == 1          # too short
+    assert rolodex.password_strength("abcdefghij") == 1   # long but single class
+    assert rolodex.password_strength("aB3!") == 1         # all classes but too short
+    assert rolodex.password_strength("abcdefgh12") == 2   # 10 chars, 2 classes
+    assert rolodex.password_strength("Abcdefgh1234") == 3  # 12 chars, 3 classes
+    assert rolodex.password_strength("Abcdefgh1234!xyz") == 4  # 16 chars, 4 classes
+
+
+def _sensitive(label, value):
+    return {"label": label, "value": value, "sensitive": True}
+
+
+def test_audit_passwords_flags_weak_and_orders_worst_first():
+    vault = _vault_with([
+        ("Strong", [_sensitive("Password", "Abcdefgh1234!xyz")], "", ""),
+        ("Weak", [_sensitive("Password", "abc")], "", ""),
+    ])
+    findings = rolodex.audit_passwords(vault)
+    assert [f["entry_name"] for f in findings] == ["Weak", "Strong"]
+    assert findings[0]["strength_label"] == "Weak"
+    assert findings[1]["strength_label"] == "Strong"
+
+
+def test_audit_passwords_detects_reuse_across_entries():
+    vault = _vault_with([
+        ("GitHub", [_sensitive("Password", "shared-secret-123")], "", ""),
+        ("GitLab", [_sensitive("Password", "shared-secret-123")], "", ""),
+        ("Unique", [_sensitive("Password", "a-different-secret")], "", ""),
+    ])
+    findings = {f["entry_name"]: f for f in rolodex.audit_passwords(vault)}
+    assert findings["GitHub"]["reused"] and findings["GitHub"]["reuse_count"] == 2
+    assert findings["GitLab"]["reused"] and findings["GitLab"]["reuse_count"] == 2
+    assert not findings["Unique"]["reused"] and findings["Unique"]["reuse_count"] == 1
+
+
+def test_audit_passwords_ignores_non_sensitive_and_empty_fields():
+    vault = _vault_with([
+        ("A", [{"label": "Username", "value": "same", "sensitive": False},
+               {"label": "Password", "value": "", "sensitive": True}], "", ""),
+        ("B", [{"label": "Username", "value": "same", "sensitive": False}], "", ""),
+    ])
+    # Non-sensitive duplicate usernames and the empty password produce no findings.
+    assert rolodex.audit_passwords(vault) == []

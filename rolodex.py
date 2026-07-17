@@ -164,6 +164,70 @@ def field_category(label: str) -> str:
     return "other"
 
 
+# Password health (ROLO-0008) — all analysis runs in-process over the decrypted vault.
+STRENGTH_LABELS = {0: "Empty", 1: "Weak", 2: "Fair", 3: "Good", 4: "Strong"}
+
+
+def password_strength(secret: str) -> int:
+    """Rate a secret 0-4 on length and character-class variety (0 empty … 4 strong).
+
+    A lightweight heuristic — not zxcvbn — but it reliably separates short or single-class
+    secrets from long, mixed ones. Anything shorter than 8 characters, or drawn from a single
+    character class, is weak regardless of the other axis.
+    """
+    if not secret:
+        return 0
+    classes = sum((
+        any(c.islower() for c in secret),
+        any(c.isupper() for c in secret),
+        any(c.isdigit() for c in secret),
+        any(not c.isalnum() for c in secret),
+    ))
+    length = len(secret)
+    if length < 8 or classes == 1:
+        return 1
+    if length < 12 or classes == 2:
+        return 2
+    if length < 16 or classes == 3:
+        return 3
+    return 4
+
+
+def audit_passwords(vault: dict) -> list[dict]:
+    """Analyse every non-empty sensitive field across the vault, worst first.
+
+    Returns one finding per field: {entry_id, entry_name, label, strength, strength_label,
+    reused, reuse_count}. `reused` is True when the same secret value appears in more than one
+    sensitive field anywhere in the vault. Pure — nothing leaves the process.
+    """
+    counts: dict[str, int] = {}
+    for entry in vault["entries"].values():
+        for f in entry["fields"]:
+            if f.get("sensitive") and f.get("value"):
+                counts[f["value"]] = counts.get(f["value"], 0) + 1
+
+    findings = []
+    for eid, entry in vault["entries"].items():
+        for f in entry["fields"]:
+            value = f.get("value", "")
+            if not f.get("sensitive") or not value:
+                continue
+            score = password_strength(value)
+            reuse_count = counts.get(value, 0)
+            findings.append({
+                "entry_id": eid,
+                "entry_name": entry["name"],
+                "label": f["label"],
+                "strength": score,
+                "strength_label": STRENGTH_LABELS[score],
+                "reused": reuse_count > 1,
+                "reuse_count": reuse_count,
+            })
+    findings.sort(key=lambda x: (x["strength"], not x["reused"],
+                                 x["entry_name"].lower(), x["label"].lower()))
+    return findings
+
+
 def add_entry(vault: dict, name: str, fields: list[dict], notes: str = "", category: str = "") -> str:
     entry_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
@@ -752,6 +816,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Right side: menu
         menu = Gio.Menu()
+        menu.append("Password health...", "win.health")
         menu.append("Manage categories...", "win.manage-categories")
         menu.append("Import from text file...", "win.import")
         menu.append("Backup vault...", "win.backup")
@@ -768,6 +833,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Actions
         for name, callback in [
+            ("health", self._on_password_health),
             ("manage-categories", self._on_manage_categories),
             ("import", self._on_import),
             ("backup", self._on_backup),
@@ -1205,6 +1271,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _show_shortcuts(self, *_args):
         ShortcutsDialog().present(self)
+
+    def _on_password_health(self, *_args):
+        PasswordHealthDialog(self).present(self)
 
     # ------------------------------------------------------------------
     # Auto-lock (ROLO-0002)
@@ -2798,6 +2867,62 @@ row.entry {
     box-shadow: 0 0 8px rgba(53,132,228,0.3);
 }
 """
+
+
+class PasswordHealthDialog(Adw.Dialog):
+    """Read-only checkup listing weak or reused secrets, worst first (ROLO-0008).
+
+    All scoring happens in audit_passwords() over the in-memory vault; nothing leaves the process.
+    """
+
+    def __init__(self, main_win):
+        super().__init__()
+        _, clamp = make_dialog_scaffold(
+            self, "Password Health", width=460, height=520, clamp_max=440, margin=16, scrolled=True)
+
+        findings = audit_passwords(main_win.vault)
+        weak = [f for f in findings if f["strength"] <= 2]
+        reused = [f for f in findings if f["reused"]]
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        if not findings:
+            summary = "No passwords stored yet."
+        elif not weak and not reused:
+            summary = f"All {len(findings)} passwords look strong."
+        else:
+            parts = []
+            if weak:
+                parts.append(f"{len(weak)} weak or fair")
+            if reused:
+                parts.append(f"{len(reused)} reused")
+            summary = "   ·   ".join(parts)
+        summary_lbl = Gtk.Label(label=summary, xalign=0, wrap=True)
+        summary_lbl.add_css_class("title-4")
+        vbox.append(summary_lbl)
+
+        if findings:
+            listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+            listbox.add_css_class("boxed-list")
+            for f in findings:
+                row = Adw.ActionRow(title=f["entry_name"], subtitle=f["label"])
+                chips = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
+                strength_chip = Gtk.Label(label=f["strength_label"])
+                strength_chip.add_css_class("caption")
+                strength_chip.add_css_class(
+                    "error" if f["strength"] <= 1 else
+                    "warning" if f["strength"] == 2 else "success")
+                chips.append(strength_chip)
+                if f["reused"]:
+                    reuse_chip = Gtk.Label(label="Reused")
+                    reuse_chip.add_css_class("caption")
+                    reuse_chip.add_css_class("warning")
+                    chips.append(reuse_chip)
+                row.add_suffix(chips)
+                listbox.append(row)
+            vbox.append(listbox)
+
+        clamp.set_child(vbox)
 
 
 class ShortcutsDialog(Adw.Dialog):

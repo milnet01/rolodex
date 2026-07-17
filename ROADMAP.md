@@ -73,12 +73,13 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-07-04.
   Resolved (2026-07-17): Gtk.Application accelerators wired via win.* actions — Ctrl+F focus search, Ctrl+N add, Ctrl+Shift+C copy secret (plain Ctrl+C left for text selection per user choice), Ctrl+L lock (pre-existing), Esc clears search via SearchEntry stop-search, Ctrl+? opens a hand-built ShortcutsDialog (Gtk.ShortcutsWindow is deprecated in GTK 4.22). Verified: 20/20 pytest + functional checks driving a real MainWindow.
 
-- 📋 [ROLO-0008] **Password health audit: flag weak, reused, and duplicate secrets.**
+- ✅ [ROLO-0008] **Password health audit: flag weak, reused, and duplicate secrets.**
   Why: storing passwords is only half the value; surfacing bad ones is the other half.
   Scope: a report view scoring sensitive fields on length/variety and detecting reuse across entries. All analysis in the pure-logic layer over the decrypted vault; never leaves the process.
   **Layman:** A checkup screen that points out weak or repeated passwords across your entries.
   Kind: feature.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): pure-logic password_strength(secret)->0-4 (length + character-class variety; short or single-class is always weak) and audit_passwords(vault)->findings (worst-first, each with strength label + reuse flag; reuse = same secret value in >1 sensitive field). Non-sensitive and empty fields are excluded. A read-only PasswordHealthDialog (built on the new ROLO-0019 make_dialog_scaffold) shows a summary line + a boxed list with Weak/Fair/Good/Strong and Reused chips (Adwaita .error/.warning/.success classes, no new CSS). Opened via a new "Password health..." menu item / win.health action. All analysis in-process. Verified: 4 new unit tests (24/24 pytest), ruff clean, selftest OK, and a headless smoke test (5/5) building the dialog against a mixed weak/reused/strong vault.
 
 - 📋 [ROLO-0009] **Filter the sidebar by category and improve search matching.**
   Why: with many entries the flat search and full grouped view are the only options today.
