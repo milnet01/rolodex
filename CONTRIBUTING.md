@@ -25,6 +25,7 @@ Before writing code or docs, read the relevant standard in [`docs/`](docs/):
 - [`docs/documentation-standards.md`](docs/documentation-standards.md)
 - [`docs/security-standards.md`](docs/security-standards.md)
 - [`docs/dependency-management-standards.md`](docs/dependency-management-standards.md)
+- [`docs/versioning-standards.md`](docs/versioning-standards.md)
 
 ## Development setup
 

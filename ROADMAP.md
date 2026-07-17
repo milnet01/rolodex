@@ -257,3 +257,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   **Layman:** A ready-made example file showing exactly how to format data for import.
   Kind: doc.
   Source: in-session-2026-07-04.
+
+- ✅ [ROLO-0033] **Document the project's versioning standard (SemVer).**
+  Adds docs/versioning-standards.md (MAJOR.MINOR.PATCH per SemVer, with Rolodex-specific rules for what counts as each — the vault format is the breaking-change hinge) and links it from CONTRIBUTING.md's Standards list. Formalises the practice the CHANGELOG already claimed ('aims to follow Semantic Versioning').
+  **Layman:** Write down the rule for version numbers so it's clear when to bump the big, middle, or last number.
+  Kind: doc.
+  Source: user-request-2026-07-17.
