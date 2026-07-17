@@ -59,6 +59,10 @@ PW_GEN_CLASSES = {
 DEFAULT_CLIPBOARD_CLEAR_SECONDS = 20  # ROLO-0003: wipe a copied secret after this delay
 DEFAULT_IDLE_LOCK_SECONDS = 300  # ROLO-0002: auto-lock after this much inactivity
 
+# ROLO-0018: coalesce rapid search keystrokes — rebuild the list once typing pauses, rather
+# than on every character (each rebuild re-scans every entry).
+SEARCH_DEBOUNCE_MS = 150
+
 # ---------------------------------------------------------------------------
 # Encryption layer
 # ---------------------------------------------------------------------------
@@ -205,6 +209,19 @@ def search_entries(vault: dict, query: str) -> list[tuple[str, dict]]:
 
 def list_entries(vault: dict) -> list[tuple[str, dict]]:
     return sorted(vault["entries"].items(), key=lambda x: x[1]["name"].lower())
+
+
+def find_entry_by_name(vault: dict, name: str, exclude_id: str | None = None) -> str | None:
+    """Return the id of an existing entry whose name matches `name` (case-insensitive,
+    whitespace-trimmed), or None. `exclude_id` skips one entry so editing an entry doesn't
+    flag itself as its own duplicate. Used to warn on duplicate names (ROLO-0023)."""
+    target = name.strip().lower()
+    for eid, entry in vault["entries"].items():
+        if eid == exclude_id:
+            continue
+        if entry["name"].strip().lower() == target:
+            return eid
+    return None
 
 
 def entries_noun(n: int) -> str:
@@ -793,6 +810,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._current_entry_id = None
         self._collapsed_categories: set[str] = set()
+        self._search_debounce_id = 0  # pending GLib timeout for debounced search (ROLO-0018)
         migrate_vault(self.vault)
         self._refresh_list()
 
@@ -815,6 +833,7 @@ class MainWindow(Adw.ApplicationWindow):
         save_vault(self.vault, self.password, self.salt, self.vault_path)
 
     def _on_close_request(self, *_args):
+        self._cancel_search_debounce()
         save_config({
             "window_width": self.get_width(),
             "window_height": self.get_height(),
@@ -915,7 +934,21 @@ class MainWindow(Adw.ApplicationWindow):
             self.detail_stack.set_visible_child_name("empty")
 
     def _on_search_changed(self, entry):
-        self._refresh_list()
+        # Debounce (ROLO-0018): restart a short timer on each keystroke so the (relatively
+        # expensive) full rebuild runs once the user pauses, not per character.
+        self._cancel_search_debounce()
+        self._search_debounce_id = GLib.timeout_add(SEARCH_DEBOUNCE_MS, self._apply_search)
+
+    def _cancel_search_debounce(self):
+        if self._search_debounce_id:
+            GLib.source_remove(self._search_debounce_id)
+            self._search_debounce_id = 0
+
+    def _apply_search(self):
+        self._search_debounce_id = 0
+        if self.vault is not None:  # guard against a timer firing after lock/close
+            self._refresh_list()
+        return GLib.SOURCE_REMOVE
 
     def _on_row_selected(self, listbox, row):
         if row is None:
@@ -1123,6 +1156,7 @@ class MainWindow(Adw.ApplicationWindow):
         if self._idle_source_id is not None:
             GLib.source_remove(self._idle_source_id)
             self._idle_source_id = None
+        self._cancel_search_debounce()
         # Wipe secrets from memory before showing the lock screen. Every mutation already saves
         # via _save(), so there is nothing unsaved to lose here.
         self.vault = None
@@ -1553,15 +1587,19 @@ class FieldRow(Gtk.ListBoxRow):
         self.sens_check = Gtk.CheckButton(label="Hide", active=sensitive)
         box.append(self.sens_check)
 
-        if sensitive:
-            self.value_entry.set_visibility(False)
+        # Peek toggle (ROLO-0021): sensitive values render masked, with an eye icon inside
+        # the value box to reveal/hide them while editing. The peek is view-only — it never
+        # changes the "Hide" flag that decides how the field is stored.
+        self._peek = False
+        self.value_entry.connect("icon-press", self._on_value_icon_press)
+        self._update_value_visibility()
 
-        # Value visibility always tracks the "Hide" checkbox, so a field is never shown in
-        # cleartext while it will be saved as sensitive. The generator button follows the same
-        # flag — it appears exactly when the field is marked sensitive.
+        # The "Hide" checkbox decides whether the value is a secret. Toggling it resets any
+        # peek and shows/hides the generator button (generating only makes sense for secrets).
         def on_sens_toggled(check):
-            self.value_entry.set_visibility(not check.get_active())
+            self._peek = False
             self.gen_btn.set_visible(check.get_active())
+            self._update_value_visibility()
         self.sens_check.connect("toggled", on_sens_toggled)
 
         # Auto-check "Hide" when the label gains a sensitive keyword (one-way; the user can
@@ -1591,6 +1629,26 @@ class FieldRow(Gtk.ListBoxRow):
         drop.set_gtypes([FieldRow])
         drop.connect("drop", self._on_drop)
         self.add_controller(drop)
+
+    def _update_value_visibility(self):
+        """Mask/reveal the value and drive the eye icon. A sensitive field is masked unless
+        the user is peeking; the icon appears only on sensitive fields and reflects state."""
+        sensitive = self.sens_check.get_active()
+        self.value_entry.set_visibility(not sensitive or self._peek)
+        pos = Gtk.EntryIconPosition.SECONDARY
+        if sensitive:
+            self.value_entry.set_icon_from_icon_name(
+                pos, "view-conceal-symbolic" if self._peek else "view-reveal-symbolic")
+            self.value_entry.set_icon_activatable(pos, True)
+            self.value_entry.set_icon_tooltip_text(
+                pos, "Hide value" if self._peek else "Show value")
+        else:
+            self.value_entry.set_icon_from_icon_name(pos, None)
+
+    def _on_value_icon_press(self, _entry, icon_pos):
+        if icon_pos == Gtk.EntryIconPosition.SECONDARY:
+            self._peek = not self._peek
+            self._update_value_visibility()
 
     def _build_generator_popover(self) -> Gtk.Popover:
         """A small popover with length + character-class options and a Generate button."""
@@ -1771,6 +1829,52 @@ class AddEditDialog(Adw.Dialog):
         toolbar.set_content(scroll)
         self.set_child(toolbar)
 
+        # Unsaved-changes guard (ROLO-0022): take over the close request so an accidental
+        # Esc / close-button / Cancel with edits in flight prompts before discarding. A
+        # successful Save bypasses this via force_close(). Snapshot taken last, once every
+        # widget is populated, so it reflects the dialog's initial state.
+        self.set_can_close(False)
+        self.connect("close-attempt", self._on_close_attempt)
+        self._initial_snapshot = self._snapshot()
+
+    def _snapshot(self) -> tuple:
+        """A comparable signature of the whole form — name, category, notes, and every field
+        row. Two snapshots differ iff the user changed something (drives the dirty check)."""
+        buf = self.notes_view.get_buffer()
+        notes = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+        category = self.category_row.get_selected() if self.category_row is not None else -1
+        fields = tuple(
+            (r.label_entry.get_text(), r.value_entry.get_text(), r.sens_check.get_active())
+            for r in self._get_field_rows()
+        )
+        return (self.name_entry.get_text(), category, notes, fields)
+
+    def _is_dirty(self) -> bool:
+        return self._snapshot() != self._initial_snapshot
+
+    def _on_close_attempt(self, _dialog):
+        if not self._is_dirty():
+            self.force_close()
+            return
+        self._confirm(
+            "Discard changes?",
+            "This entry has unsaved changes. Discard them?",
+            "Discard", Adw.ResponseAppearance.DESTRUCTIVE, self.force_close,
+        )
+
+    def _confirm(self, heading, body, action_label, appearance, on_confirm):
+        """Present a modal Cancel / <action> confirmation over this dialog, invoking
+        on_confirm only when the user picks the action. Shared by the discard and
+        duplicate-name prompts."""
+        dlg = Adw.AlertDialog(heading=heading, body=body)
+        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("ok", action_label)
+        dlg.set_response_appearance("ok", appearance)
+        dlg.set_default_response("cancel")
+        dlg.set_close_response("cancel")
+        dlg.connect("response", lambda _d, r: on_confirm() if r == "ok" else None)
+        dlg.present(self)
+
     def _on_add_field(self, btn):
         row = FieldRow(self, "", "")
         self.fields_listbox.append(row)
@@ -1835,12 +1939,26 @@ class AddEditDialog(Adw.Dialog):
                 if item:
                     category = item
 
+        # Warn on a name that collides with another entry (ROLO-0023). exclude_id skips the
+        # entry being edited so it isn't flagged as a duplicate of itself.
+        dup = find_entry_by_name(self.main_win.vault, name, exclude_id=self.entry_id)
+        if dup is not None:
+            self._confirm(
+                "Duplicate name",
+                f'Another entry is already named "{name}". Save anyway?',
+                "Save Anyway", Adw.ResponseAppearance.DEFAULT,
+                lambda: self._commit(name, fields, notes, category),
+            )
+            return
+
+        self._commit(name, fields, notes, category)
+
+    def _commit(self, name, fields, notes, category):
         if self.entry_id:
             self.main_win._finish_edit(self.entry_id, name, fields, notes, category)
         else:
             self.main_win._finish_add(name, fields, notes, category)
-
-        self.close()
+        self.force_close()  # bypass the unsaved-changes guard — this is a deliberate save
 
 
 # --------------------------------------------------------------------------

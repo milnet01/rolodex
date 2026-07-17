@@ -40,12 +40,13 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-07-04.
   Resolved (2026-07-16): pure generate_password() using the secrets module — length + per-class toggles, guarantees one char from each selected class. Popover generator control (view-refresh button) on sensitive FieldRows in the add/edit editor; disables Generate when no class is selected. Unit-tested.
 
-- 📋 [ROLO-0018] **Replace the full-sidebar rebuild with a model-backed list and debounced search.**
+- 🚧 [ROLO-0018] **Replace the full-sidebar rebuild with a model-backed list and debounced search.**
   Why: _refresh_list() tears down and recreates every sidebar row on every mutation AND on every search keystroke (search_entries scans all entries each time). Fine for a small vault, visibly wasteful for a large one.
   Scope: move to a Gtk.ListView/GtkSelectionModel backed by a data model with incremental updates, and debounce the search-changed handler (e.g. 150ms) so typing doesn't recompute per character. Keep search_entries pure and covered by ROLO-0001 tests. Biggest efficiency win in the app.
   **Layman:** Make the list update smoothly instead of rebuilding the whole thing on every keystroke.
   Kind: perf.
   Source: in-session-2026-07-04.
+  Progress (2026-07-17): debounced the search-changed handler (SEARCH_DEBOUNCE_MS=150) so rapid keystrokes coalesce into one rebuild once typing pauses; pending timer is cancelled on lock/close. This removes the per-character rebuild — the efficiency win the body calls out. Verified headlessly: 5 keystrokes -> 1 rebuild; cancel path fires 0. The model-backed Gtk.ListView migration (the larger half) is intentionally deferred pending a go/no-go: after reading the sidebar's surface (3 render modes, collapsible category headers, entry->header drag-and-drop, per-row context menus, ~10 _refresh_list call-sites) it is a high-risk rewrite that is hard to verify without interactive testing on the live vault, and for a personal-scale vault the debounce already resolves the perceived jank.
 
 ## Medium priority
 
@@ -119,26 +120,29 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: chore.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0021] **Show-password (eye) toggle on sensitive fields in the editor.**
+- ✅ [ROLO-0021] **Show-password (eye) toggle on sensitive fields in the editor.**
   Why: sensitive field values are hidden while editing with only the 'Hide' checkbox to flip visibility of the whole row; users expect a per-field reveal eye.
   Scope: add a peek toggle to sensitive FieldRow value entries (Gtk.Entry secondary icon) that flips visibility without changing the saved sensitive flag. Small, self-contained UI change.
   **Layman:** An eye icon to peek at what you're typing into a password field.
   Kind: ux.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): view-only eye toggle added to sensitive value entries in FieldRow via a secondary entry icon; peek never alters the stored sensitive flag. Verified headlessly across masked/peek/hide-off states.
 
-- 📋 [ROLO-0022] **Warn before discarding unsaved changes in the add/edit dialog.**
+- ✅ [ROLO-0022] **Warn before discarding unsaved changes in the add/edit dialog.**
   Why: Cancel/close on AddEditDialog discards everything with no confirmation — easy to lose work.
   Scope: track a dirty flag on the editor; on cancel/close with changes, show an Adw.AlertDialog to confirm discard. Applies to add and edit.
   **Layman:** Ask 'are you sure?' if you close the editor with unsaved edits.
   Kind: ux.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): AddEditDialog takes over close via can-close(False)+close-attempt; a form snapshot drives an _is_dirty() check, prompting a Discard confirmation only when edited. Save bypasses via force_close(). Verified: clean dialog closes, dirty dialog stays open.
 
-- 📋 [ROLO-0023] **Warn when a new entry duplicates an existing entry name.**
+- ✅ [ROLO-0023] **Warn when a new entry duplicates an existing entry name.**
   Why: the importer detects duplicate names, but manually adding a duplicate is silent — inconsistent and confusing.
   Scope: on save in AddEditDialog for a new entry, if the name (case-insensitive) already exists, prompt to confirm/rename. Reuse the same case-insensitive comparison used by import_entries.
   **Layman:** Flag it when you add an entry with the same name as one you already have.
   Kind: ux.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): pure find_entry_by_name() (case/whitespace-insensitive, excludes self on edit) + tests; AddEditDialog._on_save prompts a Save-Anyway confirmation on a name collision.
 
 - 📋 [ROLO-0024] **Adaptive layout for narrow windows using libadwaita breakpoints.**
   Why: the fixed two-pane Gtk.Paned doesn't collapse; on a narrow window the sidebar and detail fight for space.

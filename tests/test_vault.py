@@ -187,6 +187,27 @@ def test_search_entries_matches_name_field_category_notes():
     assert rolodex.search_entries(vault, "no-such-thing") == []
 
 
+# --- Duplicate-name detection (ROLO-0023) -------------------------------------------------
+
+
+def test_find_entry_by_name_is_case_and_whitespace_insensitive():
+    vault = _vault_with([("GitHub", [], "", "")])
+    (eid,) = vault["entries"].keys()
+    assert rolodex.find_entry_by_name(vault, "github") == eid
+    assert rolodex.find_entry_by_name(vault, "  GITHUB  ") == eid
+    assert rolodex.find_entry_by_name(vault, "GitLab") is None
+
+
+def test_find_entry_by_name_excludes_self():
+    vault = _vault_with([("GitHub", [], "", "")])
+    (eid,) = vault["entries"].keys()
+    # Editing the same entry must not flag it as a duplicate of itself.
+    assert rolodex.find_entry_by_name(vault, "GitHub", exclude_id=eid) is None
+    # But a *different* entry with the same name still counts.
+    other = rolodex.add_entry(vault, "GitHub", [])
+    assert rolodex.find_entry_by_name(vault, "GitHub", exclude_id=other) == eid
+
+
 # --- Category helpers (ROLO-0001 scope) ---------------------------------------------------
 
 

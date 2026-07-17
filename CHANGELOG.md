@@ -6,6 +6,18 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Unsaved-changes guard (ROLO-0022) — closing the add/edit dialog with edits in flight now confirms before discarding them.**
+
+- **Duplicate-name warning (ROLO-0023) — saving an entry whose name matches another (case-insensitive) now asks for confirmation first.**
+
+- **Show/hide (eye) toggle on sensitive fields in the add/edit editor (ROLO-0021) — peek at a masked value while editing, view-only so it never changes whether the field is stored as a secret.**
+
+### Changed
+
+- **Debounced sidebar search (ROLO-0018) — the list rebuilds once typing pauses (~150ms) instead of on every keystroke.**
+
 ## [1.2.0] - 2026-07-16
 
 ### Added
