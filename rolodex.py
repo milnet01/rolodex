@@ -695,7 +695,7 @@ class MainWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
 
         # Left side: Add button
-        add_btn = Gtk.Button(icon_name="list-add-symbolic", tooltip_text="Add entry")
+        add_btn = Gtk.Button(icon_name="list-add-symbolic", tooltip_text="Add entry (Ctrl+N)")
         add_btn.connect("clicked", self._on_add)
         header.pack_start(add_btn)
 
@@ -739,6 +739,19 @@ class MainWindow(Adw.ApplicationWindow):
         self.add_action(lock_action)
         app.set_accels_for_action("win.lock", ["<Control>l"])
 
+        # Keyboard shortcuts for common actions (ROLO-0007). Ctrl+Shift+C copies the
+        # selected entry's secret while plain Ctrl+C stays free for copying selected text.
+        for name, callback, accels in [
+            ("focus-search", self._focus_search, ["<Control>f"]),
+            ("add", self._on_add, ["<Control>n"]),
+            ("copy-secret", self._copy_secret, ["<Control><Shift>c"]),
+            ("shortcuts", self._show_shortcuts, ["<Control>question"]),
+        ]:
+            action = Gio.SimpleAction(name=name)
+            action.connect("activate", callback)
+            self.add_action(action)
+            app.set_accels_for_action(f"win.{name}", accels)
+
         # --- Paned: sidebar | detail ---
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.add_css_class("main-paned")
@@ -757,6 +770,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.search_entry.set_margin_end(8)
         self.search_entry.set_margin_bottom(4)
         self.search_entry.connect("search-changed", self._on_search_changed)
+        # Escape clears the search box (ROLO-0007); scoped to the entry so it never
+        # shadows the dialog/popover Escape handling elsewhere.
+        self.search_entry.connect("stop-search", lambda e: e.set_text(""))
         left_box.append(self.search_entry)
 
         # Count label
@@ -1097,18 +1113,20 @@ class MainWindow(Adw.ApplicationWindow):
         clamp.set_child(vbox)
         self.detail_box.append(clamp)
 
+    def _copy_value(self, value, label):
+        """Copy a secret to the clipboard with the auto-clear timer + toast (ROLO-0003)."""
+        if not copy_to_clipboard(value):
+            self._toast("Clipboard not available")
+            return
+        delay = self._clipboard_clear_s
+        if delay > 0:
+            self._toast(f"Copied {label} — clipboard clears in {delay}s")
+            GLib.timeout_add_seconds(delay, self._clear_clipboard_if_unchanged, value)
+        else:
+            self._toast(f"Copied {label}")
+
     def _make_copy_handler(self, value, label):
-        def handler(_btn):
-            if not copy_to_clipboard(value):
-                self._toast("Clipboard not available")
-                return
-            delay = self._clipboard_clear_s
-            if delay > 0:
-                self._toast(f"Copied {label} — clipboard clears in {delay}s")
-                GLib.timeout_add_seconds(delay, self._clear_clipboard_if_unchanged, value)
-            else:
-                self._toast(f"Copied {label}")
-        return handler
+        return lambda _btn: self._copy_value(value, label)
 
     def _clear_clipboard_if_unchanged(self, value):
         """Wipe the clipboard, but only if it still holds the secret we copied (ROLO-0003)."""
@@ -1121,6 +1139,29 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _toast(self, msg):
         self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=2))
+
+    # ------------------------------------------------------------------
+    # Keyboard shortcuts (ROLO-0007)
+    # ------------------------------------------------------------------
+
+    def _focus_search(self, *_args):
+        self.search_entry.grab_focus()
+
+    def _copy_secret(self, *_args):
+        """Copy the selected entry's first sensitive field (Ctrl+Shift+C)."""
+        entry_id = self._current_entry_id
+        if not entry_id or entry_id not in self.vault["entries"]:
+            self._toast("Select an entry first")
+            return
+        field = next((f for f in self.vault["entries"][entry_id]["fields"]
+                      if f.get("sensitive")), None)
+        if field is None:
+            self._toast("No sensitive field to copy")
+            return
+        self._copy_value(field["value"], field["label"])
+
+    def _show_shortcuts(self, *_args):
+        ShortcutsDialog().present(self)
 
     # ------------------------------------------------------------------
     # Auto-lock (ROLO-0002)
@@ -2796,6 +2837,46 @@ row.entry {
     box-shadow: 0 0 8px rgba(53,132,228,0.3);
 }
 """
+
+
+class ShortcutsDialog(Adw.Dialog):
+    """Keyboard-shortcut reference (Ctrl+?). Hand-built because Gtk.ShortcutsWindow is
+    deprecated as of GTK 4.18 (this ships against 4.22)."""
+
+    SHORTCUTS = [
+        ("<Control>f", "Focus search"),
+        ("<Control>n", "Add entry"),
+        ("<Control><Shift>c", "Copy password / secret"),
+        ("<Control>l", "Lock vault"),
+        ("Escape", "Clear search"),
+        ("<Control>question", "Keyboard shortcuts"),
+    ]
+
+    def __init__(self):
+        super().__init__()
+        self.set_title("Keyboard Shortcuts")
+        self.set_content_width(380)
+        self.set_content_height(-1)
+
+        toolbar = Adw.ToolbarView()
+        toolbar.add_top_bar(Adw.HeaderBar())
+
+        clamp = Adw.Clamp(maximum_size=340)
+        clamp.set_margin_top(24)
+        clamp.set_margin_bottom(24)
+        clamp.set_margin_start(24)
+        clamp.set_margin_end(24)
+
+        listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        for accel, desc in self.SHORTCUTS:
+            row = Adw.ActionRow(title=desc)
+            row.add_suffix(Gtk.ShortcutLabel(accelerator=accel, valign=Gtk.Align.CENTER))
+            listbox.append(row)
+
+        clamp.set_child(listbox)
+        toolbar.set_content(clamp)
+        self.set_child(toolbar)
 
 
 class RolodexApp(Adw.Application):

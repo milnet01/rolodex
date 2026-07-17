@@ -8,6 +8,12 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Keyboard shortcuts for common actions (ROLO-0007)**
+  Ctrl+F focuses search, Ctrl+N adds an entry, Ctrl+Shift+C copies
+  the selected entry's password/secret (plain Ctrl+C still copies
+  selected text), Ctrl+L locks the vault, Escape clears the search
+  box, and Ctrl+? opens a keyboard-shortcuts reference.
+
 - **Unsaved-changes guard (ROLO-0022) — closing the add/edit dialog with edits in flight now confirms before discarding them.**
 
 - **Duplicate-name warning (ROLO-0023) — saving an entry whose name matches another (case-insensitive) now asks for confirmation first.**

@@ -65,12 +65,13 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0007] **Keyboard shortcuts for the common actions.**
+- ✅ [ROLO-0007] **Keyboard shortcuts for the common actions.**
   Why: a keyboard-driven tool is faster and expected on the Linux desktop.
   Scope: wire Gtk.Application accelerators — Ctrl+F focus search, Ctrl+N add, Ctrl+L lock (pairs with ROLO-0002), Ctrl+C copy focused field, Escape to clear search. Add a shortcuts window (Ctrl+?).
   **Layman:** Hotkeys like Ctrl+F to search, Ctrl+N for a new entry, Ctrl+L to lock.
   Kind: enhancement.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): Gtk.Application accelerators wired via win.* actions — Ctrl+F focus search, Ctrl+N add, Ctrl+Shift+C copy secret (plain Ctrl+C left for text selection per user choice), Ctrl+L lock (pre-existing), Esc clears search via SearchEntry stop-search, Ctrl+? opens a hand-built ShortcutsDialog (Gtk.ShortcutsWindow is deprecated in GTK 4.22). Verified: 20/20 pytest + functional checks driving a real MainWindow.
 
 - 📋 [ROLO-0008] **Password health audit: flag weak, reused, and duplicate secrets.**
   Why: storing passwords is only half the value; surfacing bad ones is the other half.
