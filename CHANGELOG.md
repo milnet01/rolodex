@@ -6,6 +6,8 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-17
+
 ### Added
 
 - **Generate TOTP 2FA codes from stored authenticator secrets.** (ROLO-0006)
@@ -115,7 +117,8 @@ app reached this state, not a tagged release.)
 - Encrypted backup & restore, plaintext export, and master-password change.
 - Vault schema migration (v1 → v2) applied on load.
 
-[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/milnet01/rolodex/releases/tag/v1.3.0
 [1.2.0]: https://github.com/milnet01/rolodex/releases/tag/v1.2.0
 [1.1.0]: https://github.com/milnet01/rolodex/releases/tag/v1.1.0
 <!-- 1.0.0 predates the public repo and was never tagged; link points at the history. -->
