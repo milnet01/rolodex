@@ -15,13 +15,15 @@ from datetime import datetime
 
 import gi
 
+# gi.require_version() must run before the gi.repository imports, so these imports
+# cannot sit at the top of the file; E402 is silenced on exactly those lines.
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from cryptography.fernet import Fernet, InvalidToken
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
+from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # noqa: E402
+from cryptography.hazmat.primitives import hashes  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants

@@ -115,12 +115,13 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: refactor.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0020] **Add GitHub Actions CI: lint (ruff) plus the test suite.**
+- ✅ [ROLO-0020] **Add GitHub Actions CI: lint (ruff) plus the test suite.**
   Why: there is no CI; nothing currently guards a PR. Public repo = free Linux runner minutes.
   Scope: a workflow running ruff (style/lint) and the ROLO-0001 pytest suite on push/PR, on the current stable Python. Pin actions to current major versions per dependency standards. Depends on ROLO-0001 for the test half; the lint half can land immediately.
   **Layman:** Automatic checks on every change so mistakes get caught before merge.
   Kind: chore.
   Source: in-session-2026-07-04.
+  Resolved (2026-07-17): added .github/workflows/ci.yml — ruff check + pytest on push/PR to main. Uses the system GTK stack from apt (tests import rolodex.py → gi at module load; a setup-python interpreter lacks gi), mirroring build.yml's install so the two can't drift. actions/checkout pinned to current major v7. The 4 unavoidable E402s (gi imports gated behind gi.require_version) are silenced per-line with a documented reason. Verified: ruff clean, YAML valid, 20/20 pytest. Note: build.yml still on checkout@v4 — separate bump, left out of scope.
 
 - ✅ [ROLO-0021] **Show-password (eye) toggle on sensitive fields in the editor.**
   Why: sensitive field values are hidden while editing with only the 'Hide' checkbox to flip visibility of the whole row; users expect a per-field reveal eye.

@@ -8,6 +8,9 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **GitHub Actions CI: ruff lint + pytest on every push/PR** (ROLO-0020)
+  New .github/workflows/ci.yml runs ruff and the pytest suite on push and PR to main, installing the system GTK stack from apt so `import rolodex` resolves. Pinned actions/checkout@v7.
+
 - **Keyboard shortcuts for common actions (ROLO-0007)**
   Ctrl+F focuses search, Ctrl+N adds an entry, Ctrl+Shift+C copies
   the selected entry's password/secret (plain Ctrl+C still copies

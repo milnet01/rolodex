@@ -1,0 +1,38 @@
+name: CI
+
+# Lint + test gate on every push and PR to main (ROLO-0020). Runs ruff (style/lint) and the
+# pytest suite. The tests import rolodex.py, which imports gi at module load, so the job needs
+# the system GTK 4 / libadwaita + PyGObject stack from apt — a setup-python interpreter would
+# not have `gi`. This mirrors the apt install in build.yml so the two workflows can't drift.
+#
+# Public repo = free Linux runner minutes, so this runs on every push/PR rather than on demand.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint (ruff) + test (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GTK stack + tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi python3-gi-cairo python3-cairo \
+            gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-1 libadwaita-1-0
+          python3 -m pip install --break-system-packages --upgrade ruff pytest cryptography
+
+      - name: Lint (ruff)
+        run: ruff check rolodex.py tests/
+
+      - name: Test (pytest)
+        run: python3 -m pytest tests/ -q
