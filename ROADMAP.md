@@ -192,6 +192,41 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   CI job added (.github/workflows/build.yml, macos-latest via Homebrew gtk4/libadwaita/pygobject3, PyInstaller, unsigned per user). Best-effort/untested; needs CI-run iteration. Unsigned .app requires right-click->Open past Gatekeeper (no Apple Developer account).
   Shipped in v1.1.0: rolodex-macos-arm64 (unsigned; right-click->Open past Gatekeeper). CI builds on macos-latest via Homebrew and passes the native --selftest gate. Signing/notarization is future work if an Apple Developer account is obtained.
 
+- 📋 [ROLO-0036] **Nothing here says how we would know Rolodex works, outside security.**
+  Diagnosed 2026-08-14 by `adopt-project`, run from ~/.claude. Two cold
+  readers, five documents each, plus a second pass. No source was read
+  and no test was run -- this is not an audit and says nothing about
+  code quality.
+
+  **Verdict: state 1**, on ~/.claude/workflow.md's five states. That is
+  the discovery state, and it holds however much code exists.
+
+  What the reading found:
+
+  - **What it is for: YES**, stated and quotable, non-goals included.
+  - **How we would know it works: NO** -- for one half of the purpose.
+
+  `SECURITY.md`'s threat model **does** state judgeable outcomes, and the
+  reader was right to count them. But they cover security alone, and the
+  stated purpose begins *"A safe, **simple** place..."*. There is no
+  criterion for usability, speed or durability anywhere.
+
+  The seven specs do not fill the gap. They are explicitly *"retroactive
+  ... extracted from the shipped code"*, so every invariant in them
+  describes what **was built** rather than what would count as **working**.
+  A spec written backwards from the code cannot fail.
+
+  **What would close this.** Success criteria for the "simple" half --
+  what a first-time user must be able to do, and how fast. Discovery is
+  a conversation, not a writing task, so this is not a doc someone
+  drafts alone.
+
+  Recorded rather than acted on: the diagnosis was produced elsewhere,
+  and what to do about it is this project's call.
+  **Layman:** The security side has real, judgeable goals. The "simple to use" half of the promise has none, so nothing can tell us whether we delivered it.
+  Kind: doc.
+  Source: adopt-project-run-2026-08-14 (from ~/.claude).
+
 ## Low priority / nice-to-have
 
 - 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
