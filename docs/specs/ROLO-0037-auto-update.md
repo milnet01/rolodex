@@ -17,10 +17,10 @@ credentials.
 
 ## 2. Problem
 
-Rolodex publishes self-contained binaries for Linux, Windows and macOS on every `v*` tag
-(`.github/workflows/build.yml`). Nothing tells a user a new one exists. They find out by
-visiting GitHub, or they never find out — so a security fix like 1.3.1's atomic vault write
-reaches only the users who happen to look.
+Rolodex publishes self-contained binaries on every `v*` tag
+(`.github/workflows/build.yml`), and nothing tells a user a new one exists. They check GitHub,
+or they never find out — so a security fix like 1.3.1's atomic vault write reaches only the
+users who happen to look.
 
 Two things stand in the way, and both are prerequisites rather than details:
 
@@ -38,10 +38,10 @@ Two things stand in the way, and both are prerequisites rather than details:
 file, on your machine. No account, no cloud, no network access of any kind."*
 
 An update check is network access. The conflict is real, and is resolved by narrowing the goal
-rather than by pretending it does not apply: the feature is off by default (INV-1), it
-is the app's only egress and never transmits vault-derived data (INV-3), and `DESIGN.md` is
-amended in the same change to state the carve-out. Shipping code that contradicts the design
-document leaves two sources of truth, and the one users read is the one nobody checked.
+rather than ignoring it: the feature is off by default (INV-1), it is the app's only egress and
+never transmits vault-derived data (INV-3), and `DESIGN.md` is amended in the same change.
+Shipping code that contradicts the design document leaves two sources of truth, and the one
+users read is the one nobody checked.
 
 **That amendment changes direction for work still to come, so it takes `CLAUDE.md` rule 14's
 gate on its own account.** This spec's gate does not cover it.
@@ -68,10 +68,20 @@ Linux path off `$APPIMAGE`; Rolodex has no AppImage. A PyInstaller one-file buil
 `sys.frozen` there is no installer and the feature is inert.
 
 **D2 — Asset names come from the existing build matrix and are not invented here.**
-`build.yml` already fixes them: `rolodex-linux-x86_64`, `rolodex-macos-arm64`,
-`rolodex-windows-x86_64.exe`. The signature asset is that name + `.sig`. The Linux and macOS
-assets carry no file extension, so the staged temp has none either — harmless, because the file
-is `chmod +x`'d and `os.replace`d rather than opened by extension.
+`build.yml` already fixes them, and the running build selects one by
+`(sys.platform, platform.machine())`:
+
+| `sys.platform` | `platform.machine()` | Asset |
+|---|---|---|
+| `linux` | `x86_64` | `rolodex-linux-x86_64` |
+| `darwin` | `arm64` | `rolodex-macos-arm64` |
+| `win32` | `AMD64` | `rolodex-windows-x86_64.exe` |
+
+**Any other pair yields no asset and therefore no offer** — an Intel Mac is the live case, and
+matching on `sys.platform` alone would offer it the arm64 binary, which INV-10 would then
+`os.replace` over a working install. The signature asset is that name + `.sig`. The Linux and
+macOS assets carry no file extension, so the staged temp has none either — harmless, because
+the file is `chmod +x`'d and `os.replace`d rather than opened by extension.
 
 **D3 — Ed25519 detached signatures, verified against a key baked into the binary.**
 `cryptography` is already Rolodex's one dependency and provides Ed25519, so this adds none. The
@@ -94,8 +104,8 @@ unlocked, which is the wrong coupling.
 module and greps for `import urllib` everywhere else. Rolodex is a single file, so that shape is
 not available. Instead `urllib` is imported *inside* the fetch functions and never at module
 scope, so `import rolodex` pulls in no network stack and a test can assert exactly that (INV-12).
-**This is the weaker of the two mechanisms**: it proves the import graph, not that some future
-function fails to add its own egress.
+**Weaker than finbreak's whole-module ban**: it proves the import graph, not that a future
+function adds no egress of its own.
 
 **D7 — CA trust: `certifi` when present, the system store otherwise.** finbreak hit a real bug
 here — a binary built on one distro, run on another whose CA bundle sits elsewhere, found no CAs
@@ -106,17 +116,20 @@ exists, and imported defensively — a source checkout uses the system store, wh
 there. `requirements.txt` is unchanged.
 
 **D8 — `__version__` is introduced in `rolodex.py` and becomes a version-bearing file.**
-`.claude/bump.json` gains it, so `post_check` enforces lockstep between it, the CHANGELOG
-heading and the tag. This is the prerequisite from § 2 and the one change that touches the
-release recipe.
+`.claude/bump.json` gains a `files[]` entry that rewrites it, **and its `post_check` is
+extended to assert `__version__` matches the CHANGELOG heading**. Both halves are needed:
+`post_check` is a fixed shell string that greps `CHANGELOG.md` alone, so adding a `files[]`
+entry does not extend it, and a `__version__` that failed to rewrite would pass the bump
+silently. This is the prerequisite from § 2 and the one change that touches the release
+recipe.
 
 **D9 — The relaunch waits for the old process to exit.** A PyInstaller one-file binary unpacks
-itself into a private `_MEI` directory and cleans it up on exit. Spawning the replacement before
-the old process has torn down makes the new bootloader collide with the old extraction
-directory — finbreak shipped this bug twice. The relaunch is therefore a detached `/bin/sh` that
-polls until the old PID is gone (hard-capped, so a wedged process cannot hang it forever), then
-`exec`s the swapped binary with `PYINSTALLER_RESET_ENVIRONMENT=1` and the loader variables
-restored from PyInstaller's own `*_ORIG` values.
+itself into a private `_MEI` directory and cleans it up on exit; spawning the replacement before
+that teardown makes the new bootloader collide with the old extraction directory. finbreak
+shipped this bug twice. The relaunch is therefore a detached `/bin/sh` that polls until the old
+PID is gone — hard-capped, so a wedged process cannot hang it — then `exec`s the swapped binary
+with `PYINSTALLER_RESET_ENVIRONMENT=1` and the loader variables restored from PyInstaller's own
+`*_ORIG` values.
 
 **D10 — Version grammar is `N(.N)*` with an explicit digit guard.** A leading `v`/`V` is
 stripped; every remaining segment must satisfy `segment.isascii() and segment.isdigit()`.
@@ -132,9 +145,9 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   absent / `false` / `"yes"` / `1`, and non-zero once explicitly enabled.
 - **INV-2** Off a frozen build (`sys.frozen` unset), `detect_installer()` returns `None`,
   `is_update_supported()` is `False`, and `check_for_update()` returns `None` before any network
-  call.
+  call. **This gate lives inside `check_for_update()`**, not in its GUI caller.
   *Test:* `tests/test_update.py` — with `sys.frozen` unset, assert all three and a zero fetcher
-  call count.
+  call count. This is the **only** test that leaves the frozen state unset; see § 7.
 - **INV-3** The check transmits nothing derived from the vault: the request carries a fixed
   `User-Agent`, no query parameters, no cookies and no identifier.
   *Test:* `tests/test_update.py` — the injected fetcher captures the URL and headers; assert the
@@ -145,8 +158,11 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   not exist; assert an `UpdateInfo` is still produced.
 - **INV-5** An update is offered only for a release that is **all** of: a well-formed version
   strictly greater than `__version__` (D10), not equal to `skipped_update_version`, and carrying
-  both this build's platform asset and that asset's `.sig`. Any of these failing yields `None`.
-  More than one asset matching the platform suffix also yields `None` — ambiguity fails safe.
+  exactly one asset whose name **equals** this build's asset name from D2's table, plus exactly
+  one whose name equals that name + `.sig`. Any of these failing yields `None`, as does a
+  duplicate of either — ambiguity fails safe. **Matching is equality, never prefix or
+  substring**: under those the required `.sig` is itself a second match, so the ambiguity guard
+  would fire on every well-formed release and no update would ever be offered.
   *Test:* `tests/test_update.py` — a table over newer / equal / older / `"v1.2-rc1"` / `"latest"`
   / `"1_0.0"` / `0.1` vs `0.1.0` / skipped / missing-`.sig` / duplicate-asset, each asserting the
   offer or its absence.
@@ -155,7 +171,9 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   *Test:* `tests/test_update.py` — `force=True` with the pref off calls the fetcher and offers;
   `force=True` on a skipped version still returns `None`.
 - **INV-7** "Skip this version" persists to `.rolodex.conf` and suppresses exactly that version;
-  a later, higher version is still offered. "Later" persists nothing.
+  a later, higher version is still offered. "Later" persists nothing. `save_config` swallows
+  `OSError` by design, so a skip that cannot be written is dropped silently and the version is
+  offered again next launch — acceptable, and not to be "fixed" by making config writes fatal.
   *Test:* `tests/test_update.py` — skip `1.4.0`, re-check against `1.4.0` → `None`; re-check
   against `1.4.1` → offered. Assert the config file gained the key and the vault did not.
 - **INV-8** `download_and_verify` installs only bytes whose `.sig` verifies against the built-in
@@ -164,10 +182,13 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   *Test:* `tests/test_update.py` — a throwaway test key is monkeypatched in and signs a fixture;
   the clean case returns a path, and payload-tamper and signature-tamper each raise with the temp
   directory left empty.
-- **INV-9** Downloads are bounded: the asset by a byte cap, the API response and the signature by
-  their own much smaller caps, and every request by a socket timeout. Exceeding a cap aborts and
-  deletes the partial file. Only `https://` URLs are opened, and that is re-checked on **every**
-  redirect hop rather than only the first.
+- **INV-9** Downloads are bounded, and the bounds are these: asset 250 MB, API response 1 MB,
+  signature 4 KB, socket timeout 30 s. Exceeding a cap aborts and deletes the partial file.
+  Only `https://` URLs are opened, and that is re-checked on **every** redirect hop rather than
+  only the first. The asset cap is a floor sized with headroom over what `build.yml` currently
+  produces — re-derive with `gh release view <tag> --json assets -q '.assets[].size'` before
+  lowering it, because a cap under the real artifact aborts every genuine update while a
+  synthetic over-cap test still passes.
   *Test:* `tests/test_update.py` — an over-cap stream raises and unlinks; `http://` and `file://`
   refuse; a redirect handler handed an `http://` target refuses before following.
 - **INV-10** The temp is staged in the target binary's own directory, so the install is a
@@ -179,11 +200,13 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   "Update now" always fails closed with `UpdateVerificationError` and never installs.
   *Test:* `tests/test_update.py` — sign a fixture with a real throwaway key, verify against the
   shipped placeholder constant, assert it raises.
-- **INV-12** `urllib` is imported inside the fetch functions and never at module scope:
-  `import rolodex` loads no network module.
+- **INV-12** `urllib` is imported inside the fetch functions and never at module scope, so
+  `import rolodex` does not load `urllib.request`.
   *Test:* `tests/test_update.py` — source scan of `rolodex.py` asserts no module-scope
   `urllib` / `socket` / `http` import, plus `import rolodex` in a clean interpreter leaves
-  `urllib.request` absent from `sys.modules`.
+  `urllib.request` absent from `sys.modules`. **Assert that name and no wider one**: `urllib`,
+  `socket` and `ssl` all arrive transitively via GTK and `cryptography`, so a broader assertion
+  fails for reasons that have nothing to do with this feature.
 - **INV-13** Any check-time failure — DNS, TLS, HTTP, malformed JSON, an unparseable version —
   yields `None` and is never surfaced as an error dialog. A failure during an explicitly
   requested **install** is surfaced, not swallowed: the user asked for that one.
@@ -224,7 +247,13 @@ checks cannot run against this spec (§ 10).
 
 Every test uses `tmp_path` plus an **injected fake fetcher**; none touches the network, and none
 uses the real signing key — a throwaway Ed25519 key is monkeypatched in where a valid signature
-is needed. The pure-logic entry points (version parsing and comparison, asset selection,
+is needed.
+
+**A pytest process is never frozen, so every test that expects an offer must fake one**:
+monkeypatch `sys.frozen` and `sys.executable` to simulate a frozen build. Without this INV-1,
+INV-4, INV-5 and INV-6 all assert an offer that INV-2's gate correctly refuses, and the
+cheapest way to make them pass is to weaken that gate — which is the one change this spec
+must not invite. The pure-logic entry points (version parsing and comparison, asset selection,
 signature verification, the config accessors) are GTK-free per `CLAUDE.md`, so they are testable
 without a display.
 
@@ -264,7 +293,8 @@ materially different mechanism, and it cannot be exercised from this machine at 
 - **Downgrade or rollback.** Strictly-greater only (INV-5); recovery is re-downloading a release.
 - **Background or scheduled checks.** The check runs at startup and on explicit request; there is
   no timer.
-- **Amending `DESIGN.md`.** Required by § 2.1 and carries its own rule 14 gate.
+- **Running `DESIGN.md`'s rule 14 gate under this spec's gate.** The amendment itself ships
+  *in this change* and is not optional (§ 2.1); only its own gate is out of scope here.
 
 ## 10. What checks this
 
@@ -274,7 +304,7 @@ materially different mechanism, and it cannot be exercised from this machine at 
 | INV-2 | `tests/test_update.py` — `sys.frozen` unset → `detect_installer() is None` |
 | INV-3 | `tests/test_update.py` — URL and header set asserted exactly |
 | INV-4 | `tests/test_update.py` — check runs with no vault file present |
-| INV-5 | `tests/test_update.py` — the ten-case offer table |
+| INV-5 | `tests/test_update.py` — the offer table |
 | INV-6 | `tests/test_update.py` — `force=True` bypasses only the opt-in gate |
 | INV-7 | `tests/test_update.py` — skip round-trips through `.rolodex.conf` |
 | INV-8 | `tests/test_update.py` — throwaway key; payload and signature tampers each raise |
@@ -313,11 +343,12 @@ materially different mechanism, and it cannot be exercised from this machine at 
 | `README.md` | Document the preference and that it is off by default |
 | `CLAUDE.md` | Record that `__version__` is now version-bearing, and the lazy-`urllib` confinement convention |
 | `.claude/bump.json` | Add `rolodex.py`'s `__version__` to `files[]` and extend `post_check` |
-| `.github/workflows/build.yml` | Sign each asset and attach the `.sig` |
+| `.github/workflows/build.yml` | Sign each asset and attach its `.sig`; **add `certifi` to the build-time pip install** so PyInstaller bundles it (D7) |
 | `requirements.txt` | **Unchanged** — `certifi` is build-time only (D7) |
-| `docs/specs/README.md` | Add this spec to the table; it is the first non-retroactive spec there |
+| `docs/specs/README.md` | Add this spec to the table **and qualify its opening sentence**, which currently says every entry is retroactive |
 
 ## 12. Cold-eyes loop log
 
 | Loop | Date | Lanes | Q1 | Q2 | Q3 | Q4 | Outcome |
 |------|------|-------|----|----|----|----|---------|
+| 1 | 2026-08-27 | 3, cold — genre pinned `spec` | 2 | 3 | 3 | 1 | **Nine verified, nine fixed, none dismissed.** Three defects were found by more than one lane. All three found the same one, and it is the worst: § 2.1 rested the whole resolution of the `DESIGN.md` conflict on the amendment landing *in this change*, while § 9 listed that amendment as out of scope — so an implementer could ship the feature with the design document still saying "no network access of any kind", which is precisely the state § 2.1 forbids. Two lanes each found the missing `certifi` build step (§ 11 told an implementer to change `build.yml` for signing only, so the frozen binary would ship without the CA bundle D7 depends on and the check would fail silently) and the `docs/specs/README.md` row (its opening sentence claims every entry is retroactive, which this spec is not). **The sharpest single-lane finding was the asset predicate**: "suffix" admits prefix matching, under which a release's own required `.sig` is a second match, so the ambiguity guard would fire on every well-formed release and no update would ever be offered — while a synthetic duplicate-asset test still passed. The same lane found that nothing mapped a running process to an asset name at all, which would have offered an Intel Mac the arm64 binary and then `os.replace`d it over a working install. **One Q1 was a false claim about this project's own tooling**: D8 said adding a `files[]` entry to `.claude/bump.json` makes `post_check` enforce `__version__` lockstep, and `post_check` is a fixed shell string that greps `CHANGELOG.md` alone. Three lane open questions were settled by running them rather than reasoning: the all-zero placeholder key loads and rejects 100 real signatures plus crafted low-order forgeries, so it fails closed as D4 claims; `PYINSTALLER_RESET_ENVIRONMENT` and `LD_LIBRARY_PATH_ORIG` are both present in the shipped bootloader binary, so D9 holds; and `import rolodex` does leave `urllib.request` absent, though `urllib`, `socket` and `ssl` all arrive transitively via GTK and `cryptography` — INV-12 was true as written but a slightly broader assertion would fail, so it now says which name to assert. None of those three is counted above. |
