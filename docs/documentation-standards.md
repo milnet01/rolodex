@@ -40,6 +40,14 @@ treated as a bug.
 - Prefer a small table or a worked example over a wall of prose.
 - Use fenced code blocks with a language tag for anything runnable.
 - American spelling in prose is fine; match existing surrounding style within a file.
+- **Don't write counts or line numbers.** "the ten-case table", "three subsystems",
+  `rolodex.py:918` — each is true when written and wrong after the next edit, and nothing
+  checks it. Name the thing instead: "the offer table", "every subsystem it touches",
+  `write_private_file`. Where a number genuinely matters, give the command that produces
+  it so a reader can re-derive it.
+- **Every claim must be checkable.** Prefer something a reader can run or grep over
+  something they must take on trust. Where you cannot verify a claim, say so in the
+  sentence rather than stating it flatly — an unmarked guess reads exactly like a fact.
 
 ## Code-level documentation
 

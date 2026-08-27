@@ -385,3 +385,22 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   **Layman:** A few more small safety-net tests for the least-risky helper functions.
   Kind: test.
   Source: debt-sweep-2026-07-17.
+
+- 📋 [ROLO-0040] **Run the contract gate on documentation-standards.md.**
+  Two rules were added to the Style section on 2026-08-27 at the user's
+  instruction: don't write counts or line numbers, and every claim must be
+  checkable.
+
+  That changes direction for anyone writing docs under this standard -- a
+  conformer now writes "the offer table" where they would have written "the
+  ten-case table" -- so CLAUDE.md rule 14's test answers yes and the cold-read
+  gate is owed on it.
+
+  It was NOT run, deliberately and not silently. A review-contract run was
+  already in flight on the auto-update spec, and that skill's Phase 1a forbids
+  widening a run's subject mid-flight; starting a second concurrent gate was
+  judged worse than filing this. Run `review-contract
+  docs/documentation-standards.md --genre standard` (cap 3 for a standard).
+  **Layman:** A rule change to the writing standard is owed an independent read-through that has not happened yet.
+  Kind: doc.
+  Source: in-session-2026-08-27.
