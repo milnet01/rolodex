@@ -53,9 +53,11 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 
 - **INV-14** Export requires confirmation because it writes **unencrypted** data.
 - **INV-15** The export is a human-readable text dump (name, optional category, aligned
-  label/value pairs, optional notes) written with `os.open(..., 0o600)`, so the `0600` mode
-  applies when the file is created. Overwriting an existing file keeps that file's current
-  permissions — the export path does not additionally `chmod` (unlike the backup path).
+  label/value pairs, optional notes) written through `write_private_file`, which stages a
+  `0600` temp and `os.replace`s it into place — so the export is `0600` on creation **and** on
+  overwrite, without the export path needing its own `chmod` (unlike the backup path). Before
+  1.3.1 it used `os.open(..., 0o600)` directly and an overwrite kept the existing file's
+  permissions; see `vault-format-and-crypto.md` INV-9.
 - **INV-16** The default export filename is `rolodex_export_<YYYYMMDD>_<HHMMSS>.txt`.
 
 ## Notes

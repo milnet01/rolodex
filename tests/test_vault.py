@@ -338,6 +338,52 @@ def test_write_private_file_atomically_overwrites_at_0600(tmp_path):
     assert [p for p in os.listdir(tmp_path) if p != "secret.bin"] == []
 
 
+def test_write_private_file_overwrite_tightens_world_readable_mode(tmp_path):
+    """A pre-existing 0644 file comes back 0600 after an overwrite (INV-9).
+
+    The sibling test above creates the file through write_private_file, so it is already
+    0600 before the overwrite — it cannot tell "the mode was preserved" from "the replace
+    carried 0600 across". This starts from a world-readable file, which is the only shape
+    that distinguishes them.
+
+    This is the half of INV-9 that CHANGED in 1.3.1. Under the previous
+    os.open(..., O_TRUNC, 0o600) write, an overwrite kept the existing file's permissions,
+    so a vault that was somehow 0644 stayed 0644. os.replace swaps the inode instead, so
+    the temp's 0600 now lands on the destination.
+    """
+    path = str(tmp_path / "secret.bin")
+    with open(path, "wb") as f:
+        f.write(b"world readable")
+    os.chmod(path, 0o644)
+    assert (os.stat(path).st_mode & 0o777) == 0o644  # precondition, not the assertion
+
+    rolodex.write_private_file(path, b"now private")
+
+    assert (os.stat(path).st_mode & 0o777) == 0o600
+    with open(path, "rb") as f:
+        assert f.read() == b"now private"
+
+
+def test_write_private_file_failure_leaves_original_intact(tmp_path):
+    """A write that raises mid-way leaves the previous file byte-for-byte intact (INV-16).
+
+    This is the vault-corruption case the atomic write exists to prevent: the user's only
+    copy of their credentials must survive an interrupted save. Passing a str where bytes
+    are required raises inside the temp write, after mkstemp has already run — so it
+    exercises the cleanup path rather than failing before any file was created.
+    """
+    path = str(tmp_path / "vault.bin")
+    rolodex.write_private_file(path, b"original")
+
+    with pytest.raises(TypeError):
+        rolodex.write_private_file(path, "not bytes")
+
+    with open(path, "rb") as f:
+        assert f.read() == b"original"
+    # And the aborted write orphans no temp next to it.
+    assert [p for p in os.listdir(tmp_path) if p != "vault.bin"] == []
+
+
 # --- Field classification (entries-and-fields spec) ---------------------------------------
 
 

@@ -32,15 +32,19 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 
 ### File permissions
 
-- **INV-9** Every secret write creates the file owner-only (`0o600`), regardless of umask.
-  `save_vault` and the plaintext export use `os.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)`;
-  backups `shutil.copy2` then `os.chmod(..., 0o600)`. (Mode applies on creation — overwriting an
-  existing file keeps its permissions; see `import-export-backup.md` INV-15.)
+- **INV-9** Every secret write ends owner-only (`0o600`), regardless of umask, **and so does an
+  overwrite**. `save_vault` and the plaintext export go through `write_private_file`, which stages
+  the bytes in a `tempfile.mkstemp` temp — created `0600` — in the destination's own directory and
+  `os.replace`s it into place, so the replacing inode's `0600` carries onto the destination
+  whatever mode the previous file had. Backups `shutil.copy2` then `os.chmod(..., 0o600)`.
+  (Before 1.3.1 the write was `os.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)`, under which an
+  overwrite *kept* the existing file's permissions. That is no longer true; see
+  `import-export-backup.md` INV-15.)
 - **INV-10** A write error propagates to the caller rather than being silently swallowed, and
-  the *original* error surfaces (not a masking one). `save_vault`/export open the fd, hand it to
-  `os.fdopen` (a `with` block owns closing it), and call `os.close(fd)` manually only if
-  `os.fdopen` itself fails — so the fd is closed exactly once on every path (regression-tested in
-  `tests/test_vault.py`).
+  the *original* error surfaces (not a masking one). `write_private_file` writes the temp inside a
+  `with os.fdopen(fd, "wb")` block, so the fd is closed exactly once on every path; on any failure
+  it unlinks the temp — suppressing only the unlink's own `OSError` — and re-raises the original
+  exception (regression-tested in `tests/test_vault.py`).
 
 ### Creation & migration
 
@@ -51,6 +55,12 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
   same result.
 - **INV-13** `migrate_vault` is called after every successful `load_vault` (both unlock and
   restore paths) before the data is used.
+
+- **INV-16** A secret write is **atomic**: the bytes are written to a temp in the destination's
+  own directory, `flush`ed and `os.fsync`ed, then `os.replace`d into place. An interrupted write —
+  a crash, a full disk, a power cut — therefore leaves the previous file byte-for-byte intact
+  rather than truncating it, and leaves no temp behind. The rename is not itself followed by a
+  directory `fsync`, so a power cut may lose the *new* contents; it can never corrupt the old.
 
 ## Notes
 

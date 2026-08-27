@@ -280,6 +280,28 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: doc.
   Source: adopt-project-run-2026-08-14 (from ~/.claude).
 
+- 📋 [ROLO-0039] **Publish release notes from CHANGELOG.md instead of an empty body.**
+  build.yml's "Attach to Release" step uses softprops/action-gh-release@v3 with
+  `files:` only -- no `body` and no `body_path`. So a v* tag creates the GitHub
+  Release with an EMPTY body. Found on v1.3.1, which published with no notes at
+  all and had to be corrected by hand with `gh release edit --notes-file`.
+
+  releases.md section 5 wants the notes to be the changelog section verbatim.
+  The fix is to extract that section in the workflow and pass it as body_path,
+  so the release page, the annotated tag and CHANGELOG.md all carry one text.
+
+  Note the matrix runs the attach step three times (once per OS). Whichever job
+  lands first creates the release, so the body must be supplied identically by
+  all three, or supplied by a separate single-run job that the three attach to.
+  The second shape is the safer one -- three jobs racing to set a body is how
+  they come to disagree.
+
+  Also worth pinning while in there: the action is on a mutable major tag (@v3)
+  rather than a commit SHA.
+  **Layman:** When a new version is published, the release page should show what changed instead of being blank.
+  Kind: fix.
+  Source: in-session-2026-08-27.
+
 ## Low priority / nice-to-have
 
 - 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
