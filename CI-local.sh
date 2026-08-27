@@ -2,9 +2,14 @@
 # Local pre-push gate. Run this before every push to catch what GitHub CI would catch, without
 # waiting on (or paying for) a round-trip:
 #
-#   1. pytest                 — the pure-logic test suite (a regression net; CI runs this too
+#   1. ruff                   — the lint gate, invoked exactly as ci.yml's Lint step does
+#                               (`ruff check rolodex.py tests/`). The scope matters: a bare
+#                               `ruff check .` also sweeps build/ dist/ out/ build_pyi/ and
+#                               reports findings CI never sees. The rule set is declared in
+#                               ruff.toml so an unpinned ruff cannot drift the gate (ROLO-0038).
+#   2. pytest                 — the pure-logic test suite (a regression net; CI runs this too
 #                               via ci.yml (ROLO-0020), so this is a local mirror of that gate).
-#   2. Linux build + selftest — via packaging/linux-build.sh, the SAME script the GitHub
+#   3. Linux build + selftest — via packaging/linux-build.sh, the SAME script the GitHub
 #                               'ubuntu-latest' job runs. A green run here means the Linux
 #                               release binary will build on CI too.
 #
@@ -22,11 +27,15 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "==> [1/2] pytest (pure-logic suite)"
+echo "==> [1/3] ruff (lint) — same invocation as ci.yml's Lint step"
+python3 -m ruff check rolodex.py tests/
+
+echo
+echo "==> [2/3] pytest (pure-logic suite)"
 python3 -m pytest tests/ -q
 
 echo
-echo "==> [2/2] Linux build + self-test (mirrors the ubuntu-latest CI job)"
+echo "==> [3/3] Linux build + self-test (mirrors the ubuntu-latest CI job)"
 bash packaging/linux-build.sh
 
 echo

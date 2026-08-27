@@ -98,6 +98,18 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
 - Keep the pure logic layer GTK-free so it stays trivially testable/reasoned-about.
 - Master-password changes (`_finish_change_password`) rotate the salt and re-encrypt on save;
   they verify the *current* password against the in-memory `self.password`, not by re-decrypting.
+- **Lint scope is `ruff check rolodex.py tests/`, never `ruff check .`** — a bare `.` also
+  sweeps `build/`, `dist/`, `out/` and `build_pyi/` and reports findings CI never sees.
+  The rule set is declared in `ruff.toml` (`E4, E7, E9, F`) precisely because `ci.yml`
+  installs ruff unpinned, so ruff's changing defaults would otherwise drift the gate under
+  a codebase that hasn't changed. Widening that set is ROLO-0038, not a drive-by.
+- **The pre-push gate needs two `git config` keys per clone, and says nothing if unset.**
+  `git config ants.gate.command ./CI-local.sh` and
+  `git config ants.gate.docsGlob '*.md:docs/**:LICENSE:.github/ISSUE_TEMPLATE/**'`.
+  These are local git config, so they do not survive a fresh clone and an unset gate is
+  indistinguishable from a passing one — the hook warns, then pushes anyway. `CI-local.sh`
+  mirrors `ci.yml` step for step (ruff → pytest → Linux build); keep them in lockstep or the
+  local run returns green for a pipeline that will fail.
 - This directory sits under `/mnt/Games`, whose project `CLAUDE.md` requires
   `SUDO_ASKPASS=/usr/libexec/ssh/ksshaskpass sudo -A -p "..."` for any privileged command —
   never bare `sudo`.
