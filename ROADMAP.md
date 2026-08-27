@@ -94,6 +94,17 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   updates and refuses to install them. ROLO-0041 is the maintainer action that
   completes it. The swap-and-relaunch path needs a frozen binary and two real
   signed releases, so it is untested end to end and says so in the spec.
+  Progress (2026-08-27): the DESIGN.md contract gate found a defect in the CODE, after
+  this item was already marked shipped. All three cold lanes found the same false
+  claim and two traced its cause: check_for_update had one call site passing
+  force=True, and set_update_check_enabled had none -- so there was no automatic
+  check, no in-app way to set the preference, and INV-1 gated a branch nothing
+  reached. Fixed by wiring the silent startup check and a stateful menu toggle,
+  plus a source-scan test that reddens on a revert to what shipped. 99 tests.
+
+  Worth remembering: the feature passed its own spec gate, 97 tests and a green
+  build while its central preference was inert. What caught it was a cold read of
+  a DIFFERENT document, asking whether the design claim was true of the code.
   **Layman:** Let Rolodex tell you when a new version is out and install it for you — off by default, and only if the download is cryptographically signed by us.
   Kind: feature.
   Source: user-request-2026-08-27.
