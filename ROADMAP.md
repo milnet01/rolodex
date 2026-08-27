@@ -51,7 +51,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Progress (2026-07-17): debounced the search-changed handler (SEARCH_DEBOUNCE_MS=150) so rapid keystrokes coalesce into one rebuild once typing pauses; pending timer is cancelled on lock/close. This removes the per-character rebuild — the efficiency win the body calls out. Verified headlessly: 5 keystrokes -> 1 rebuild; cancel path fires 0. The model-backed Gtk.ListView migration (the larger half) is intentionally deferred pending a go/no-go: after reading the sidebar's surface (3 render modes, collapsible category headers, entry->header drag-and-drop, per-row context menus, ~10 _refresh_list call-sites) it is a high-risk rewrite that is hard to verify without interactive testing on the live vault, and for a personal-scale vault the debounce already resolves the perceived jank.
   Resolved (2026-07-17): closing as shipped on the debounce alone. The 150ms search debounce (SEARCH_DEBOUNCE_MS) removed the per-keystroke rebuild — the efficiency win the body calls out — and is the real perf gain for this app's scale. The model-backed Gtk.ListView migration (the larger half) was evaluated and deliberately DESCOPED, not merely deferred: for a personal-scale vault the debounce resolves the felt jank, while the rewrite is high-risk (3 render modes, collapsible category headers, entry->header drag-and-drop, per-row context menus, ~10 _refresh_list call-sites) and unverifiable without interactive testing on the live vault. If a large vault ever makes incremental updates necessary, open a fresh scoped item for the ListView work rather than reviving this one.
 
-- 🚧 [ROLO-0037] **Opt-in, signed in-app auto-update.**
+- ✅ [ROLO-0037] **Opt-in, signed in-app auto-update.**
   Requested 2026-08-27, modelled on the finbreak implementation at
   /mnt/Games/Scripts/Linux/finbreak (docs/specs/FIBR-0054.md + FIBR-0131.md).
 
@@ -74,6 +74,26 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   DESIGN.md states "No account, no cloud, no network access of any kind." This
   feature contradicts that non-goal and the design doc must be amended to carve
   out the opt-in exception rather than leaving the two in conflict.
+  Resolved (2026-08-27): implemented and merged. Spec docs/specs/ROLO-0037-auto-update.md
+  was gated by review-contract over two cold loops -- 18 findings verified and fixed
+  -- and accepted before any code was written.
+
+  Shipped: the opt-in check, the "Check for updates..." menu entry, the
+  Later / Skip / Update Now prompt, Ed25519 verification, the same-filesystem
+  swap and the wait-for-exit relaunch. Linux and macOS; Windows refused up
+  front (ROLO-0042).
+
+  97 tests pass (46 new), ruff clean, Linux build + selftest green. The new
+  tests were mutation-checked rather than assumed: four deliberate breaks --
+  adding win32 to the asset map, switching asset matching from equality to
+  startswith, making the opt-in gate truthy, and swallowing forced errors --
+  redden 1, 7, 3 and 1 tests respectively.
+
+  NOT yet functional at the install step, deliberately: the built-in signing
+  key is an all-zero placeholder that verifies nothing, so the feature offers
+  updates and refuses to install them. ROLO-0041 is the maintainer action that
+  completes it. The swap-and-relaunch path needs a frozen binary and two real
+  signed releases, so it is untested end to end and says so in the spec.
   **Layman:** Let Rolodex tell you when a new version is out and install it for you — off by default, and only if the download is cryptographically signed by us.
   Kind: feature.
   Source: user-request-2026-08-27.
@@ -100,6 +120,53 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   breach coding-standards' surgical-change rule.
   **Layman:** Ruff learned some new warnings; decide one by one which are worth keeping rather than taking or ignoring all of them by accident.
   Kind: chore.
+  Source: in-session-2026-08-27.
+
+- 📋 [ROLO-0041] **Generate the release-signing key and retire the fail-closed placeholder.**
+  ROLO-0037 shipped with an all-zero placeholder public key. It loads and
+  verifies nothing, so the updater offers updates and refuses to install any of
+  them -- it fails closed rather than open, which is the right interim state but
+  is not the finished one.
+
+  This is a MAINTAINER action, not a code change, and it cannot be done by a
+  session: the private key must not enter this repository or any transcript.
+
+  1. Run `python3 scripts/gen-signing-key.py`.
+  2. Paste the printed public key into rolodex.py's RELEASE_PUBLIC_KEY_B64.
+  3. Add the private key as the repository secret ROLODEX_SIGNING_KEY.
+  4. Move the private key file somewhere backed up and OUT of the repo.
+
+  `test_INV11_shipped_key_is_the_all_zero_placeholder` will then fail ON PURPOSE.
+  Retire INV-11 in the same commit that pastes the key -- that is the test's whole
+  job, since a test asserting only "a throwaway signature is rejected" stays green
+  whether the placeholder or a real key is shipped and would never notice.
+
+  Until this is done, build.yml's signing step no-ops with a warning and attaches
+  no .sig, so the updater makes no offer at all rather than offering something it
+  cannot verify.
+
+  Losing the private key later is unrecoverable: shipped binaries will refuse
+  every update signed by any other key.
+  **Layman:** One manual step by the maintainer turns the update feature from "can look" into "can install".
+  Kind: security.
+  Source: in-session-2026-08-27.
+
+- 📋 [ROLO-0042] **Extend in-app auto-update to Windows.**
+  Deferred from ROLO-0037 (its scope decision S4), and refused up front rather
+  than half-working: PLATFORM_ASSETS has no win32 entry, so is_update_supported()
+  is False there and no offer is made.
+
+  Windows needs a materially different mechanism. os.replace cannot swap a
+  running, locked .exe, and the relaunch goes through /bin/sh, which Windows does
+  not have. finbreak solved the same problem with a detached PowerShell helper
+  that polls until the image is free, then moves the new binary in and restarts it
+  -- see docs/specs/FIBR-0131.md at /mnt/Games/Scripts/Linux/finbreak.
+
+  It also cannot be tested from this machine at all, so the swap and relaunch are
+  empirical-only: they need a real two-cycle run on Windows against two signed
+  releases. Specify it separately rather than folding it into ROLO-0037's spec.
+  **Layman:** Windows users can't yet update from inside the app; the swap has to work differently there.
+  Kind: feature.
   Source: in-session-2026-08-27.
 
 ## Medium priority
