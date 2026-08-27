@@ -1,6 +1,6 @@
 # Spec: Opt-in Signed Auto-Update (ROLO-0037)
 
-**Status:** draft (2026-08-27)
+**Status:** accepted (2026-08-27) — gated by `review-contract`, 2 loops, 18 findings verified and fixed, cap reached (calm). Tail empty.
 
 **Roadmap:** ROLO-0037
 
@@ -75,7 +75,13 @@ Linux path off `$APPIMAGE`; Rolodex has no AppImage. A PyInstaller one-file buil
 |---|---|---|
 | `linux` | `x86_64` | `rolodex-linux-x86_64` |
 | `darwin` | `arm64` | `rolodex-macos-arm64` |
-| `win32` | `AMD64` | `rolodex-windows-x86_64.exe` |
+| `win32` | `AMD64` | *(reserved — see below)* |
+
+**The `win32` row is reserved for the deferred Windows item and is not live** (S4). Windows is
+out of scope here, and the mechanism this spec describes does not work there: INV-10 `os.replace`s
+the running binary, which Windows refuses on a locked `.exe`, and D9 relaunches through
+`/bin/sh`, which Windows does not have. INV-2 therefore refuses the platform outright, before any
+offer.
 
 **Any other pair yields no asset and therefore no offer** — an Intel Mac is the live case, and
 matching on `sys.platform` alone would offer it the arm64 binary, which INV-10 would then
@@ -88,10 +94,16 @@ the file is `chmod +x`'d and `os.replace`d rather than opened by extension.
 signature is the raw 64 bytes over the exact asset bytes, published as `<asset>.sig`.
 
 **D4 — The private key never enters the repository.** `scripts/gen-signing-key.py` generates the
-pair; the private half becomes a GitHub Actions secret and lives nowhere else. Until that key
-exists the public constant holds base64 of 32 zero bytes: the module imports cleanly, key
-loading succeeds, and no real signature can verify — so the feature **fails closed** in the
-interim rather than failing open (INV-11).
+pair. The private half becomes a GitHub Actions secret and lives nowhere else. **The public half
+is hand-pasted into `rolodex.py`'s constant and committed** — it is public by definition, and
+baking it in at build time would mean the binary trusts whatever key the workflow happened to
+hold, which is the property signing exists to remove. Both `scripts/gen-signing-key.py` and the
+`build.yml` signing step consume the private key in the same encoding that script writes; it is
+never transcribed by hand.
+
+Until that key exists the public constant holds base64 of 32 zero bytes: the module imports
+cleanly, key loading succeeds, and no real signature can verify — so the feature **fails closed**
+in the interim rather than failing open (INV-11).
 
 **D5 — Preferences live in `.rolodex.conf`, not the vault.** That file is already plaintext JSON
 holding non-secret preferences (`idle_lock_seconds`, `clipboard_clear_seconds`). Two keys join
@@ -100,12 +112,27 @@ be readable without the vault, because the check runs at startup while the app i
 (INV-4); putting them in the vault would make the update check depend on the user having
 unlocked, which is the wrong coupling.
 
+**`load_config()` / `save_config()` take no argument today and read a module-level
+`CONFIG_FILE`.** Either give them an optional path parameter or have the tests monkeypatch
+`CONFIG_FILE` — the choice is the implementer's, but INV-4's and INV-7's tests need one of them,
+so it cannot be left unnoticed until the tests are written.
+
+**There is no preferences UI in Rolodex today**, so this feature must also add the surface that
+sets `check_for_updates`. Without it the only way to opt in is hand-editing JSON, which is not an
+opt-in a user can find. A menu entry beside the existing app-menu actions is enough; it is
+disabled with a tooltip when `is_update_supported()` is `False` (INV-2).
+
 **D6 — Network code is confined and lazily imported.** finbreak confines network access to one
 module and greps for `import urllib` everywhere else. Rolodex is a single file, so that shape is
-not available. Instead `urllib` is imported *inside* the fetch functions and never at module
-scope, so `import rolodex` pulls in no network stack and a test can assert exactly that (INV-12).
-**Weaker than finbreak's whole-module ban**: it proves the import graph, not that a future
-function adds no egress of its own.
+not available. Instead `urllib.request` is imported *inside* the fetch functions and never at
+module scope, so `import rolodex` leaves `urllib.request` out of `sys.modules` and INV-12 asserts
+exactly that name.
+
+**It is not "no network stack", and the difference matters to whoever writes the test.**
+`rolodex.py` already imports `urllib.parse` at module scope for TOTP `otpauth://` parsing, and
+GTK and `cryptography` pull in `socket` and `ssl` transitively. All three are expected and none
+may be removed. **Weaker than finbreak's whole-module ban**: it proves one import, not that a
+future function adds no egress of its own.
 
 **D7 — CA trust: `certifi` when present, the system store otherwise.** finbreak hit a real bug
 here — a binary built on one distro, run on another whose CA bundle sits elsewhere, found no CAs
@@ -145,9 +172,13 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   absent / `false` / `"yes"` / `1`, and non-zero once explicitly enabled.
 - **INV-2** Off a frozen build (`sys.frozen` unset), `detect_installer()` returns `None`,
   `is_update_supported()` is `False`, and `check_for_update()` returns `None` before any network
-  call. **This gate lives inside `check_for_update()`**, not in its GUI caller.
+  call. **The same is true on `sys.platform == "win32"` whatever `sys.frozen` says** — Windows is
+  deferred (S4) and this spec's install mechanism does not work there, so the platform is refused
+  before any offer rather than after a 36 MB download. **Both gates live inside
+  `check_for_update()`**, not in its GUI caller.
   *Test:* `tests/test_update.py` — with `sys.frozen` unset, assert all three and a zero fetcher
-  call count. This is the **only** test that leaves the frozen state unset; see § 7.
+  call count; separately, with `sys.frozen` set and `sys.platform` forced to `win32`, assert the
+  same. This is the **only** test that leaves the frozen state unset; see § 7.
 - **INV-3** The check transmits nothing derived from the vault: the request carries a fixed
   `User-Agent`, no query parameters, no cookies and no identifier.
   *Test:* `tests/test_update.py` — the injected fetcher captures the URL and headers; assert the
@@ -180,8 +211,10 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   public key. A one-byte change to either the payload or the signature raises
   `UpdateVerificationError`, and every temp file is removed.
   *Test:* `tests/test_update.py` — a throwaway test key is monkeypatched in and signs a fixture;
-  the clean case returns a path, and payload-tamper and signature-tamper each raise with the temp
-  directory left empty.
+  the clean case returns a path, and payload-tamper and signature-tamper each raise leaving **no
+  staged temp beside the target binary**. Not "the directory is empty": INV-10 stages the temp in
+  the target's own directory, which contains the target, so an empty-directory assertion can never
+  pass.
 - **INV-9** Downloads are bounded, and the bounds are these: asset 250 MB, API response 1 MB,
   signature 4 KB, socket timeout 30 s. Exceeding a cap aborts and deletes the partial file.
   Only `https://` URLs are opened, and that is re-checked on **every** redirect hop rather than
@@ -198,19 +231,32 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   a raise before `os.replace` and assert the target's bytes are unchanged.
 - **INV-11** With the placeholder all-zero public key in place, no signature verifies, so
   "Update now" always fails closed with `UpdateVerificationError` and never installs.
-  *Test:* `tests/test_update.py` — sign a fixture with a real throwaway key, verify against the
-  shipped placeholder constant, assert it raises.
-- **INV-12** `urllib` is imported inside the fetch functions and never at module scope, so
-  `import rolodex` does not load `urllib.request`.
+  *Test:* `tests/test_update.py` — assert the shipped constant decodes to 32 zero bytes, **and**
+  that a fixture signed with a throwaway key fails against it. The first half is the one that
+  works: a throwaway key's signature fails against *any* other key, so the second half alone stays
+  green whether the placeholder or a real production key is shipped, and would never detect that
+  the key had — or had not — been replaced. The test is meant to fail the day a real key lands, so
+  that INV-11 is retired in that same commit.
+- **INV-12** `urllib.request` is imported inside the fetch functions and never at module scope, so
+  `import rolodex` does not load it.
   *Test:* `tests/test_update.py` — source scan of `rolodex.py` asserts no module-scope
-  `urllib` / `socket` / `http` import, plus `import rolodex` in a clean interpreter leaves
-  `urllib.request` absent from `sys.modules`. **Assert that name and no wider one**: `urllib`,
-  `socket` and `ssl` all arrive transitively via GTK and `cryptography`, so a broader assertion
-  fails for reasons that have nothing to do with this feature.
+  `urllib.request` / `urllib.error` / `socket` / `http` import, plus `import rolodex` in a clean
+  interpreter leaves `urllib.request` absent from `sys.modules`.
+  **Scan for those names and no wider one, and exempt `urllib.parse`**: `rolodex.py` imports it at
+  module scope today for TOTP `otpauth://` parsing, so a scan for bare `urllib` fails on correct
+  pre-existing code — and the cheapest way to make it pass is to delete that import, which breaks
+  TOTP field parsing. Likewise assert `urllib.request` and no wider name in `sys.modules`:
+  `urllib`, `socket` and `ssl` are all present after import, via that same `urllib.parse` and via
+  GTK and `cryptography`.
 - **INV-13** Any check-time failure — DNS, TLS, HTTP, malformed JSON, an unparseable version —
-  yields `None` and is never surfaced as an error dialog. A failure during an explicitly
-  requested **install** is surfaced, not swallowed: the user asked for that one.
-  *Test:* `tests/test_update.py` — a fetcher raising each of those yields `None`; a verify
+  yields `None` on the silent startup path and is never surfaced as an error dialog. A failure
+  during an explicitly requested **install** is surfaced, not swallowed: the user asked for that
+  one. **On a forced check (INV-6) the caller must be able to tell "up to date" from "could not
+  check"** — `None` alone conflates them, and a manual button that answers a DNS failure with
+  "You're up to date" is wrong. The forced path therefore reports the failure to its caller, which
+  shows "Couldn't check for updates" rather than an error dialog.
+  *Test:* `tests/test_update.py` — a fetcher raising each of those yields `None` unforced; the
+  same fetcher under `force=True` yields a distinguishable failure rather than `None`; a verify
   failure inside `download_and_verify` propagates.
 - **INV-14** The install swaps the binary and only then relaunches; if the relaunch spawn fails
   the process still exits, because the new binary is already in place and a manual restart gets
@@ -238,6 +284,12 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
 | Vault is locked during the check | Check runs normally — it never touches the vault | INV-4 |
 | App is closed mid-download | Prompt torn down; the completing download installs nothing | INV-15 |
 | Signing key not yet generated | Every install fails closed; the check still works | INV-11 |
+| Running on Windows | Refused before any offer — the platform is out of scope (S4) | INV-2 |
+| Forced check cannot reach the network | Reported as "couldn't check", never as "up to date" | INV-13 |
+
+`UpdateVerificationError` (a signature that did not verify) and `UpdateError` (everything else
+that went wrong during an install — staging, oversize, timeout, a failed swap) are the two the
+GUI catches. Both derive from one base so a caller may catch either separately or both together.
 
 ## 7. Tests
 
@@ -340,8 +392,8 @@ materially different mechanism, and it cannot be exercised from this machine at 
 |----------|-------------|
 | `DESIGN.md` | Amend the first **Goal**'s "no network access of any kind" to carve out the opt-in check (§ 2.1). **Own rule 14 gate.** |
 | `SECURITY.md` | Add the update path to the threat model: what signing protects against, what it does not, and the fail-closed placeholder |
-| `README.md` | Document the preference and that it is off by default |
-| `CLAUDE.md` | Record that `__version__` is now version-bearing, and the lazy-`urllib` confinement convention |
+| `README.md` | Document the preference, where to set it, and that it is off by default |
+| `CLAUDE.md` | Record that `__version__` is now version-bearing, and that `urllib.request` is imported lazily inside the fetch functions while the module-scope `urllib.parse` is expected |
 | `.claude/bump.json` | Add `rolodex.py`'s `__version__` to `files[]` and extend `post_check` |
 | `.github/workflows/build.yml` | Sign each asset and attach its `.sig`; **add `certifi` to the build-time pip install** so PyInstaller bundles it (D7) |
 | `requirements.txt` | **Unchanged** — `certifi` is build-time only (D7) |
@@ -352,3 +404,4 @@ materially different mechanism, and it cannot be exercised from this machine at 
 | Loop | Date | Lanes | Q1 | Q2 | Q3 | Q4 | Outcome |
 |------|------|-------|----|----|----|----|---------|
 | 1 | 2026-08-27 | 3, cold — genre pinned `spec` | 2 | 3 | 3 | 1 | **Nine verified, nine fixed, none dismissed.** Three defects were found by more than one lane. All three found the same one, and it is the worst: § 2.1 rested the whole resolution of the `DESIGN.md` conflict on the amendment landing *in this change*, while § 9 listed that amendment as out of scope — so an implementer could ship the feature with the design document still saying "no network access of any kind", which is precisely the state § 2.1 forbids. Two lanes each found the missing `certifi` build step (§ 11 told an implementer to change `build.yml` for signing only, so the frozen binary would ship without the CA bundle D7 depends on and the check would fail silently) and the `docs/specs/README.md` row (its opening sentence claims every entry is retroactive, which this spec is not). **The sharpest single-lane finding was the asset predicate**: "suffix" admits prefix matching, under which a release's own required `.sig` is a second match, so the ambiguity guard would fire on every well-formed release and no update would ever be offered — while a synthetic duplicate-asset test still passed. The same lane found that nothing mapped a running process to an asset name at all, which would have offered an Intel Mac the arm64 binary and then `os.replace`d it over a working install. **One Q1 was a false claim about this project's own tooling**: D8 said adding a `files[]` entry to `.claude/bump.json` makes `post_check` enforce `__version__` lockstep, and `post_check` is a fixed shell string that greps `CHANGELOG.md` alone. Three lane open questions were settled by running them rather than reasoning: the all-zero placeholder key loads and rejects 100 real signatures plus crafted low-order forgeries, so it fails closed as D4 claims; `PYINSTALLER_RESET_ENVIRONMENT` and `LD_LIBRARY_PATH_ORIG` are both present in the shipped bootloader binary, so D9 holds; and `import rolodex` does leave `urllib.request` absent, though `urllib`, `socket` and `ssl` all arrive transitively via GTK and `cryptography` — INV-12 was true as written but a slightly broader assertion would fail, so it now says which name to assert. None of those three is counted above. |
+| 2 | 2026-08-27 | 3, cold — identical brief, packet rebuilt from disk | 2 | 2 | 4 | 1 | **Nine verified, nine fixed, none dismissed. Cap reached (2 for a spec); the run files its tail and ships.** All three lanes independently found the same defect, and it was loop 1's own collateral: loop 1 added D2's platform table to fix an undefined mapping, and the table carried a live `win32` row while § 3 and § 9 both defer Windows — with no invariant gating on platform, since INV-2 gated only on `sys.frozen`, which a frozen Windows build sets. A Windows user would have been offered an update, downloaded it, verified it, and then hit an `os.replace` over a locked `.exe` and a `/bin/sh` relaunch on a platform with no `/bin/sh`. **The most valuable finding corrected a fact this orchestrator had asserted to all six lanes as settled**: the packet said `urllib` reaches `sys.modules` transitively, and one lane opened the source and found `import urllib.parse` at module scope, used for TOTP `otpauth://` parsing. INV-12's test as written scanned for bare `urllib`, so it would have failed on correct pre-existing code — and the cheapest way to make it pass is deleting that import, which breaks TOTP. Never assert a source fact to a lane without opening the file. **One Q4 was a test that could not fail**: INV-11 verified a throwaway-key signature against the shipped placeholder, and a throwaway key's signature fails against *any* other key, so the assertion stayed green whether the placeholder or a real production key shipped — falsifying nothing about the claim it existed to pin. It now asserts the constant decodes to 32 zero bytes, so it fails deliberately the day a real key lands. Also fixed: D6 still said `import rolodex` pulls in no network stack, which loop 1's own INV-12 fix had just contradicted; INV-8 asserted an empty temp directory that INV-10 guarantees can never be empty, since the temp is staged beside the target binary; the public key's route into the baked-in constant was never stated, so signing could be set up completely and still fail closed forever; and INV-13 collapsed "up to date" and "could not check" into one `None` while INV-6 promised a manual check button. **One finding was the orchestrator's, found while reading the source for the implementation and missed by all six lanes across both loops: the spec described an opt-in feature with no way to opt in.** Rolodex has no preferences UI at all, so as written the only route was hand-editing JSON. **Calm cap:** two of this loop's nine findings landed on text loop 1 wrote; the rest were defects the document had held from drafting. The document held more defects than the cap held loops, so shipping is right and the tail is empty — every finding was fixed. |
