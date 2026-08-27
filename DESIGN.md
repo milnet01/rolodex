@@ -35,11 +35,15 @@ or not at all.
 
 What keeps it from eroding the goal:
 
-- **Off until the user turns it on.** A fresh install makes no request, ever. Absent, false, or
-  a malformed setting all read as off.
+- **Off until the user turns it on.** Rolodex never checks on its own until you enable it, from
+  *Check for updates automatically* in the app menu; absent, false or a malformed setting all
+  read as off. Choosing *Check for updates...* yourself checks once whether or not that setting
+  is on — an explicit click is its own consent, and it is the only route to the network without
+  the setting.
 - **It sends nothing about you.** A fixed `User-Agent` to the GitHub releases API. No account,
-  no identifier, no query string, and nothing derived from the vault. It never reads the vault
-  or the master password, and it works while the app is locked.
+  no identifier, no query string, and nothing derived from the vault. It needs neither the
+  vault nor the master password — only `.rolodex.conf` and the app's own version — so nothing
+  in it depends on being unlocked, though it is reached from the main window.
 - **It cannot install unsigned code.** Every download is verified against an Ed25519 public key
   built into the binary. A download that does not verify is discarded and nothing is installed.
   This is the part that matters: an updater that installs unverified code is a remote-code
@@ -49,6 +53,14 @@ What keeps it from eroding the goal:
 
 Everything else in this document still holds: no account, no cloud, no sync, and the vault
 never leaves your machine. The contract is `docs/specs/ROLO-0037-auto-update.md`.
+
+**One consequence worth stating, because making upgrades easy makes it likelier.**
+`migrate_vault()` upgrades a vault's on-disk shape in place and is one-way — there is no
+downgrade. An update replaces the binary but never touches `contacts.vault` or `.rolodex.conf`,
+so installing one is safe on its own; but once the newer binary opens the vault and migrates
+it, going back to an older binary is not supported. Reverting means restoring a backup taken
+before the upgrade. This was always true of manual upgrades; an in-app updater simply means
+more people reach it.
 
 ## Architecture
 

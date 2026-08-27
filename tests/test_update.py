@@ -87,6 +87,36 @@ def test_INV1_enabled_does_call_the_fetcher(frozen, tmp_path):
     assert info is not None and info.version == "9.9.9"
 
 
+def test_INV1_preference_round_trips(tmp_path):
+    """The setter is what the in-app toggle calls, and it must produce a value the getter
+    reads as on. Nothing tested this until the toggle existed, and the setter had no caller
+    at all -- so the preference gated a path no user could reach."""
+    conf = tmp_path / ".conf"
+    assert rolodex.update_check_enabled(str(conf)) is False  # absent reads as off
+
+    rolodex.set_update_check_enabled(True, str(conf))
+    assert rolodex.update_check_enabled(str(conf)) is True
+    assert json.loads(conf.read_text())["check_for_updates"] is True
+
+    rolodex.set_update_check_enabled(False, str(conf))
+    assert rolodex.update_check_enabled(str(conf)) is False
+
+
+def test_INV1_both_check_paths_are_wired(tmp_path):
+    """Source scan: the silent (unforced) path and the manual (forced) path must BOTH have a
+    call site. With only the forced one wired the `check_for_updates` preference is inert --
+    it gates a branch nothing reaches, which is exactly what shipped before this test.
+    """
+    source = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rolodex.py")
+    with open(source, "r") as fh:
+        src = fh.read()
+    assert "check_for_update(force=True)" in src, "the manual check must be wired"
+    assert "info = check_for_update()" in src, "the silent startup check must be wired"
+    assert "set_update_check_enabled(" in src.replace("def set_update_check_enabled(", ""), (
+        "the preference must have an in-app writer, or it can only be set by editing JSON"
+    )
+
+
 # --- INV-2: inert off a frozen build, and on Windows -------------------------------------
 
 

@@ -27,8 +27,10 @@ describes both how it protects data and how to report a problem.
 
 ### The update check (ROLO-0037)
 
-Rolodex has one optional network feature: an **off-by-default** check for a newer release.
-When you enable it, this is what it does and does not do.
+Rolodex has one optional network feature: a check for a newer release. It is **off by
+default** — nothing runs automatically until you enable it — with one deliberate exception:
+choosing *Check for updates...* from the menu checks once regardless of the setting, because
+an explicit request is its own consent. This is what that check does and does not do.
 
 **What it protects against.** A malicious or compromised download. Every update is verified
 against an Ed25519 public key compiled into your binary, over the exact bytes downloaded. A

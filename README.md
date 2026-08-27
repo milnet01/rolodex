@@ -127,9 +127,10 @@ cp rolodex.desktop ~/.local/share/applications/
   copied password is wiped from the clipboard (`clipboard_clear_seconds`, default 20; `0` to
   turn off).
 - **Rolodex works offline, with one optional exception.** It can check GitHub for a newer
-  version, and that is **off unless you turn it on** — a fresh install never touches the
-  network. Turn it on from *Check for updates...* in the app menu, or by setting
-  `check_for_updates` to `true` in `.rolodex.conf`. The check sends nothing about you and
+  version, and it **never does so on its own unless you turn it on** — tick *Check for updates
+  automatically* in the app menu, or set `check_for_updates` to `true` in `.rolodex.conf`.
+  You can also check once, any time, with *Check for updates...*; that contacts GitHub whether
+  or not automatic checking is on, because choosing it is itself the consent. The check sends nothing about you and
   nothing from your vault, and it will only install a download that carries a valid signature
   from the Rolodex release key. You are always shown what changed and asked first — it never
   installs on its own. In-app updating applies to the downloadable builds; if you run from

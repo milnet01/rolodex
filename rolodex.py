@@ -1367,6 +1367,7 @@ class MainWindow(Adw.ApplicationWindow):
         menu.append("Export (decrypted plaintext)...", "win.export")
         menu.append("Change master password...", "win.chpass")
         menu.append("Check for updates...", "win.check-updates")
+        menu.append("Check for updates automatically", "win.auto-updates")
         menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu)
         header.pack_end(menu_btn)
 
@@ -1394,6 +1395,16 @@ class MainWindow(Adw.ApplicationWindow):
         move_action = Gio.SimpleAction(name="move-to-category", parameter_type=GLib.VariantType.new("(ss)"))
         move_action.connect("activate", self._on_move_to_category_action)
         self.add_action(move_action)
+
+        # Automatic-update-check toggle (ROLO-0037). A STATEFUL action, so the menu renders it
+        # as a checkbox — this is the only in-app way to set `check_for_updates`, and without
+        # it the preference could be changed only by hand-editing .rolodex.conf.
+        auto_update_action = Gio.SimpleAction.new_stateful(
+            "auto-updates", None, GLib.Variant.new_boolean(update_check_enabled())
+        )
+        auto_update_action.connect("change-state", self._on_toggle_auto_updates)
+        auto_update_action.set_enabled(is_update_supported())
+        self.add_action(auto_update_action)
 
         # Lock action + Ctrl+L accelerator (ROLO-0002).
         lock_action = Gio.SimpleAction(name="lock")
@@ -1485,6 +1496,14 @@ class MainWindow(Adw.ApplicationWindow):
         self._toast_overlay = Adw.ToastOverlay()
         self._toast_overlay.set_child(main_box)
         self.set_content(self._toast_overlay)
+
+        # The SILENT startup check (ROLO-0037, INV-1). This is the path the
+        # `check_for_updates` preference actually gates -- without it the preference would be
+        # inert and the feature would only ever check when explicitly clicked. Deferred a few
+        # seconds so it never competes with showing the window, and it stays silent: a failure
+        # yields None and no dialog (INV-13).
+        if update_check_enabled() and is_update_supported():
+            GLib.timeout_add_seconds(3, self._start_silent_update_check)
 
         self._current_entry_id = None
         self._collapsed_categories: set[str] = set()
@@ -1873,6 +1892,36 @@ class MainWindow(Adw.ApplicationWindow):
 
     # --- Opt-in signed auto-update (ROLO-0037) --------------------------------------------
 
+    def _on_toggle_auto_updates(self, action, value):
+        """Turn the automatic check on or off (INV-1). The only in-app writer of the preference."""
+        enabled = bool(value.get_boolean())
+        set_update_check_enabled(enabled)
+        action.set_state(value)
+        self._toast(
+            "Rolodex will check for updates on startup"
+            if enabled
+            else "Automatic update checks turned off"
+        )
+
+    def _start_silent_update_check(self):
+        """Kick off the startup check on a background thread. Returns False so the GLib
+        timeout does not repeat."""
+        import threading
+
+        threading.Thread(target=self._silent_update_worker, daemon=True).start()
+        return False
+
+    def _silent_update_worker(self):
+        """The unforced check. Every failure yields None and is never surfaced (INV-13) --
+        this path runs without the user asking, so it must never interrupt them."""
+        info = check_for_update()
+        if info is not None:
+            GLib.idle_add(self._offer_update, info)
+
+    def _offer_update(self, info):
+        UpdateDialog(self, info).present(self)
+        return False
+
     def _on_check_updates(self, *_):
         """The manual "Check for updates..." action (INV-6).
 
@@ -1907,7 +1956,7 @@ class MainWindow(Adw.ApplicationWindow):
         if info is None:
             self._toast(f"Rolodex {__version__} is up to date")
             return
-        UpdateDialog(self, info).present(self)
+        self._offer_update(info)
 
     def _start_update_download(self, info):
         """Download and verify on a background thread, then install (INV-8/INV-15)."""

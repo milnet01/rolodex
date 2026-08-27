@@ -10,8 +10,10 @@ All notable changes to Rolodex are documented here. The format is based on
 
 - **Opt-in update check that only ever installs a signed release** (ROLO-0037)
   Rolodex can now tell you when a newer version is out and install it for you.
-  It is **off until you turn it on** — a fresh install never touches the
-  network — and you switch it on from "Check for updates..." in the app menu.
+  It **never checks on its own until you turn it on** — tick "Check for updates
+  automatically" in the app menu. You can also check once at any time with
+  "Check for updates...", which contacts GitHub whether or not automatic
+  checking is on, because choosing it is itself the consent.
 
   When an update is found you are shown what changed and choose Later, Skip
   This Version, or Update Now. Nothing installs on its own.

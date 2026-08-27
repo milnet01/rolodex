@@ -34,8 +34,10 @@ Two things stand in the way, and both are prerequisites rather than details:
 ### 2.1 This contradicts a stated goal, deliberately
 
 `DESIGN.md`'s first **Goal** — not its non-goals, which say nothing about the network — is
-*"A local, offline, encrypted store for credentials."*, elaborated as *"One master password, one
-file, on your machine. No account, no cloud, no network access of any kind."*
+*"A local, offline, encrypted store for credentials."* Until this feature landed, that goal went
+on to rule out network access of any kind. **That clause is no longer quoted here because it no
+longer exists**: `DESIGN.md` was amended in this change, as the rest of this section requires,
+and now states the carve-out and what keeps it from eroding the goal.
 
 An update check is network access. The conflict is real, and is resolved by narrowing the goal
 rather than ignoring it: the feature is off by default (INV-1), it is the app's only egress and
@@ -352,7 +354,7 @@ materially different mechanism, and it cannot be exercised from this machine at 
 
 | INV | Checked by |
 |-----|-----------|
-| INV-1 | `tests/test_update.py` — fetcher call count is zero for absent / `false` / malformed |
+| INV-1 | `tests/test_update.py` — fetcher call count is zero for absent / `false` / malformed; the preference round-trips through `.rolodex.conf`; and a source scan asserts **both** call sites exist. That last one matters: with only the forced call wired, the preference gates a branch nothing reaches and the whole opt-in is inert — which is what the first implementation shipped |
 | INV-2 | `tests/test_update.py` — `sys.frozen` unset → `detect_installer() is None` |
 | INV-3 | `tests/test_update.py` — URL and header set asserted exactly |
 | INV-4 | `tests/test_update.py` — check runs with no vault file present |
