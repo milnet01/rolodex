@@ -1,0 +1,29 @@
+# Ruff configuration for Rolodex.
+#
+# The point of this file is the explicit `select` below. Ruff's DEFAULT rule set changes
+# between releases, and .github/workflows/ci.yml installs ruff UNPINNED
+# (`pip install --upgrade ruff`). Without an explicit selection the lint gate's meaning
+# drifts underneath the project: the code stands still and CI turns red on rules nobody
+# opted into.
+#
+# That is not hypothetical. CI last ran green on 2026-07-17 against the ruff of the day.
+# By 2026-08-27, ruff 0.16 had dropped E402 from its defaults and added DTZ, BLE, PLW,
+# RUF and I — turning up 20 findings on a tree whose Python had not changed. The next
+# push would have gone red for no reason anyone could act on.
+#
+# These four are ruff's historical default set: the rules this codebase was written and
+# reviewed against. Pinning the RULE SET rather than the ruff VERSION is deliberate — it
+# keeps docs/dependency-management-standards.md's "latest by default" policy intact
+# (linters included), so we still get every new ruff release's bug fixes and simply do
+# not inherit new style policy by surprise. Pinning the version instead would be a
+# "forced-older pin" and would owe that standard's ledger entry.
+#
+# E402 (module import not at top of file) matters here: rolodex.py must call
+# gi.require_version() before importing from gi.repository, so the `# noqa: E402`
+# comments on those imports are load-bearing. Keeping E4 selected keeps them meaningful.
+#
+# Widening this set is a deliberate, per-rule decision — not a drive-by. ROLO-0038 holds
+# the 20 deferred findings, broken down by rule class, with the reason each was parked.
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

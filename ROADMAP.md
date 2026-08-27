@@ -1,3 +1,5 @@
+<!-- ants-roadmap-format: 1 -->
+
 # Rolodex Roadmap
 
 Planned and proposed work for Rolodex, grouped by priority. Each item is written to be
@@ -48,6 +50,57 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-07-04.
   Progress (2026-07-17): debounced the search-changed handler (SEARCH_DEBOUNCE_MS=150) so rapid keystrokes coalesce into one rebuild once typing pauses; pending timer is cancelled on lock/close. This removes the per-character rebuild — the efficiency win the body calls out. Verified headlessly: 5 keystrokes -> 1 rebuild; cancel path fires 0. The model-backed Gtk.ListView migration (the larger half) is intentionally deferred pending a go/no-go: after reading the sidebar's surface (3 render modes, collapsible category headers, entry->header drag-and-drop, per-row context menus, ~10 _refresh_list call-sites) it is a high-risk rewrite that is hard to verify without interactive testing on the live vault, and for a personal-scale vault the debounce already resolves the perceived jank.
   Resolved (2026-07-17): closing as shipped on the debounce alone. The 150ms search debounce (SEARCH_DEBOUNCE_MS) removed the per-keystroke rebuild — the efficiency win the body calls out — and is the real perf gain for this app's scale. The model-backed Gtk.ListView migration (the larger half) was evaluated and deliberately DESCOPED, not merely deferred: for a personal-scale vault the debounce resolves the felt jank, while the rewrite is high-risk (3 render modes, collapsible category headers, entry->header drag-and-drop, per-row context menus, ~10 _refresh_list call-sites) and unverifiable without interactive testing on the live vault. If a large vault ever makes incremental updates necessary, open a fresh scoped item for the ListView work rather than reviving this one.
+
+- 🚧 [ROLO-0037] **Opt-in, signed in-app auto-update.**
+  Requested 2026-08-27, modelled on the finbreak implementation at
+  /mnt/Games/Scripts/Linux/finbreak (docs/specs/FIBR-0054.md + FIBR-0131.md).
+
+  Shape: opt-in and OFF by default. On a newer, Ed25519-signed, non-skipped
+  GitHub release, offer Later / Skip this version / Update now. Update now
+  downloads, verifies the signature, swaps the binary, relaunches.
+
+  Two things Rolodex does not have today and this needs:
+  - No __version__ anywhere in the app. .claude/bump.json states this outright
+    ("no __version__ in the single-file app"); the version lives only in the
+    CHANGELOG heading and the git tag. An updater cannot compare against a
+    version the running process cannot read, so this introduces one and the
+    bump recipe gains a version-bearing file.
+  - No release signing. build.yml attaches unsigned binaries. An updater that
+    installs unverified downloads is a remote-code-execution path into the app
+    holding the user's credentials, so signing is a prerequisite, not a polish
+    item. Ed25519 verification needs no new dependency -- cryptography already
+    provides it.
+
+  DESIGN.md states "No account, no cloud, no network access of any kind." This
+  feature contradicts that non-goal and the design doc must be amended to carve
+  out the opt-in exception rather than leaving the two in conflict.
+  **Layman:** Let Rolodex tell you when a new version is out and install it for you — off by default, and only if the download is cryptographically signed by us.
+  Kind: feature.
+  Source: user-request-2026-08-27.
+
+- 📋 [ROLO-0038] **Decide deliberately which of ruff's newer default rules to adopt.**
+  ruff.toml now declares select = [E4, E7, E9, F] -- ruff's historical default,
+  and the set this codebase was written against. That fixed a CI gate that had
+  drifted (see the ruff.toml header), but it also parks 20 real findings that
+  ruff 0.16's wider defaults surface. They were deferred, not dismissed:
+
+  - DTZ005 x5 -- datetime.now() without tz. NOT a free fix: created/modified
+    are written into the vault as isoformat strings, so making them tz-aware
+    changes the on-disk data format and needs a migration decision.
+  - BLE001 x5 -- blind `except Exception` in GUI handlers. Mostly deliberate
+    (a dialog must not die on an unexpected error), so this is probably a
+    per-site noqa rather than a code change.
+  - PLW1510 x2 -- subprocess.run without explicit check=. Free fix.
+  - RUF012 x1 -- mutable class attribute (SHORTCUTS). Free fix (ClassVar).
+  - I001 x3 / RUF100 x4 -- import sorting and now-unused noqa: E402. Both are
+    entangled with the gi.require_version() ordering, which MUST run before the
+    gi.repository import, so import sorting cannot simply be enabled.
+
+  Each class wants its own decision. Adopting all of them in one sweep would
+  breach coding-standards' surgical-change rule.
+  **Layman:** Ruff learned some new warnings; decide one by one which are worth keeping rather than taking or ignoring all of them by accident.
+  Kind: chore.
+  Source: in-session-2026-08-27.
 
 ## Medium priority
 
