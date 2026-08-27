@@ -37,6 +37,13 @@ from cryptography.hazmat.primitives import hashes  # noqa: E402
 # ---------------------------------------------------------------------------
 
 APP_ID = "com.rolodex.Contacts"
+
+# The running app's own version (ROLO-0037). Before this existed the version lived only in the
+# CHANGELOG heading and the git tag, and an updater cannot compare against a version the process
+# cannot read. .claude/bump.json rewrites this line and its post_check asserts it matches the
+# topmost dated CHANGELOG heading, so the two cannot drift.
+__version__ = "1.3.1"
+
 if getattr(sys, "frozen", False):
     # Packaged (PyInstaller) build: __file__ lives in a temp extraction dir that is deleted on
     # exit, so persist user data in the per-user data directory — ~/.local/share/Rolodex on
@@ -571,25 +578,455 @@ def copy_to_clipboard(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def load_config() -> dict:
+def load_config(path: str = None) -> dict:
     try:
-        with open(CONFIG_FILE, "r") as f:
+        with open(path or CONFIG_FILE, "r") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return {}
 
 
-def save_config(data: dict) -> None:
+def save_config(data: dict, path: str = None) -> None:
     try:
-        existing = load_config()
+        existing = load_config(path)
         existing.update(data)
-        with open(CONFIG_FILE, "w") as f:
+        with open(path or CONFIG_FILE, "w") as f:
             json.dump(existing, f)
     except OSError:
         # Best-effort: .rolodex.conf holds only non-secret prefs (window geometry,
         # timeouts). If it can't be written we drop the update rather than interrupt
         # the user — there is nothing here worth surfacing an error or losing work over.
         pass
+
+
+# ===========================================================================
+# ---------------------------------------------------------------------------
+# Opt-in signed auto-update (ROLO-0037)
+# Contract: docs/specs/ROLO-0037-auto-update.md
+#
+# OFF by default (INV-1) and the app's only network egress (INV-3). Nothing here reads the
+# vault or the master password (INV-4). urllib.request is imported INSIDE the fetch helpers
+# and never at module scope, so `import rolodex` does not load it (INV-12) -- note the
+# module-scope `urllib.parse` near the top is for TOTP otpauth:// parsing and is expected.
+# ---------------------------------------------------------------------------
+
+# The release-signing public key, base64 of 32 raw Ed25519 bytes (D3/D4).
+#
+# THIS IS A PLACEHOLDER: 32 zero bytes. It loads cleanly and rejects every signature, so until
+# a real key is generated the feature FAILS CLOSED -- it can offer an update and can never
+# install one (INV-11). Generate the real pair with scripts/gen-signing-key.py, paste the
+# public half here, and keep the private half as a GitHub Actions secret and nowhere else.
+RELEASE_PUBLIC_KEY_B64 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+GITHUB_OWNER = "milnet01"
+GITHUB_REPO = "rolodex"
+
+# The asset each build downloads, keyed by (sys.platform, platform.machine()) -- D2. The names
+# are build.yml's matrix, not invented here. Matching is EQUALITY, never prefix or substring:
+# under those the release's own required <asset>.sig is a second match, so the ambiguity guard
+# would fire on every well-formed release and no update would ever be offered (INV-5).
+#
+# win32 is deliberately ABSENT. Windows is deferred (S4) and this mechanism does not work
+# there -- os.replace refuses a locked .exe and the relaunch needs /bin/sh -- so it is refused
+# up front by is_update_supported() rather than after a download (INV-2).
+PLATFORM_ASSETS = {
+    ("linux", "x86_64"): "rolodex-linux-x86_64",
+    ("darwin", "arm64"): "rolodex-macos-arm64",
+}
+
+# Resource bounds (INV-9). The asset cap has headroom over what build.yml currently produces;
+# re-derive with `gh release view <tag> --json assets -q '.assets[].size'` before lowering it,
+# because a cap under the real artifact aborts every genuine update while a synthetic
+# over-cap test still passes.
+MAX_UPDATE_BYTES = 250 * 1024 * 1024
+MAX_API_BYTES = 1024 * 1024
+MAX_SIG_BYTES = 4096
+UPDATE_TIMEOUT_S = 30
+_DOWNLOAD_CHUNK = 64 * 1024
+
+UPDATE_ENABLED_KEY = "check_for_updates"
+UPDATE_SKIPPED_KEY = "skipped_update_version"
+
+
+class UpdateError(Exception):
+    """An update could not be fetched, staged or installed."""
+
+
+class UpdateVerificationError(UpdateError):
+    """A download's signature did not verify against the built-in public key (INV-8).
+
+    Deliberately a subclass of UpdateError so a caller may catch the signature case on its own
+    or catch everything with one clause.
+    """
+
+
+def parse_version(text: str):
+    """Parse ``N(.N)*`` (optional leading v/V) to an int tuple, or None if unusable (D10).
+
+    ``segment.isdigit()`` -- not ``int()`` -- is the guard. int() quietly accepts "1_0", " 1",
+    "+1" and Unicode digits, every one of which must make the parse fail so the caller treats
+    the version as unusable rather than comparing a number the tag never carried.
+    """
+    if not isinstance(text, str):
+        return None
+    if text[:1] in ("v", "V"):
+        text = text[1:]
+    if not text:
+        return None
+    out = []
+    for segment in text.split("."):
+        if not (segment.isascii() and segment.isdigit()):
+            return None
+        out.append(int(segment))
+    return tuple(out)
+
+
+def version_gt(latest, current) -> bool:
+    """True iff *latest* is strictly greater, zero-padding the shorter tuple so that
+    (0, 1) and (0, 1, 0) compare EQUAL rather than one being newer (D10)."""
+    width = max(len(latest), len(current))
+    return latest + (0,) * (width - len(latest)) > current + (0,) * (width - len(current))
+
+
+def version_string(tag: str) -> str:
+    """A tag's bare version -- one leading v/V stripped. This is the form stored as the
+    skipped version and shown to the user."""
+    return tag[1:] if tag[:1] in ("v", "V") else tag
+
+
+def platform_asset_name():
+    """This build's release asset name, or None where self-update is unsupported (D2)."""
+    import platform
+
+    return PLATFORM_ASSETS.get((sys.platform, platform.machine()))
+
+
+def detect_installer():
+    """The path of the binary to replace, or None where self-update cannot run (INV-2).
+
+    None off a frozen build (a source checkout or a distro package -- updating those is the
+    packager's job), and None on any platform without an asset, which includes Windows.
+    """
+    if not getattr(sys, "frozen", False):
+        return None
+    if platform_asset_name() is None:
+        return None
+    return sys.executable
+
+
+def is_update_supported() -> bool:
+    """Whether self-update can run on this build (INV-2). The preference is shown but
+    disabled, with a tooltip, when this is False."""
+    return detect_installer() is not None
+
+
+def update_check_enabled(path: str = None) -> bool:
+    """Whether the user opted in. OFF unless the stored value is exactly boolean True --
+    absent (a fresh install), false, or any malformed value all read as off (INV-1)."""
+    return load_config(path).get(UPDATE_ENABLED_KEY) is True
+
+
+def set_update_check_enabled(enabled: bool, path: str = None) -> None:
+    save_config({UPDATE_ENABLED_KEY: bool(enabled)}, path)
+
+
+def update_skipped_version(path: str = None) -> str:
+    value = load_config(path).get(UPDATE_SKIPPED_KEY)
+    return value if isinstance(value, str) else ""
+
+
+def skip_update_version(version: str, path: str = None) -> None:
+    """Persist a skipped version (INV-7). save_config swallows OSError by design, so a skip
+    that cannot be written is dropped silently and the version is offered again next launch.
+    That is accepted rather than made fatal -- see the spec's INV-7."""
+    save_config({UPDATE_SKIPPED_KEY: version}, path)
+
+
+def select_update_assets(assets, asset_name: str):
+    """From a release's assets[] return (asset_url, sig_url), or None (INV-5).
+
+    EQUALITY, not endswith/startswith -- see PLATFORM_ASSETS. Requires exactly one asset named
+    *asset_name* and exactly one named *asset_name* + ".sig"; a duplicate of either fails safe,
+    because ambiguity about which bytes to install is not something to guess at.
+    """
+    if not isinstance(assets, list):
+        return None
+    matches = [a for a in assets if isinstance(a, dict) and a.get("name") == asset_name]
+    sigs = [a for a in assets if isinstance(a, dict) and a.get("name") == asset_name + ".sig"]
+    if len(matches) != 1 or len(sigs) != 1:
+        return None
+    asset_url = matches[0].get("browser_download_url")
+    sig_url = sigs[0].get("browser_download_url")
+    if not asset_url or not sig_url:
+        return None
+    return asset_url, sig_url
+
+
+def release_public_key():
+    """The built-in release-signing public key (INV-8/INV-11)."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    return Ed25519PublicKey.from_public_bytes(base64.b64decode(RELEASE_PUBLIC_KEY_B64))
+
+
+def _require_https(url: str) -> None:
+    """Refuse any non-https URL (INV-9). Defence in depth: even a tampered API response
+    pointing an asset at http:// or file:// is never opened."""
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise UpdateError("refusing a non-https update URL")
+
+
+def _opener():
+    """A urllib opener that verifies TLS and re-checks https on EVERY redirect hop (INV-9).
+
+    urllib's default redirect handler would transparently follow a 3xx to http://, so guarding
+    only the first URL is not enough.
+
+    CA trust is certifi when it is importable, else the system store (D7). The frozen binaries
+    are built on one distro and run on any, and a host whose CA bundle sits somewhere the
+    frozen OpenSSL does not look yields no CAs at all -- which INV-13 would then swallow as a
+    silent "no update". A source checkout has no such problem and needs no extra dependency.
+    """
+    import ssl
+    import urllib.request
+
+    try:
+        import certifi
+
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ctx = ssl.create_default_context()
+
+    class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            _require_https(newurl)  # raises before the redirect is followed
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    return urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=ctx), _HttpsOnlyRedirect()
+    )
+
+
+def fetch_latest_release(owner: str = GITHUB_OWNER, repo: str = GITHUB_REPO) -> dict:
+    """GET /repos/{owner}/{repo}/releases/latest and return the parsed JSON.
+
+    /releases/latest excludes prereleases, so an rc tag is never offered. The request carries a
+    fixed User-Agent and nothing else -- no query string, no cookie, no identifier (INV-3).
+    """
+    import urllib.request
+
+    url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
+    _require_https(url)
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "rolodex-updater", "Accept": "application/vnd.github+json"},
+    )
+    with _opener().open(request, timeout=UPDATE_TIMEOUT_S) as response:
+        raw = response.read(MAX_API_BYTES + 1)
+    if len(raw) > MAX_API_BYTES:
+        raise UpdateError("release API response exceeds the size cap")
+    return json.loads(raw.decode("utf-8"))
+
+
+def download_to(url: str, dest: str, max_bytes: int) -> None:
+    """Stream *url* to *dest*, aborting once the running total exceeds *max_bytes* (INV-9).
+    Any failure deletes the partial file, so a broken download never leaves bytes behind."""
+    import urllib.request
+
+    _require_https(url)
+    request = urllib.request.Request(url, headers={"User-Agent": "rolodex-updater"})
+    received = 0
+    try:
+        with _opener().open(request, timeout=UPDATE_TIMEOUT_S) as response, open(dest, "wb") as fh:
+            while True:
+                chunk = response.read(_DOWNLOAD_CHUNK)
+                if not chunk:
+                    break
+                received += len(chunk)
+                if received > max_bytes:
+                    raise UpdateError("download exceeds the size cap")
+                fh.write(chunk)
+    except BaseException:
+        try:
+            os.unlink(dest)
+        except OSError:
+            pass
+        raise
+
+
+class UpdateInfo:
+    """A newer, signed, non-skipped release the user may install (INV-5)."""
+
+    def __init__(self, version, asset_url, sig_url, notes):
+        self.version = version
+        self.asset_url = asset_url
+        self.sig_url = sig_url
+        self.notes = notes
+
+
+def check_for_update(*, force=False, fetcher=None, current_version=None, config_path=None):
+    """Return an UpdateInfo to offer, or None. The whole opt-in gate lives here (INV-1/2).
+
+    Order matters. The platform/frozen gate runs FIRST, so an unsupported build never reaches
+    the network at all; then the opt-in gate, so a disabled app makes no request on the silent
+    startup path. *force* is the manual "Check for updates" action -- an explicit click is its
+    own consent, so it bypasses the opt-in gate and NOTHING else: the version compare, the skip
+    and the asset predicate all still apply.
+
+    Failures are swallowed to None on the silent path and RAISED under force (INV-13). None
+    alone conflates "up to date" with "could not check", and a button the user pressed on
+    purpose must not answer a DNS failure with "You're up to date".
+    """
+    if not is_update_supported():
+        return None
+    if not force and not update_check_enabled(config_path):
+        return None
+    fetch = fetcher or fetch_latest_release
+    try:
+        current = parse_version(current_version or __version__)
+        if current is None:
+            return None
+        release = fetch()
+        latest = parse_version(release.get("tag_name") or "")
+        if latest is None or not version_gt(latest, current):
+            return None
+        version = version_string(release.get("tag_name") or "")
+        if version == update_skipped_version(config_path):
+            return None
+        urls = select_update_assets(release.get("assets") or [], platform_asset_name())
+        if urls is None:
+            return None
+        return UpdateInfo(version, urls[0], urls[1], release.get("body") or "")
+    except Exception as exc:
+        if force:
+            raise UpdateError(f"could not check for updates: {exc}") from exc
+        return None
+
+
+def download_and_verify(info, *, downloader=None, target=None) -> str:
+    """Download the asset and its .sig, verify Ed25519 over the exact bytes, return a temp path.
+
+    Staged in the target binary's OWN directory so the eventual install is a same-filesystem
+    os.replace (INV-10). On any failure every temp is removed and the running binary is left
+    byte-for-byte intact. A bad signature raises UpdateVerificationError; everything else
+    raises UpdateError (INV-8).
+    """
+    from cryptography.exceptions import InvalidSignature
+
+    target = target or detect_installer()
+    if target is None:
+        raise UpdateError("self-update is not supported on this build")
+    fetch = downloader or download_to
+    directory = os.path.dirname(os.path.abspath(target))
+    asset_tmp = sig_tmp = None
+    try:
+        fd, asset_tmp = tempfile.mkstemp(dir=directory, prefix=".rolodex-update-")
+        os.close(fd)
+        fd, sig_tmp = tempfile.mkstemp(dir=directory, prefix=".rolodex-update-", suffix=".sig")
+        os.close(fd)
+        fetch(info.asset_url, asset_tmp, MAX_UPDATE_BYTES)
+        fetch(info.sig_url, sig_tmp, MAX_SIG_BYTES)
+        with open(asset_tmp, "rb") as fh:
+            data = fh.read()
+        with open(sig_tmp, "rb") as fh:
+            signature = fh.read()
+        try:
+            release_public_key().verify(signature, data)
+        except InvalidSignature as exc:
+            raise UpdateVerificationError("the update's signature did not verify") from exc
+        os.unlink(sig_tmp)
+        sig_tmp = None
+        return asset_tmp
+    except BaseException:
+        for tmp in (asset_tmp, sig_tmp):
+            if tmp:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+        raise
+
+
+def _relaunch_env() -> dict:
+    """The environment for the relaunch waiter (D9).
+
+    PYINSTALLER_RESET_ENVIRONMENT=1 is PyInstaller's supported restart signal: it makes the new
+    one-file bootloader treat itself as a fresh top-level instance and re-extract, instead of
+    assuming it is a worker subprocess of the old one and reusing an extraction dir that is
+    being deleted.
+
+    The loader vars matter just as much. A frozen app runs with LD_LIBRARY_PATH pointing at its
+    private _MEI dir so it finds its bundled libraries; inherited by /bin/sh, the system shell
+    then loads those bundled libraries and can die on a symbol lookup before it ever relaunches.
+    PyInstaller preserves the pre-launch value in <VAR>_ORIG, so restore from that, or drop the
+    variable where there was none.
+    """
+    env = dict(os.environ)
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    for var in ("LD_LIBRARY_PATH", "LD_PRELOAD", "DYLD_LIBRARY_PATH"):
+        original = env.pop(f"{var}_ORIG", None)
+        if original:
+            env[var] = original
+        else:
+            env.pop(var, None)
+    return env
+
+
+def _relaunch_command(binary: str, pid: int) -> list:
+    """A detached /bin/sh that waits for the OLD process to exit, then execs the new binary.
+
+    Launching the replacement before the old process has torn down is a real bug rather than a
+    theoretical one: the fresh bootloader collides with the old _MEI extraction dir and dies.
+    The wait is hard-capped so a wedged old process cannot hang the relaunch forever. The path
+    is shlex.quote-d, and it is our own sys.executable rather than user input.
+    """
+    import shlex
+
+    quoted = shlex.quote(binary)
+    return [
+        "/bin/sh",
+        "-c",
+        f"i=0; while kill -0 {pid} 2>/dev/null; do "
+        f'i=$((i+1)); [ "$i" -ge 600 ] && break; sleep 0.1; done; exec {quoted}',
+    ]
+
+
+def apply_update(new_file: str, *, target=None, on_before_exec=None):
+    """Swap the verified download into place and relaunch, replacing this process (INV-14).
+
+    chmod then os.replace: any failure before the replace completes leaves the running binary
+    byte-for-byte intact, so the temp is dropped and the error surfaced with nothing installed.
+    Once the swap HAS committed we never return into a live window whose binary changed
+    underneath it -- if the relaunch spawn fails we still exit, because the new binary is
+    already in place and a manual restart gets the new version.
+    """
+    target = target or detect_installer()
+    if target is None:
+        raise UpdateError("self-update is not supported on this build")
+    try:
+        os.chmod(new_file, 0o755)
+        os.replace(new_file, target)
+    except OSError as exc:
+        try:
+            os.unlink(new_file)
+        except OSError:
+            pass
+        raise UpdateError(f"could not install the update: {exc}") from exc
+    if on_before_exec is not None:
+        on_before_exec()
+    try:
+        subprocess.Popen(
+            _relaunch_command(str(target), os.getpid()),
+            env=_relaunch_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
+        )
+    except OSError:
+        pass  # swap already committed; exit anyway so a manual restart gets the new version
+    os._exit(0)
 
 
 # ===========================================================================
@@ -929,6 +1366,7 @@ class MainWindow(Adw.ApplicationWindow):
         menu.append("Restore vault from backup...", "win.restore")
         menu.append("Export (decrypted plaintext)...", "win.export")
         menu.append("Change master password...", "win.chpass")
+        menu.append("Check for updates...", "win.check-updates")
         menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu)
         header.pack_end(menu_btn)
 
@@ -946,6 +1384,7 @@ class MainWindow(Adw.ApplicationWindow):
             ("restore", self._on_restore),
             ("export", self._on_export),
             ("chpass", self._on_change_password),
+            ("check-updates", self._on_check_updates),
         ]:
             action = Gio.SimpleAction(name=name)
             action.connect("activate", callback)
@@ -1431,6 +1870,84 @@ class MainWindow(Adw.ApplicationWindow):
             return False
         copy_to_clipboard("")
         return False  # one-shot timeout
+
+    # --- Opt-in signed auto-update (ROLO-0037) --------------------------------------------
+
+    def _on_check_updates(self, *_):
+        """The manual "Check for updates..." action (INV-6).
+
+        An explicit click is its own consent, so this runs with force=True even when the
+        preference is off. Off an unsupported build it says so rather than silently doing
+        nothing (INV-2). The check runs on a background thread so a slow or hanging network
+        never freezes the UI -- the same pattern the unlock path uses (INV-15).
+        """
+        if not is_update_supported():
+            self._show_message(
+                "Updates not available",
+                "In-app updates work only in the packaged Rolodex build. Running from source "
+                "or from a distribution package, updating is handled outside the app.",
+            )
+            return
+        import threading
+
+        self._toast("Checking for updates...")
+        threading.Thread(target=self._check_updates_worker, daemon=True).start()
+
+    def _check_updates_worker(self):
+        """Background half of the manual check. Never touches GTK directly."""
+        try:
+            info = check_for_update(force=True)
+        except UpdateError as exc:
+            # INV-13: a forced failure must not read as "you're up to date".
+            GLib.idle_add(self._toast, f"Couldn't check for updates: {exc}")
+            return
+        GLib.idle_add(self._finish_check_updates, info)
+
+    def _finish_check_updates(self, info):
+        if info is None:
+            self._toast(f"Rolodex {__version__} is up to date")
+            return
+        UpdateDialog(self, info).present(self)
+
+    def _start_update_download(self, info):
+        """Download and verify on a background thread, then install (INV-8/INV-15)."""
+        import threading
+
+        self._toast(f"Downloading Rolodex {info.version}...")
+        threading.Thread(target=self._update_worker, args=(info,), daemon=True).start()
+
+    def _update_worker(self, info):
+        try:
+            staged = download_and_verify(info)
+        except UpdateVerificationError:
+            GLib.idle_add(
+                self._show_message,
+                "Update rejected",
+                "The downloaded update was not signed by the Rolodex release key, so it was "
+                "discarded and nothing was installed. Your current version is untouched.",
+            )
+            return
+        except UpdateError as exc:
+            GLib.idle_add(self._show_message, "Update failed", str(exc))
+            return
+        GLib.idle_add(self._install_update, staged)
+
+    def _install_update(self, staged):
+        """Swap and relaunch. apply_update does not return -- it replaces this process."""
+        try:
+            apply_update(staged, on_before_exec=self._wipe_secrets_for_update)
+        except UpdateError as exc:
+            self._show_message("Update failed", str(exc))
+
+    def _wipe_secrets_for_update(self):
+        """Drop the in-memory password and vault before the process is replaced.
+
+        The relaunch exits via os._exit, so no GTK teardown or destructor runs -- anything
+        that must be cleared has to be cleared here.
+        """
+        self.password = None
+        self.vault = None
+        self.salt = None
 
     def _toast(self, msg):
         self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=2))
@@ -2721,6 +3238,46 @@ class ManageCategoriesDialog(Adw.Dialog):
         self.main_win._save()
         self._rebuild_list()
         self.main_win._refresh_list()
+
+
+# --------------------------------------------------------------------------
+# Update prompt (ROLO-0037)
+# --------------------------------------------------------------------------
+
+
+class UpdateDialog(Adw.AlertDialog):
+    """Offers a verified update: Later / Skip this version / Update now (INV-7).
+
+    Deliberately not auto-installing. A password manager replacing its own binary unattended
+    is a lot of trust for a little convenience, and it removes the user's chance to read what
+    changed.
+    """
+
+    def __init__(self, main_win, info):
+        notes = (info.notes or "").strip()
+        if len(notes) > 1500:
+            notes = notes[:1500].rstrip() + "\n\n(...)"
+        super().__init__(
+            heading=f"Rolodex {info.version} is available",
+            body=(f"You have {__version__}.\n\n{notes}" if notes else f"You have {__version__}."),
+        )
+        self.main_win = main_win
+        self.info = info
+        self.add_response("later", "Later")
+        self.add_response("skip", "Skip This Version")
+        self.add_response("update", "Update Now")
+        self.set_response_appearance("update", Adw.ResponseAppearance.SUGGESTED)
+        self.set_default_response("later")
+        self.set_close_response("later")
+        self.connect("response", self._on_response)
+
+    def _on_response(self, _dialog, response):
+        # "Later" persists nothing, by design (INV-7).
+        if response == "skip":
+            skip_update_version(self.info.version)
+            self.main_win._toast(f"Skipping Rolodex {self.info.version}")
+        elif response == "update":
+            self.main_win._start_update_download(self.info)
 
 
 # ===========================================================================

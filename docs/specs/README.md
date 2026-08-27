@@ -1,8 +1,13 @@
 # Feature Specs
 
-These are **retroactive** specifications: they document how Rolodex *already* behaves, feature
-by feature, extracted from the shipped code. They exist so that future changes have a written
-contract to check against, and so a reviewer can tell intended behaviour from an accident.
+Most of these are **retroactive** specifications: they document how Rolodex *already* behaves,
+feature by feature, extracted from the shipped code. They exist so that future changes have a
+written contract to check against, and so a reviewer can tell intended behaviour from an
+accident.
+
+Specs carrying a `ROLO-NNNN` id in their filename are the other kind: written **before** the
+code, as the contract an implementer builds to. They carry a Status line and a review loop log;
+the retroactive ones do not.
 
 Rolodex is a small app, so this set is small.
 
@@ -14,6 +19,7 @@ Rolodex is a small app, so this set is small.
 | [search.md](search.md) | Sidebar search behaviour and match rules |
 | [import-export-backup.md](import-export-backup.md) | Text import + preview, encrypted backup/restore, plaintext export |
 | [master-password.md](master-password.md) | Create, unlock, and change the master password |
+| [ROLO-0037-auto-update.md](ROLO-0037-auto-update.md) | Opt-in signed auto-update: the check, the Ed25519 gate, the install and relaunch |
 
 ## Spec format
 
@@ -22,5 +28,5 @@ what must be true — followed by **Notes** on rationale or edge cases. An invar
 a test or a reviewer checks. When behaviour changes, update the affected INV in the same commit
 and reflect it in `CHANGELOG.md`.
 
-New specs for planned work (see `ROADMAP.md`) are written *before* implementation and should
-be run through the `/cold-eyes` review before coding begins.
+New specs for planned work (see `ROADMAP.md`) are written *before* implementation and are run
+through the `review-contract` cold-read gate before coding begins.

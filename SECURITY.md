@@ -25,6 +25,31 @@ describes both how it protects data and how to report a problem.
 - **Plaintext export.** The *Export (decrypted plaintext)* feature writes an unencrypted file
   by design. Treat that output as radioactive.
 
+### The update check (ROLO-0037)
+
+Rolodex has one optional network feature: an **off-by-default** check for a newer release.
+When you enable it, this is what it does and does not do.
+
+**What it protects against.** A malicious or compromised download. Every update is verified
+against an Ed25519 public key compiled into your binary, over the exact bytes downloaded. A
+tampered binary, a wrong-key signature, or a missing signature all result in nothing being
+installed. TLS alone would not be enough here: it authenticates the host, not the artifact,
+and would put the whole update path inside GitHub account security and the CA system.
+
+**What it does not protect against.** Loss of the release-signing private key. Anyone holding
+it can sign an update your binary will accept, so it lives in a repository secret and a backup
+and nowhere else. It also does not hide *that* you check: GitHub sees the request, which is
+why the feature is opt-in rather than assumed.
+
+**What it never sends.** Nothing derived from your vault. The request carries a fixed
+`User-Agent` and no identifier, account, or query string. The check reads only the plaintext
+`.rolodex.conf` and the app's own version, so it runs while the vault is locked and never
+touches the master password.
+
+**Its current state.** Until a signing key is generated, the built-in key is an all-zero
+placeholder that verifies nothing — so the feature can offer an update and can never install
+one. It fails closed rather than open, deliberately.
+
 ## Cryptographic design
 
 | Element | Choice |

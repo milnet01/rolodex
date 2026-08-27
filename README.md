@@ -109,9 +109,10 @@ cp rolodex.desktop ~/.local/share/applications/
 |------|------------|
 | `rolodex.py` | The whole application (it's a single file). |
 | `contacts.vault` | Your encrypted vault — created on first run. Never shared or committed. |
-| `.rolodex.conf` | Window size plus a couple of non-secret settings (see below). Plain text, no secrets. |
+| `.rolodex.conf` | Window size plus a few non-secret settings (see below), including the update check. Plain text, no secrets. |
 | `Backups/`, `rolodex_export_*.txt` | Backups and exports you create. |
 | `requirements.txt` | The single pip dependency (`cryptography`). |
+| `scripts/` | Maintainer tooling — currently just the release-signing keygen. |
 | `rolodex.desktop` | The app-menu launcher (edit its paths — see above). |
 | `rolodex.png` | The app icon. |
 
@@ -125,6 +126,14 @@ cp rolodex.desktop ~/.local/share/applications/
   auto-locks (`idle_lock_seconds`, default 300 seconds; set `0` to turn off) and how soon a
   copied password is wiped from the clipboard (`clipboard_clear_seconds`, default 20; `0` to
   turn off).
+- **Rolodex works offline, with one optional exception.** It can check GitHub for a newer
+  version, and that is **off unless you turn it on** — a fresh install never touches the
+  network. Turn it on from *Check for updates...* in the app menu, or by setting
+  `check_for_updates` to `true` in `.rolodex.conf`. The check sends nothing about you and
+  nothing from your vault, and it will only install a download that carries a valid signature
+  from the Rolodex release key. You are always shown what changed and asked first — it never
+  installs on its own. In-app updating applies to the downloadable builds; if you run from
+  source, use `git pull`.
 - This is a personal-use tool, not audited security software. It's one readable file — feel free
   to look before trusting it with anything critical. The nuts-and-bolts of the vault format are
   documented in [`docs/specs/vault-format-and-crypto.md`](docs/specs/vault-format-and-crypto.md).

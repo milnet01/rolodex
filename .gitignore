@@ -4,6 +4,14 @@ contacts.vault
 Backups/
 .rolodex.conf
 
+# NEVER publish the release-signing private key (ROLO-0037). The public half belongs in
+# rolodex.py; the private half belongs in a GitHub Actions secret and a backup, and nowhere
+# in this repository. Losing it is unrecoverable -- shipped binaries will refuse every
+# update signed by any other key.
+*.key
+*.pem
+rolodex-signing.key
+
 # Local export/import artifacts
 rolodex_export_*.txt
 

@@ -6,6 +6,31 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in update check that only ever installs a signed release** (ROLO-0037)
+  Rolodex can now tell you when a newer version is out and install it for you.
+  It is **off until you turn it on** — a fresh install never touches the
+  network — and you switch it on from "Check for updates..." in the app menu.
+
+  When an update is found you are shown what changed and choose Later, Skip
+  This Version, or Update Now. Nothing installs on its own.
+
+  An update is only ever installed if it carries a valid signature from the
+  Rolodex release key, checked over the exact bytes downloaded. A tampered
+  download, a wrong signature, or a missing one all mean nothing is installed
+  and your current version is untouched. The check sends nothing about you and
+  nothing from your vault, needs no unlock, and is the app's only network
+  access — see DESIGN.md and SECURITY.md.
+
+  In-app updating applies to the downloadable builds. Running from source,
+  updating is `git pull` as before.
+
+  Note for maintainers: until `scripts/gen-signing-key.py` has been run and the
+  signing key added to the repository, the built-in key is a placeholder that
+  verifies nothing, so the feature offers updates it will refuse to install.
+  That is deliberate — it fails closed rather than open.
+
 ## [1.3.1] - 2026-08-27
 
 ### Fixed

@@ -45,7 +45,7 @@ jobs:
           sudo apt-get install -y \
             python3-gi python3-gi-cairo python3-cairo xvfb \
             gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-1 libadwaita-1-0
-          python3 -m pip install --break-system-packages --upgrade pyinstaller cryptography
+          python3 -m pip install --break-system-packages --upgrade pyinstaller cryptography certifi
       - name: Build + self-test (Linux)
         if: runner.os == 'Linux'
         run: bash packaging/linux-build.sh "${{ matrix.asset }}"
@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          python -m pip install --upgrade pyinstaller
+          python -m pip install --upgrade pyinstaller certifi
           bash packaging/windows-build.sh "${{ matrix.asset }}"
 
       # ---- macOS: GTK stack from Homebrew (unsigned build) ----
@@ -75,7 +75,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install gtk4 libadwaita pygobject3 py3cairo pyinstaller
-          "$(brew --prefix)/bin/python3" -m pip install --break-system-packages --upgrade cryptography || true
+          "$(brew --prefix)/bin/python3" -m pip install --break-system-packages --upgrade cryptography certifi || true
           bash packaging/macos-build.sh "${{ matrix.asset }}"
 
       - name: Upload artifact
@@ -85,8 +85,49 @@ jobs:
           path: out/${{ matrix.asset }}
           if-no-files-found: error
 
+      # ---- Sign the binary so the in-app updater will install it (ROLO-0037) ----
+      #
+      # Ed25519 over the exact bytes of the artifact, published beside it as <asset>.sig.
+      # rolodex.py carries the matching PUBLIC key and installs a download only if it
+      # verifies, so an unsigned or wrongly-signed release is one the updater refuses.
+      #
+      # Skipped when ROLODEX_SIGNING_KEY is unset, which is the state before anyone has run
+      # scripts/gen-signing-key.py. That degrades safely: no .sig means the updater makes no
+      # offer at all, rather than offering something it cannot verify.
+      - name: Sign the binary (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          SIGNING_KEY: ${{ secrets.ROLODEX_SIGNING_KEY }}
+        shell: bash
+        run: |
+          if [ -z "${SIGNING_KEY:-}" ]; then
+            echo "::warning::ROLODEX_SIGNING_KEY is not set - shipping unsigned."
+            echo "The in-app updater will not offer this release. See scripts/gen-signing-key.py."
+            exit 0
+          fi
+          python3 -m pip install --upgrade --break-system-packages cryptography 2>/dev/null \
+            || python3 -m pip install --upgrade cryptography
+          printf '%s' "$SIGNING_KEY" > signing.pem
+          python3 - "out/${{ matrix.asset }}" <<'EOF'
+          import sys
+          from cryptography.hazmat.primitives import serialization
+          key = serialization.load_pem_private_key(open("signing.pem", "rb").read(), password=None)
+          target = sys.argv[1]
+          with open(target, "rb") as fh:
+              signature = key.sign(fh.read())
+          assert len(signature) == 64, len(signature)
+          with open(target + ".sig", "wb") as fh:
+              fh.write(signature)
+          print(f"signed {target} -> {target}.sig")
+          EOF
+          rm -f signing.pem
+
       - name: Attach to Release (tag builds only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
-          files: out/${{ matrix.asset }}
+          # The .sig rides along when signing ran; the glob simply matches nothing when it
+          # did not, so an unsigned release still publishes its binaries.
+          files: |
+            out/${{ matrix.asset }}
+            out/${{ matrix.asset }}.sig

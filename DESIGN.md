@@ -7,7 +7,7 @@ for feature-level behaviour contracts see `docs/specs/`.
 ## Goals
 
 - **A local, offline, encrypted store for credentials.** One master password, one file, on
-  your machine. No account, no cloud, no network access of any kind.
+  your machine. No account, no cloud, and no network access except the one carve-out below.
 - **Trivially auditable.** The entire app is one readable Python file. A user should be able
   to skim it and understand exactly what happens to their secrets before trusting it.
 - **Native on the Linux desktop.** GTK 4 + libadwaita so it looks and behaves like a modern
@@ -22,6 +22,33 @@ for feature-level behaviour contracts see `docs/specs/`.
 - **Not sync.** Moving the vault between machines is a manual file copy (it's just one file).
 - **Not defence against a compromised host.** See the threat model in `SECURITY.md`.
 - **Not a plugin platform.** Simplicity is a feature; extensibility is explicitly out of scope.
+
+## The one network carve-out: checking for updates
+
+Rolodex has exactly one thing that talks to the network, added in ROLO-0037: an **opt-in,
+off-by-default** check for a newer release.
+
+This narrows the offline goal above, and the narrowing is deliberate rather than an oversight.
+The reasoning is that a security fix nobody installs protects nobody: Rolodex ships binaries
+that cannot tell the user a fixed version exists, so users learn about one by visiting GitHub
+or not at all.
+
+What keeps it from eroding the goal:
+
+- **Off until the user turns it on.** A fresh install makes no request, ever. Absent, false, or
+  a malformed setting all read as off.
+- **It sends nothing about you.** A fixed `User-Agent` to the GitHub releases API. No account,
+  no identifier, no query string, and nothing derived from the vault. It never reads the vault
+  or the master password, and it works while the app is locked.
+- **It cannot install unsigned code.** Every download is verified against an Ed25519 public key
+  built into the binary. A download that does not verify is discarded and nothing is installed.
+  This is the part that matters: an updater that installs unverified code is a remote-code
+  path into the app holding your credentials.
+- **It never installs silently.** You are shown what changed and choose Later, Skip This
+  Version, or Update Now.
+
+Everything else in this document still holds: no account, no cloud, no sync, and the vault
+never leaves your machine. The contract is `docs/specs/ROLO-0037-auto-update.md`.
 
 ## Architecture
 

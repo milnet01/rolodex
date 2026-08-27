@@ -98,6 +98,30 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
 - Keep the pure logic layer GTK-free so it stays trivially testable/reasoned-about.
 - Master-password changes (`_finish_change_password`) rotate the salt and re-encrypt on save;
   they verify the *current* password against the in-memory `self.password`, not by re-decrypting.
+- **`__version__` in `rolodex.py` is version-bearing.** The updater compares against it, so
+  `.claude/bump.json` rewrites it *and* its `post_check` asserts it matches the topmost dated
+  CHANGELOG heading. Both halves are needed: `post_check` is a fixed shell string, so adding a
+  `files[]` entry alone does not extend it, and a `__version__` that failed to rewrite would
+  pass the bump silently.
+- **`urllib.request` is imported lazily, inside the update fetch helpers only.** Never at
+  module scope — `tests/test_update.py` asserts `import rolodex` leaves it out of
+  `sys.modules`. The module-scope `import urllib.parse` near the top is a *different* module,
+  is required for TOTP `otpauth://` parsing, and must stay. Scan for `urllib.request` and
+  never for bare `urllib`: the wider scan fails on that correct pre-existing import, and the
+  cheapest way to make it pass is deleting it, which breaks TOTP. `urllib`, `socket` and `ssl`
+  are all in `sys.modules` after import anyway, via that import and via GTK and cryptography.
+- **Auto-update asset matching is EQUALITY, never a prefix or suffix.** A release's required
+  `<asset>.sig` is a prefix match of the asset name, so a `startswith` predicate finds two
+  matches on every well-formed release, the ambiguity guard fires, and no update is ever
+  offered — while a synthetic duplicate-asset test still passes. `PLATFORM_ASSETS` is keyed on
+  `(sys.platform, platform.machine())`, not on platform alone: an Intel Mac must not be offered
+  the arm64 binary. Windows is deliberately absent (deferred) — `os.replace` cannot swap a
+  locked `.exe` and the relaunch needs `/bin/sh`.
+- **The release-signing public key in `rolodex.py` is an all-zero placeholder.** It loads and
+  verifies nothing, so the updater fails *closed* until someone runs
+  `scripts/gen-signing-key.py`. `test_INV11_shipped_key_is_the_all_zero_placeholder` is meant
+  to fail the day a real key is pasted in — retire INV-11 in that same commit. Never commit the
+  private half.
 - **Lint scope is `ruff check rolodex.py tests/`, never `ruff check .`** — a bare `.` also
   sweeps `build/`, `dist/`, `out/` and `build_pyi/` and reports findings CI never sees.
   The rule set is declared in `ruff.toml` (`E4, E7, E9, F`) precisely because `ci.yml`
