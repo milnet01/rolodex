@@ -6,6 +6,8 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-27
+
 ### Fixed
 
 - **Vault saves are now atomic — an interrupted save can no longer corrupt your vault**
@@ -125,7 +127,8 @@ app reached this state, not a tagged release.)
 - Encrypted backup & restore, plaintext export, and master-password change.
 - Vault schema migration (v1 → v2) applied on load.
 
-[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/milnet01/rolodex/releases/tag/v1.3.1
 [1.3.0]: https://github.com/milnet01/rolodex/releases/tag/v1.3.0
 [1.2.0]: https://github.com/milnet01/rolodex/releases/tag/v1.2.0
 [1.1.0]: https://github.com/milnet01/rolodex/releases/tag/v1.1.0
