@@ -180,6 +180,61 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: in-session-2026-08-27.
 
+- 📋 [ROLO-0043] **Cache the derived Fernet key so saving does not re-run the 600k KDF on the UI thread.**
+  save_vault() calls derive_key(), which runs ITERATIONS = 600_000 PBKDF2 rounds. _save()
+  calls it from a GTK signal handler on EVERY mutation -- add, edit, delete, field reorder,
+  drag-to-category, category rename. That is the identical work the unlock and restore paths
+  are deliberately threaded to avoid (master-password.md INV-6).
+
+  Three review lanes reached the same fix independently: derive once at unlock, hold the
+  Fernet on MainWindow, and invalidate it only where the salt actually rotates --
+  _finish_change_password and _finish_restore. Preferred over moving saves to a background
+  thread because it introduces no new secret exposure (the password is already resident for
+  the session, per security-standards.md) and no mutation/write race.
+
+  Already acknowledged as a known gap in DESIGN.md and docs/coding-standards.md, which is why
+  this is queued rather than fixed in the audit pass: it changes the crypto call path and
+  wants its own change with tests.
+  **Layman:** Every edit currently freezes the window for about a second while it re-scrambles your master password. Doing that work once at unlock instead makes saving feel instant.
+  Kind: perf.
+  Source: review-code 2026-08-31 lanes 1, 5, 9 (independently).
+  Lanes: crypto, gui.
+
+- 📋 [ROLO-0044] **Guard against two Rolodex instances writing the vault last-writer-wins.**
+  _save() writes the whole vault with no lock file, no mtime check and no generation counter.
+  The single-instance guard added to do_activate() closes the common route to this, but it is
+  not a guarantee: it relies on D-Bus registration, and it does nothing about a second
+  checkout, a second user, or the vault living on a shared or synced volume.
+
+  The create path compounds it -- is_new is computed once at startup and create_vault ->
+  write_private_file -> os.replace overwrites unconditionally, so a vault that appears between
+  the check and the write is destroyed.
+
+  Needs a design decision rather than an edit, which is why it is queued: flock on the vault,
+  a .lock sidecar, or stat-before-replace with a refuse-or-merge prompt. The atomic-write work
+  from 1.3.1 does not address this and was never meant to.
+  **Layman:** If two copies of Rolodex ever have the vault open at once, whichever saves last wipes out the other's changes with no warning.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 5.
+  Lanes: crypto, gui.
+
+- 📋 [ROLO-0045] **Offer restore-from-backup when the vault will not open.**
+  do_activate decides create-or-unlock on os.path.exists alone, so a truncated or corrupt
+  vault reads as "existing" and the app enters unlock mode. load_vault then raises, the
+  unlock dialog shows the error text, and the user is stuck: there is no create path and no
+  restore path, because Restore is a MainWindow action that needs an unlocked vault.
+
+  A user with a good backup in Backups/ has no in-app route to it.
+
+  The salt-length check landed in this audit makes the diagnosis honest -- a corrupt vault now
+  says so instead of reporting "Wrong password." -- but it does not give the user anywhere to
+  go. Offer "Restore from backup..." and "Start a new vault" in the unlock dialog on a
+  format/magic error, as distinct from an InvalidToken (wrong password).
+  **Layman:** If your vault file gets corrupted, the app just says it cannot open it and there is no way in. Your backups are right there but nothing offers them to you.
+  Kind: feature.
+  Source: review-code 2026-08-31 lane 9.
+  Lanes: gui.
+
 ## Medium priority
 
 - 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
@@ -380,6 +435,152 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: fix.
   Source: in-session-2026-08-27.
 
+- 📋 [ROLO-0046] **Run the clipboard helpers off the GTK main thread.**
+  copy_to_clipboard and read_clipboard both use subprocess.run(..., timeout=5) and are called
+  from a button click and from a GLib timeout. A hung wl-paste freezes the UI for 5 s, or 10 s
+  across _clear_clipboard_if_unchanged's read-then-write.
+
+  The project already keeps the KDF and the update fetch off the main thread for exactly this
+  reason. Either move both through a short-lived thread with GLib.idle_add, or drop the
+  external tools for the async Gdk.Clipboard API -- which would also remove the per-platform
+  tool list the macOS/Windows fix had to extend.
+  **Layman:** Copying a password shells out to a helper program with a five-second limit, and it does that on the thread that draws the window — so if the helper hangs, the app freezes.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 6.
+  Lanes: gui.
+
+- 📋 [ROLO-0047] **Settle whether a re-ticked duplicate should import, and make preview and commit agree.**
+  Two lanes found the same disagreement from opposite ends. import_entries dedups against the
+  vault AND within the import file; ImportPreviewDialog computes its duplicate set from the
+  vault only, so two identically-named entries in one file both render unmarked and
+  pre-checked, and one is then silently skipped.
+
+  Separately, _finish_import passes skip_duplicates=True, so a duplicate the user deliberately
+  re-ticks is discarded -- the checkbox has no effect for exactly the rows it draws attention
+  to.
+
+  import-export-backup.md contradicts itself here: INV-7 says "only checked entries import",
+  which reads as a promise that checked entries DO import, while its own Notes record the
+  skip_duplicates behaviour. The spec needs deciding before the code moves, so this is a
+  review-contract item first. The preview is the user's consent surface for a bulk write into
+  an encrypted vault; whichever way it is settled, it must not show one thing and do another.
+  **Layman:** The import preview lets you tick a duplicate entry, then throws it away anyway. Either the tick should work or it should not be offered.
+  Kind: doc-fix.
+  Source: review-code 2026-08-31 lanes 3 and 8.
+  Lanes: import-export.
+
+- 📋 [ROLO-0048] **Store entry timestamps with a timezone.**
+  add_entry and update_entry write datetime.now().isoformat() -- naive local time. Across a
+  timezone change or a DST fall-back, `modified` can precede `created`, and the detail pane
+  renders the value with no offset marker.
+
+  entries-and-fields.md INV-1 says only "ISO-8601 strings", which this technically satisfies,
+  so the spec needs a sentence too. The fix itself is datetime.now().astimezone().isoformat(),
+  but it is queued rather than done inline because existing vaults hold naive values: readers
+  must tolerate both forms, and whether to rewrite old timestamps on migration is a decision,
+  not an edit.
+  **Layman:** Saved-at times have no timezone, so a vault carried to another country — or across a clock change — shows edits in the wrong order.
+  Kind: fix.
+  Source: review-code 2026-08-31 lanes 3, 6, 7.
+  Lanes: data-model.
+
+- 📋 [ROLO-0049] **Declare the GTK and libadwaita minimum versions the code already requires.**
+  Two hard floors are used with no minimum stated in README.md, requirements.txt, the
+  packaging scripts or the workflows:
+
+  - Gtk.CssProvider.load_from_string (do_startup) is GTK 4.12+. Debian bookworm ships 4.8, so
+    this is an AttributeError before any window appears. Using load_from_data(CUSTOM_CSS.encode())
+    instead would drop the floor to 4.0.
+  - Adw.Dialog, set_can_close, close-attempt, force_close and Adw.AlertDialog are libadwaita
+    1.5+. On a distro shipping 1.4 the whole editor stack fails at attribute lookup.
+
+  Verify both floors against the real API history before writing them down -- the lanes read
+  them from usage, not from a compatibility table.
+  **Layman:** The app needs fairly recent versions of its UI libraries but never says so, so on an older Linux it fails at startup with a confusing error.
+  Kind: doc.
+  Source: review-code 2026-08-31 lanes 8 and 9.
+  Lanes: packaging.
+
+- 📋 [ROLO-0050] **Bound the size of a chosen import file.**
+  parse_text_file reads the whole user-chosen file into memory and re.splits the entire string.
+  A mis-picked multi-GB file is an OOM rather than a message. The regex itself is not
+  ReDoS-prone -- [^:]+? cannot overlap the literal colon, so backtracking is linear.
+
+  Queued rather than fixed because the ceiling is a number somebody has to choose, and it
+  should be stated in import-export-backup.md rather than only in the code.
+  **Layman:** Picking a huge file by mistake in the import dialog will make the app run out of memory and die, with no message.
+  Kind: security.
+  Source: review-code 2026-08-31 lanes 3 and 7.
+  Lanes: import-export.
+
+- 📋 [ROLO-0051] **Guard the update check and download against re-entry.**
+  _on_check_updates and _start_update_download take no re-entrancy guard, so repeated menu
+  clicks spawn N threads and N offer dialogs, and two accepted offers give two concurrent
+  downloads racing on the same os.replace.
+
+  The INV-15 cancellation flag added in this audit makes the teardown correct but does not make
+  the start path idempotent -- a second download still begins. Wants a simple in-flight flag on
+  MainWindow, plus disabling the menu item while a check or download is running.
+  **Layman:** Clicking “Check for updates” repeatedly starts a new check each time, and accepting two update offers downloads twice at once.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 6.
+  Lanes: updater.
+
+- 📋 [ROLO-0052] **Turn on mypy's untyped-def checking and annotate the public signatures it then reports.**
+  coding-standards.md requires type hints on every public function signature. mypy runs clean
+  because unannotated defs are UNCHECKED by default -- so roughly twenty functions are
+  reported as passing without being analysed at all.
+
+  Three review lanes independently found unannotated public signatures and independently tagged
+  it a tool gap, which is the strongest signal in the run that the checker is not doing what
+  the standard assumes.
+
+  Two parts, in order: add the annotations, then enable --disallow-untyped-defs so it cannot
+  regress. Doing it the other way round turns the whole file red at once. This is check-code's
+  tool set, not the project's CI gate, so it also wants recording wherever that calibration
+  lives.
+  **Layman:** The type checker is skipping about twenty functions because they have no type labels, so it reports the code as clean without having looked at them.
+  Kind: chore.
+  Source: review-code 2026-08-31 lanes 3, 4, 8 (tool gap).
+  Lanes: tooling.
+
+- 📋 [ROLO-0057] **Run review-contract over the four spec claims this audit falsified.**
+  Four document-side findings, each verified against source, none fixable without deciding
+  which side is authoritative. Grouped because they want one review-contract pass, not four.
+
+  1. entries-and-fields.md INV-9 -- "the value entry's visibility always tracks the Hide
+     checkbox, so a field is never shown in cleartext while it will be saved as sensitive" is
+     falsified by the peek toggle (ROLO-0021), which is a deliberate, commented feature. The
+     DOCUMENT is the wrong side. Its Notes are also stale: they call built-in password
+     generation a roadmap item, and it shipped.
+
+  2. ROLO-0037 D5 -- says the update entry is "disabled with a tooltip when
+     is_update_supported() is False". The disable is there; a Gio.Menu model item cannot carry a
+     tooltip in GTK4, so the promise is unimplementable as written. The DOCUMENT is the wrong
+     side; the manual action already compensates with an explanatory dialog.
+
+  3. ROLO-0037 D5 again -- justifies keeping the update preferences out of the vault "because
+     the check runs at startup while the app is locked", and INV-4 says it "runs correctly while
+     the app is locked". The invariant holds (no vault dependency), but the check is scheduled
+     from MainWindow.__init__, which only exists AFTER a successful unlock. So a user who leaves
+     Rolodex at the lock screen is never told about a release. Cannot tell from the documents
+     which side is intended.
+
+  4. vault-format-and-crypto.md INV-16 -- claims an interrupted write "leaves no temp behind"
+     for "a crash, a full disk, a power cut". write_private_file unlinks only on `except
+     Exception`, so a KeyboardInterrupt/SystemExit (both BaseException) or a power cut leaves a
+     .rolodex-*.tmp holding the full ciphertext in the vault directory. Only the disk-full case
+     is actually covered. Either narrow the claim or widen the handler.
+
+  Also for that pass: INV-15's test surface reads "none -- GTK-layer behaviour, verified by
+  hand", and two lanes independently found its teardown clause had no implementing code at all.
+  Whatever that hand-verification exercised, it was not this. The clause is implemented as of
+  this audit; the spec should say how it is now checked.
+  **Layman:** Four places in the design documents now describe behaviour the code does not have. Each needs a decision about which side is wrong.
+  Kind: doc-fix.
+  Source: review-code 2026-08-31 lanes 2, 4, 8, 9.
+  Lanes: docs.
+
 ## Low priority / nice-to-have
 
 - 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
@@ -482,3 +683,63 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   **Layman:** A rule change to the writing standard is owed an independent read-through that has not happened yet.
   Kind: doc.
   Source: in-session-2026-08-27.
+
+- 📋 [ROLO-0053] **Make field and category reordering reachable from the keyboard.**
+  The drag handle is a Gtk.Image, which is not focusable, and no accelerator or move action
+  exists. entries-and-fields.md INV-7 and categories.md INV-13 both promise reordering as a
+  feature; for a keyboard-only or motor-impaired user the feature does not exist.
+
+  Ctrl+Up / Ctrl+Down on the focused row calling the existing _reorder_field / _reorder_category
+  is the cheap version. Several icon-only buttons across the app also carry tooltip_text but no
+  accessible name, and the category count badge is a bare numeral -- worth doing in the same
+  pass.
+  **Layman:** You can only reorder fields and categories by dragging them with a mouse, so anyone using just a keyboard cannot do it at all.
+  Kind: accessibility.
+  Source: review-code 2026-08-31 lane 8.
+  Lanes: gui.
+
+- 📋 [ROLO-0054] **Give the project a .yamllint so the linter measures its own style.**
+  yamllint has no project config, so it runs on defaults the project never adopted: 26 of the
+  32 findings are the 80-column limit (coding-standards.md declares ~100, and that rule is
+  Python-scoped anyway -- only one line in the tree exceeds 100), two are the GitHub Actions
+  `on:` key flagged as non-truthy, and the rest are document-start and comment spacing.
+
+  As it stands the tool produces noise on every run and decides nothing, so its output is
+  skipped rather than read -- which is how a real finding would be missed. A .yamllint stating
+  the project's actual line length and disabling the truthy and document-start rules for
+  workflows would make a yamllint finding mean something.
+
+  NOT a suppression of a rule that caught something: no finding here is a defect.
+  **Layman:** The YAML checker currently complains about 32 things using its own default rules, none of which this project ever agreed to.
+  Kind: chore.
+  Source: check-code 2026-08-31 (whole-tree).
+  Lanes: tooling.
+
+- 📋 [ROLO-0055] **Decide whether zizmor should run at the auditor persona in the audit sweep.**
+  check-code runs zizmor at its default `regular` persona, which suppressed 9 of 17 findings on
+  this tree. Lane 10 reported excessive-permissions on build.yml's workflow-wide `contents:
+  write`; that audit does not emit at the default persona, and a re-run at --persona=auditor
+  confirmed it, plus template-injection x4, secrets-outside-env and concurrency-limits.
+
+  The permissions finding is now fixed by the build/sign job split, so this is about the
+  instrument rather than the tree: at the default persona the sweep could not have found it.
+  The auditor persona is noisier -- the template-injection hits are ${{ matrix.asset }} in run:
+  blocks, which is workflow-controlled and not attacker-controllable -- so this is a calibration
+  decision, not an obvious yes.
+  **Layman:** The workflow security scanner has a stricter mode that is turned off by default, and it spots things the default mode stays quiet about.
+  Kind: chore.
+  Source: review-code 2026-08-31 lane 10 (tool gap).
+  Lanes: tooling.
+
+- 📋 [ROLO-0056] **Replace softprops/action-gh-release with a gh release script step.**
+  zizmor's superfluous-actions audit (informational) points out that `gh release upload` in a
+  run: step does what softprops/action-gh-release@v3 is being used for, using the CLI already
+  present on the runner.
+
+  Worth doing mainly to remove a third-party action from the job that now holds the signing key
+  and contents: write -- one fewer upstream in the blast radius. The action is hash-pinned as of
+  this audit, so it is not urgent.
+  **Layman:** The release step uses a third-party add-on to do something the runner can already do by itself.
+  Kind: chore.
+  Source: check-code 2026-08-31 (zizmor superfluous-actions).
+  Lanes: packaging.

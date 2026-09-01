@@ -20,8 +20,10 @@
 #
 #     gh workflow run "Build binaries"
 #
-# The release-attach step only fires on a v* tag, so a manual run just builds + self-tests all
-# three OSes. Watch it with:  gh run watch
+# The sign-and-release job only runs on a v* tag, so a manual run FROM A BRANCH just builds +
+# self-tests all three OSes. Note workflow_dispatch also accepts a TAG as its ref, and
+# github.ref is then refs/tags/v... -- a manual run launched against a tag does sign and
+# publish. Watch it with:  gh run watch
 #
 # Usage: ./CI-local.sh
 set -euo pipefail
@@ -36,6 +38,14 @@ python3 -m pytest tests/ -q
 
 echo
 echo "==> [3/3] Linux build + self-test (mirrors the ubuntu-latest CI job)"
+# certifi is a build-time dependency of the frozen binary's TLS trust (ROLO-0037 D7) and CI
+# installs it in every job. Without this assertion a green local run meant nothing about the
+# shipped binary's trust store, which is precisely the drift this script exists to prevent.
+python3 -c 'import certifi' 2>/dev/null || {
+    echo "certifi is not installed, but CI builds with it (ROLO-0037 D7)." >&2
+    echo "Install it first:  python3 -m pip install --upgrade certifi" >&2
+    exit 1
+}
 bash packaging/linux-build.sh
 
 echo

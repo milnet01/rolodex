@@ -30,6 +30,11 @@ if sys.platform == "win32":
 
     _mingw = os.environ.get("ROLODEX_MINGW", "C:/msys64/ucrt64")
     _typelibs = glob.glob(os.path.join(_mingw, "lib", "girepository-1.0", "*.typelib"))
+    # Fail loudly here rather than at runtime: an empty glob (a wrong ROLODEX_MINGW, or the
+    # C:/msys64/ucrt64 fallback being wrong) used to print "bundling 0 typelibs", build
+    # successfully, and surface only as an opaque self-test timeout with no clue why.
+    if not _typelibs:
+        raise SystemExit(f"[rolodex.spec] no GObject-introspection typelibs found under {_mingw}")
     datas += [(f, "gi_typelibs") for f in _typelibs]
     print(f"[rolodex.spec] bundling {len(_typelibs)} typelibs from {_mingw}")
 

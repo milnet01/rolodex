@@ -20,10 +20,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root
 ASSET="${1:-rolodex-windows-x86_64.exe}"
+# certifi is NOT optional: it is the CA bundle the frozen binary's TLS trust depends on
+# (ROLO-0037 D7), and CI installs it in every job.
 
 # Windows-form MSYS2 prefix so the spec can bundle the GTK typelibs (PyInstaller's automatic
 # collection misses them on MSYS2 → "Namespace Gtk not available" at runtime).
-export ROLODEX_MINGW="$(cygpath -w "$MINGW_PREFIX")"
+ROLODEX_MINGW="$(cygpath -w "$MINGW_PREFIX")"
+export ROLODEX_MINGW
 echo "MINGW prefix: $ROLODEX_MINGW"
 
 python -m PyInstaller packaging/rolodex.spec --noconfirm

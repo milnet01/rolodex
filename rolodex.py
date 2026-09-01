@@ -135,6 +135,14 @@ def load_vault(password: str, path: str) -> tuple[dict, bytes]:
         if magic != MAGIC:
             raise ValueError("Not a valid vault file")
         salt = fp.read(16)
+        # INV-6 is "the exact 16 bytes", and a short read here is silently accepted by
+        # derive_key. A truncated vault -- a partial copy, an interrupted sync -- would then
+        # fail decryption with InvalidToken, which the unlock dialog renders as "Wrong
+        # password." Reporting a corrupt file as a forgotten password is the worst available
+        # error for an app with no recovery path: the plausible response is to delete and start
+        # again, destroying a file a backup restore could still have salvaged.
+        if len(salt) != 16:
+            raise ValueError("Vault file is truncated or corrupt")
         ciphertext = fp.read()
     key = derive_key(password, salt)
     f = Fernet(key)
@@ -150,7 +158,21 @@ def create_vault(password: str, path: str) -> tuple[dict, bytes]:
 
 
 def migrate_vault(vault: dict) -> dict:
-    """Upgrade vault data to the latest version (v2). Idempotent."""
+    """Upgrade vault data to the latest version (v2). Idempotent.
+
+    Refuses a vault newer than this build understands rather than relabelling it: the version
+    stamp was unconditional, so a future v3 vault opened here was rewritten as v2 and the lie
+    persisted on the next save. Migration is one-way by design (DESIGN.md), so there is no
+    recovering from that.
+    """
+    if not isinstance(vault, dict) or not isinstance(vault.get("entries"), dict):
+        raise ValueError("Vault contents are not a valid vault")
+    version = vault.get("version", 1)
+    if isinstance(version, int) and version > 2:
+        raise ValueError(
+            f"This vault was written by a newer version of Rolodex (format v{version}). "
+            "Upgrade Rolodex to open it."
+        )
     if "categories" not in vault:
         vault["categories"] = []
     for entry in vault["entries"].values():
@@ -202,9 +224,19 @@ def _decode_base32(s: str) -> bytes | None:
     Returns None (rather than raising) on anything that isn't valid base32, so the detection
     path can treat "not a seed" and "malformed seed" identically.
     """
-    cleaned = s.strip().replace(" ", "").replace("-", "").upper()
-    if not cleaned:
+    # Strip any whitespace, not just U+0020: the docstring promises tolerance, and a seed pasted
+    # with a tab, newline or non-breaking space would otherwise be rejected as "not a seed".
+    stripped = re.sub(r"[\s\-]+", "", s)
+    if not stripped:
         return None
+    # Validate BEFORE folding case, and against the ASCII ranges only. str.upper() applies full
+    # Unicode case mapping, so characters outside base32 fold INTO it ('ı' -> 'I',
+    # 'ſ' -> 'S') and would decode silently to a WRONG secret rather than failing. Checking
+    # after .upper() cannot catch that -- by then the fold has already happened and the
+    # character is a legitimate base32 letter.
+    if not re.fullmatch(r"[A-Za-z2-7]*", stripped):
+        return None
+    cleaned = stripped.upper()
     padded = cleaned + "=" * (-len(cleaned) % 8)
     try:
         decoded = base64.b32decode(padded, casefold=True)  # binascii.Error subclasses ValueError
@@ -229,7 +261,14 @@ def totp_remaining(timestamp: float, period: int = 30) -> int:
 
 
 def _parse_otpauth_uri(uri: str) -> dict | None:
-    parsed = urllib.parse.urlparse(uri)
+    try:
+        parsed = urllib.parse.urlparse(uri)
+    except ValueError:
+        # urlsplit raises on an unbalanced or invalid bracketed host ("otpauth://[totp"). This
+        # runs per field from the detail-view render, so an exception here strands the whole
+        # entry behind an undrawable pane -- and parse_totp_field's docstring promises it never
+        # raises on user data.
+        return None
     if parsed.scheme != "otpauth" or parsed.netloc.lower() != "totp":
         return None  # only time-based OTP; HOTP (counter-based) is out of scope
     q = urllib.parse.parse_qs(parsed.query)
@@ -244,7 +283,11 @@ def _parse_otpauth_uri(uri: str) -> dict | None:
         period = int((q.get("period") or ["30"])[0])
     except ValueError:
         return None
-    if not (6 <= digits <= 10) or period < 1:
+    # RFC 4226 defines Digit as 6-8 and its DIGITS_POWER table stops at 10^8; the Key URI Format
+    # names 6 and 8. Dynamic truncation yields at most 2147483647, so a 9- or 10-digit code is
+    # degenerate -- its leading digits can never span their full range. An unbounded period
+    # likewise produces a countdown the ring cannot render.
+    if digits not in (6, 7, 8) or not (1 <= period <= 300):
         return None
     return {"secret": secret, "digits": digits, "period": period, "algorithm": algorithm}
 
@@ -264,7 +307,10 @@ def parse_totp_field(label: str, value: str) -> dict | None:
     if not any(kw in label.lower() for kw in TOTP_LABEL_KEYWORDS):
         return None
     secret = _decode_base32(value)
-    # Require ≥80 bits (RFC 4226's minimum secret size). This keeps short base32-valid prose
+    # Require ≥80 bits. NOT an RFC floor -- RFC 4226 §4 R6 requires at least 128 bits and
+    # recommends 160, but Google Authenticator's standard 16-character seed decodes to 80, so
+    # raising this to match the RFC would reject the most common seed in existence. It is a
+    # heuristic threshold chosen to keep short base32-valid prose
     # like "just some words" from being mistaken for a seed when guessing off a bare value.
     if not secret or len(secret) < 10:
         return None
@@ -272,6 +318,22 @@ def parse_totp_field(label: str, value: str) -> dict | None:
 
 
 # Password health (ROLO-0008) — all analysis runs in-process over the decrypted vault.
+def field_is_sensitive(field: dict) -> bool:
+    """Whether a stored field must be masked in the UI.
+
+    The stored `sensitive` flag OR a recognised TOTP seed. The two keyword sets do not agree --
+    SENSITIVE_KEYWORDS and TOTP_LABEL_KEYWORDS overlap only on "authenticator" -- so a field
+    labelled "2FA", "TOTP", "OTP" or "One-time" was stored non-sensitive and then rendered in
+    permanent cleartext beside the live code derived from it. Routing through parse_totp_field
+    also covers an otpauth:// URI pasted under ANY label, whose secret= parameter no keyword
+    list could have caught. Checked at render as well as at save, so entries already sitting in
+    a vault are masked too rather than only newly edited ones.
+    """
+    if field.get("sensitive"):
+        return True
+    return parse_totp_field(field.get("label", ""), field.get("value", "")) is not None
+
+
 STRENGTH_LABELS = {0: "Empty", 1: "Weak", 2: "Fair", 3: "Good", 4: "Strong"}
 
 
@@ -423,6 +485,11 @@ def add_category(vault: dict, name: str) -> bool:
 
 
 def rename_category(vault: dict, old_name: str, new_name: str) -> None:
+    # Uniqueness is categories.md INV-1. The sole caller guards this today, so the check is
+    # defence in depth -- but renaming onto an existing name would leave two identical entries
+    # in the ordered list, which the sidebar renders twice and delete_category half-removes.
+    if new_name != old_name and new_name in vault["categories"]:
+        raise ValueError(f"A category named {new_name!r} already exists")
     idx = vault["categories"].index(old_name)
     vault["categories"][idx] = new_name
     for entry in vault["entries"].values():
@@ -463,9 +530,13 @@ def parse_text_file(filepath: str) -> list[dict]:
     blocks = re.split(r"\n\s*\n", content.strip())
     entries = []
     for block in blocks:
-        lines = block.strip().split("\n")
-        if not lines:
+        # str.split never returns [], so the old `if not lines` guard was dead code: an empty or
+        # whitespace-only file produced one block of [""], hence one entry with an empty name.
+        # That defeated the caller's `if not parsed` check, so "No entries found in file."
+        # (INV-5) was unreachable and importing wrote a nameless entry the editor forbids.
+        if not block.strip():
             continue
+        lines = block.strip().split("\n")
         name = lines[0].rstrip(":").strip()
         fields = []
         notes_lines = []
@@ -474,7 +545,11 @@ def parse_text_file(filepath: str) -> list[dict]:
             if match:
                 label = match.group(1).strip()
                 value = match.group(2).strip()
-                fields.append({"label": label, "value": value, "sensitive": is_sensitive_label(label)})
+                fields.append({
+                    "label": label,
+                    "value": value,
+                    "sensitive": is_sensitive_label(label) or parse_totp_field(label, value) is not None,
+                })
             elif line.strip():
                 notes_lines.append(line.strip())
         entries.append({"name": name, "fields": fields, "notes": "\n".join(notes_lines)})
@@ -523,8 +598,13 @@ def generate_password(
         raise ValueError("length must be at least 1")
 
     combined = "".join(pools)
-    # One char from each class first (up to length), then fill from the combined pool.
-    chars = [secrets.choice(pool) for pool in pools][:length]
+    # One char from each class first (up to length), then fill from the combined pool. The
+    # per-class draws are shuffled BEFORE the [:length] slice: truncating them in the fixed
+    # lower/upper/digits/symbols order meant generate_password(length=2) could only ever return
+    # a lowercase and an uppercase character, never a digit or symbol.
+    seeded = [secrets.choice(pool) for pool in pools]
+    secrets.SystemRandom().shuffle(seeded)
+    chars = seeded[:length]
     chars += [secrets.choice(combined) for _ in range(length - len(chars))]
     secrets.SystemRandom().shuffle(chars)
     return "".join(chars)
@@ -543,9 +623,11 @@ def read_clipboard() -> str | None:
     its contents are still the secret we put there.
     """
     for cmd in [
+        ["pbpaste"],  # macOS
         ["wl-paste", "--no-newline"],
         ["xclip", "-selection", "clipboard", "-o"],
         ["xsel", "--clipboard", "--output"],
+        ["powershell.exe", "-NoProfile", "-Command", "Get-Clipboard"],  # Windows
     ]:
         if shutil.which(cmd[0]):
             try:
@@ -559,14 +641,22 @@ def read_clipboard() -> str | None:
 
 def copy_to_clipboard(text: str) -> bool:
     for cmd in [
+        ["pbcopy"],  # macOS
         ["wl-copy", "--trim-newline"],
         ["xclip", "-selection", "clipboard"],
         ["xsel", "--clipboard", "--input"],
+        ["clip.exe"],  # Windows
     ]:
         if shutil.which(cmd[0]):
             try:
                 proc = subprocess.run(cmd, input=text.encode("utf-8"), capture_output=True, timeout=5)
-                return proc.returncode == 0
+                # Fall through to the next tool on a non-zero exit, exactly as read_clipboard
+                # does. Returning here unconditionally meant that wl-clipboard merely being
+                # INSTALLED under an X11 session -- which several distros arrange by default --
+                # made every copy fail, because wl-copy exits non-zero with no Wayland display,
+                # while a working xclip sat untried on the next line.
+                if proc.returncode == 0:
+                    return True
             except (subprocess.TimeoutExpired, OSError):
                 continue
     return False
@@ -578,20 +668,51 @@ def copy_to_clipboard(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def load_config(path: str = None) -> dict:
+def load_config(path: str | None = None) -> dict:
+    """Read .rolodex.conf, returning {} for anything that is not a JSON object.
+
+    The isinstance check is load-bearing, not defensive padding: README documents this file as
+    hand-editable, and valid non-object JSON (`null`, `[]`, `5`) satisfied json.load and then
+    raised AttributeError out of MainWindow.__init__ -- so the app failed to open its window at
+    all, with an unhandled traceback rather than a message.
+    """
     try:
         with open(path or CONFIG_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError, UnicodeDecodeError):
         return {}
+    return data if isinstance(data, dict) else {}
 
 
-def save_config(data: dict, path: str = None) -> None:
+def config_int(conf: dict, key: str, default: int) -> int:
+    """An int from a hand-editable config file, falling back rather than raising.
+
+    `int("five")` inside MainWindow.__init__ raised from a GLib.idle_add callback after the
+    unlock dialog had already disabled its button, leaving it stuck on "Unlocking..." forever
+    with the vault decrypted in memory and nothing on screen to say why.
+    """
+    try:
+        return int(conf.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def save_config(data: dict, path: str | None = None) -> None:
     try:
         existing = load_config(path)
         existing.update(data)
-        with open(path or CONFIG_FILE, "w") as f:
+        # Atomic: open(..., "w") truncates first, so a kill or ENOSPC between truncate and flush
+        # left a partial file that the next load_config read as {} -- silently resetting the
+        # window geometry, BOTH security timeouts, skipped_update_version and the
+        # check_for_updates opt-in, so the app quietly stopped checking for the security
+        # updates ROLO-0037 exists to deliver.
+        target = path or CONFIG_FILE
+        tmp = f"{target}.tmp"
+        with open(tmp, "w") as f:
             json.dump(existing, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, target)
     except OSError:
         # Best-effort: .rolodex.conf holds only non-secret prefs (window geometry,
         # timeouts). If it can't be written we drop the update rather than interrupt
@@ -720,22 +841,22 @@ def is_update_supported() -> bool:
     return detect_installer() is not None
 
 
-def update_check_enabled(path: str = None) -> bool:
+def update_check_enabled(path: str | None = None) -> bool:
     """Whether the user opted in. OFF unless the stored value is exactly boolean True --
     absent (a fresh install), false, or any malformed value all read as off (INV-1)."""
     return load_config(path).get(UPDATE_ENABLED_KEY) is True
 
 
-def set_update_check_enabled(enabled: bool, path: str = None) -> None:
+def set_update_check_enabled(enabled: bool, path: str | None = None) -> None:
     save_config({UPDATE_ENABLED_KEY: bool(enabled)}, path)
 
 
-def update_skipped_version(path: str = None) -> str:
+def update_skipped_version(path: str | None = None) -> str:
     value = load_config(path).get(UPDATE_SKIPPED_KEY)
     return value if isinstance(value, str) else ""
 
 
-def skip_update_version(version: str, path: str = None) -> None:
+def skip_update_version(version: str, path: str | None = None) -> None:
     """Persist a skipped version (INV-7). save_config swallows OSError by design, so a skip
     that cannot be written is dropped silently and the version is offered again next launch.
     That is accepted rather than made fatal -- see the spec's INV-7."""
@@ -937,14 +1058,21 @@ def download_and_verify(info, *, downloader=None, target=None) -> str:
         os.unlink(sig_tmp)
         sig_tmp = None
         return asset_tmp
-    except BaseException:
+    except BaseException as exc:
         for tmp in (asset_tmp, sig_tmp):
             if tmp:
                 try:
                     os.unlink(tmp)
                 except OSError:
                     pass
-        raise
+        # INV-8/INV-13: the only caller catches UpdateError and UpdateVerificationError and
+        # nothing else, so anything escaping as its own type would kill the worker thread with
+        # a stderr traceback and leave the "Downloading..." toast simply ending. mkstemp raises
+        # OSError on a read-only or full directory, and download_to re-raises URLError /
+        # HTTPError / SSLError / TimeoutError verbatim. Convert them; let control-flow through.
+        if isinstance(exc, (UpdateError, KeyboardInterrupt, SystemExit)):
+            raise
+        raise UpdateError(f"could not stage the update: {exc}") from exc
 
 
 def _relaunch_env() -> dict:
@@ -1027,6 +1155,39 @@ def apply_update(new_file: str, *, target=None, on_before_exec=None):
     except OSError:
         pass  # swap already committed; exit anyway so a manual restart gets the new version
     os._exit(0)
+
+
+def sweep_stale_update_temps(target=None) -> int:
+    """Delete orphaned update temps left by a download the process did not outlive (INV-15).
+
+    download_and_verify stages into the target binary's own directory and unlinks on its way
+    out, but the worker is a daemon thread: quitting mid-download freezes it at interpreter
+    finalisation, so that cleanup never runs and a partial asset of up to MAX_UPDATE_BYTES is
+    left behind. Nothing else ever removes one, so sweep at startup. Only files older than a
+    day are touched, so a download running in another instance is never pulled out from under
+    it. Returns the number removed; never raises -- a failure here must not block startup.
+    """
+    target = target or detect_installer()
+    if target is None:
+        return 0
+    directory = os.path.dirname(os.path.abspath(str(target)))
+    cutoff = time.time() - 86400
+    removed = 0
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return 0
+    for name in names:
+        if not name.startswith(".rolodex-update-"):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.unlink(path)
+                removed += 1
+        except OSError:
+            continue
+    return removed
 
 
 # ===========================================================================
@@ -1199,8 +1360,17 @@ class UnlockDialog(Gtk.Window):
             GLib.idle_add(self._unlock_fail, str(e))
 
     def _unlock_ok(self, vault, salt, pw):
-        migrate_vault(vault)
-        self.app.open_main(vault, salt, pw, self.vault_path)
+        # Everything after a SUCCESSFUL decrypt needs its own handler. This runs from a
+        # GLib.idle_add callback with the unlock button already disabled, so an exception here
+        # (a malformed vault reaching migrate_vault, a bad value in .rolodex.conf reaching
+        # MainWindow.__init__) froze the dialog on "Unlocking..." forever, with the vault
+        # decrypted in memory and nothing on screen explaining why.
+        try:
+            migrate_vault(vault)
+            self.app.open_main(vault, salt, pw, self.vault_path)
+        except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
+            self._unlock_fail(f"The vault opened but could not be loaded: {exc}")
+            return
         self.close()
 
     def _unlock_fail(self, msg):
@@ -1308,10 +1478,13 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
         self.remove_css_class("category-drop-hover")
         if not isinstance(dragged_row, EntryRow):
             return False
-        # Find the MainWindow ancestor
+        # Find the MainWindow ancestor. Report the real outcome: returning True unconditionally
+        # told GTK the drop succeeded even when the row had been rebuilt out from under the drag
+        # and get_root() no longer resolved, so the entry silently did not move.
         widget = self.get_root()
-        if hasattr(widget, "_move_entry_to_category"):
-            widget._move_entry_to_category(dragged_row.entry_id, self.category_name)
+        if not isinstance(widget, MainWindow):
+            return False
+        widget._move_entry_to_category(dragged_row.entry_id, self.category_name)
         return True
 
 
@@ -1335,15 +1508,17 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Restore saved window size or use defaults
         conf = load_config()
-        w = conf.get("window_width", 820)
-        h = conf.get("window_height", 580)
+        w = config_int(conf, "window_width", 820)
+        h = config_int(conf, "window_height", 580)
         self.set_default_size(w, h)
         if conf.get("window_maximized"):
             self.maximize()
 
         # Security timeouts (0 disables either). Read once at unlock; edit .rolodex.conf to change.
-        self._clipboard_clear_s = int(conf.get("clipboard_clear_seconds", DEFAULT_CLIPBOARD_CLEAR_SECONDS))
-        self._idle_timeout_s = int(conf.get("idle_lock_seconds", DEFAULT_IDLE_LOCK_SECONDS))
+        self._clipboard_clear_s = config_int(
+            conf, "clipboard_clear_seconds", DEFAULT_CLIPBOARD_CLEAR_SECONDS
+        )
+        self._idle_timeout_s = config_int(conf, "idle_lock_seconds", DEFAULT_IDLE_LOCK_SECONDS)
         self._idle_source_id = None
         self._last_activity = 0
 
@@ -1502,8 +1677,19 @@ class MainWindow(Adw.ApplicationWindow):
         # inert and the feature would only ever check when explicitly clicked. Deferred a few
         # seconds so it never competes with showing the window, and it stays silent: a failure
         # yields None and no dialog (INV-13).
+        #
+        # INV-15 teardown state. _update_cancelled is set by _lock and _on_close_request; both
+        # _update_worker and _install_update check it, so a download completing after the vault
+        # is locked deletes its temp instead of swapping the binary out from under the unlock
+        # screen. _silent_check_id is tracked so the deferred check cannot fire against a window
+        # that closed inside the three seconds.
+        self._update_cancelled = False
+        self._silent_check_id = 0
+        self._clipboard_timer_id = 0
+        self._clipboard_pending_value = None
+        self._rebuilding = False
         if update_check_enabled() and is_update_supported():
-            GLib.timeout_add_seconds(3, self._start_silent_update_check)
+            self._silent_check_id = GLib.timeout_add_seconds(3, self._start_silent_update_check)
 
         self._current_entry_id = None
         self._collapsed_categories: set[str] = set()
@@ -1518,6 +1704,11 @@ class MainWindow(Adw.ApplicationWindow):
         motion.connect("motion", self._bump_activity)
         self.add_controller(motion)
         keyctl = Gtk.EventControllerKey()
+        # CAPTURE, matching UnlockDialog: in the default BUBBLE phase a key consumed by the
+        # focused GtkText (the search box, every dialog entry, the notes view) never reaches
+        # this handler, so typing did not reset the activity clock and only mouse motion did.
+        # A user composing a long note was then locked out mid-edit, losing the open dialog.
+        keyctl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         keyctl.connect("key-pressed", self._bump_activity)
         self.add_controller(keyctl)
         self._start_idle_timer()
@@ -1526,12 +1717,26 @@ class MainWindow(Adw.ApplicationWindow):
     # Vault persistence
     # ------------------------------------------------------------------
 
-    def _save(self):
-        save_vault(self.vault, self.password, self.salt, self.vault_path)
+    def _save(self) -> bool:
+        """Re-encrypt and write the whole vault, surfacing a write failure. True on success.
+
+        A failed write used to escape into the GTK signal handler: PyGObject printed a traceback
+        and carried on, so the UI reported success while the in-memory vault silently diverged
+        from disk -- and _lock's "nothing unsaved to lose" comment relied on that being
+        impossible. Callers that must roll back on failure (the password change, the restore)
+        call save_vault directly instead, so they can order the write before the assignment.
+        """
+        try:
+            save_vault(self.vault, self.password, self.salt, self.vault_path)
+            return True
+        except OSError as exc:
+            self._show_message("Could Not Save", f"The vault was not written to disk: {exc}")
+            return False
 
     def _on_close_request(self, *_args):
         self._cancel_search_debounce()
         self._cancel_totp_tick()  # covers _lock too, which routes through close()
+        self._cancel_pending_update()
         save_config({
             "window_width": self.get_width(),
             "window_height": self.get_height(),
@@ -1547,7 +1752,10 @@ class MainWindow(Adw.ApplicationWindow):
         query = self.search_entry.get_text().strip()
         categories = self.vault.get("categories", [])
 
-        # Clear list
+        # Clear list. gtk_list_box_remove emits ::row-selected(NULL) for the selected row, so
+        # _on_row_selected would otherwise wipe _current_entry_id on every rebuild -- before the
+        # re-selection pass below ever gets to look for it (search.md INV-7).
+        self._rebuilding = True
         clear_container(self.listbox)
 
         select_row = None
@@ -1607,6 +1815,9 @@ class MainWindow(Adw.ApplicationWindow):
                     select_row = row
             self.count_label.set_text(f"{total} {entries_noun(total)}")
 
+        # Rebuild finished: from here the select_row() calls below are deliberate, so the
+        # handler must see them.
+        self._rebuilding = False
         if select_row:
             self.listbox.select_row(select_row)
         elif self._current_entry_id:
@@ -1620,8 +1831,10 @@ class MainWindow(Adw.ApplicationWindow):
                     self.listbox.select_row(row)
                     return
                 idx += 1
-            # Entry gone or collapsed, clear detail
-            self._current_entry_id = None
+            # Entry filtered out or inside a collapsed category. Blank the detail pane but KEEP
+            # _current_entry_id, so clearing the search or expanding the category re-selects it
+            # (search.md INV-7). Clearing it here is what broke that: typing until the selected
+            # entry dropped out of the results discarded the selection permanently.
             self.detail_stack.set_visible_child_name("empty")
 
     def _on_search_changed(self, entry):
@@ -1642,6 +1855,8 @@ class MainWindow(Adw.ApplicationWindow):
         return GLib.SOURCE_REMOVE
 
     def _on_row_selected(self, listbox, row):
+        if self._rebuilding:
+            return  # a teardown/rebuild artefact, not a user action
         if row is None:
             self._current_entry_id = None
             self.detail_stack.set_visible_child_name("empty")
@@ -1706,16 +1921,17 @@ class MainWindow(Adw.ApplicationWindow):
             row.add_css_class(f"field-{field_category(field['label'])}")
 
             # Value display
-            if field.get("sensitive") and not self._revealed:
+            is_sensitive = field_is_sensitive(field)
+            if is_sensitive and not self._revealed:
                 display = MASK
             else:
                 display = field["value"]
 
             val_label = Gtk.Label(label=display)
             val_label.set_selectable(True)
-            if field.get("sensitive") and not self._revealed:
+            if is_sensitive and not self._revealed:
                 val_label.add_css_class("field-masked")
-            elif field.get("sensitive") and self._revealed:
+            elif is_sensitive and self._revealed:
                 val_label.add_css_class("field-revealed-sensitive")
             row.add_suffix(val_label)
 
@@ -1872,9 +2088,15 @@ class MainWindow(Adw.ApplicationWindow):
             self._toast("Clipboard not available")
             return
         delay = self._clipboard_clear_s
+        # Remember what was copied whatever the delay: with clipboard_clear_seconds = 0 there is
+        # no timer at all, and a lock still has to be able to wipe it (ROLO-0003).
+        self._cancel_clipboard_timer()
+        self._clipboard_pending_value = value
         if delay > 0:
             self._toast(f"Copied {label} — clipboard clears in {delay}s")
-            GLib.timeout_add_seconds(delay, self._clear_clipboard_if_unchanged, value)
+            self._clipboard_timer_id = GLib.timeout_add_seconds(
+                delay, self._clear_clipboard_if_unchanged, value
+            )
         else:
             self._toast(f"Copied {label}")
 
@@ -1883,12 +2105,49 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _clear_clipboard_if_unchanged(self, value):
         """Wipe the clipboard, but only if it still holds the secret we copied (ROLO-0003)."""
+        self._clipboard_timer_id = 0  # this source removes itself via the False returns below
         current = read_clipboard()
-        # If a reader is available and the clipboard has moved on, leave the user's new copy alone.
-        if current is not None and current != value:
+        # If a reader is available and the clipboard has moved on, leave the user's new copy
+        # alone. wl-copy --trim-newline stores a trailing-newline value trimmed, so compare
+        # against the trimmed form too -- otherwise such a value never matches and the secret
+        # stays on the clipboard for good.
+        if current is not None and current != value and current != value.rstrip("\n"):
+            self._clipboard_pending_value = None
             return False
+        # No reader available falls through to the wipe deliberately: for a credential manager,
+        # clearing a clipboard we cannot inspect is the safe direction.
         copy_to_clipboard("")
+        self._clipboard_pending_value = None
         return False  # one-shot timeout
+
+    def _cancel_clipboard_timer(self):
+        if self._clipboard_timer_id:
+            GLib.source_remove(self._clipboard_timer_id)
+            self._clipboard_timer_id = 0
+
+    def _clear_clipboard_on_lock(self):
+        """A lock must not leave a copied secret on the clipboard.
+
+        The auto-clear timer alone cannot cover this: it may still be pending, and with
+        clipboard_clear_seconds = 0 -- a documented setting -- there is no timer at all, so
+        without this the secret would sit there indefinitely.
+        """
+        pending = self._clipboard_pending_value
+        self._cancel_clipboard_timer()
+        if pending is not None:
+            self._clear_clipboard_if_unchanged(pending)
+
+    def _cancel_pending_update(self):
+        """INV-15: tear down anything the update path has in flight.
+
+        The worker thread cannot be killed, so it is told to abandon its result instead: it and
+        _install_update both read _update_cancelled, and whichever reaches the staged file first
+        unlinks it.
+        """
+        self._update_cancelled = True
+        if self._silent_check_id:
+            GLib.source_remove(self._silent_check_id)
+            self._silent_check_id = 0
 
     # --- Opt-in signed auto-update (ROLO-0037) --------------------------------------------
 
@@ -1908,6 +2167,7 @@ class MainWindow(Adw.ApplicationWindow):
         timeout does not repeat."""
         import threading
 
+        self._silent_check_id = 0  # this source removes itself via the False return below
         threading.Thread(target=self._silent_update_worker, daemon=True).start()
         return False
 
@@ -1979,10 +2239,29 @@ class MainWindow(Adw.ApplicationWindow):
         except UpdateError as exc:
             GLib.idle_add(self._show_message, "Update failed", str(exc))
             return
+        # INV-15: the window may have been locked or closed while this ran. Drop the download
+        # rather than installing something the user is no longer consenting to.
+        if self._update_cancelled:
+            try:
+                os.unlink(staged)
+            except OSError:
+                pass
+            return
         GLib.idle_add(self._install_update, staged)
 
     def _install_update(self, staged):
-        """Swap and relaunch. apply_update does not return -- it replaces this process."""
+        """Swap and relaunch. apply_update does not return -- it replaces this process.
+
+        Re-checks the cancel flag (INV-15): this runs from an idle callback, so the vault can
+        have been locked between _update_worker's own check and this call. Installing then would
+        swap the binary and relaunch underneath the unlock screen.
+        """
+        if self._update_cancelled:
+            try:
+                os.unlink(staged)
+            except OSError:
+                pass
+            return
         try:
             apply_update(staged, on_before_exec=self._wipe_secrets_for_update)
         except UpdateError as exc:
@@ -1999,7 +2278,13 @@ class MainWindow(Adw.ApplicationWindow):
         self.salt = None
 
     def _toast(self, msg):
-        self._toast_overlay.add_toast(Adw.Toast(title=msg, timeout=2))
+        # AdwToast:use-markup defaults to TRUE, so this is a Pango markup sink and callers
+        # interpolate raw field labels into it. A label of "AT&T" or "<work>" produced a parse
+        # failure and a toast that rendered wrong or not at all. security-standards.md requires
+        # escaping at every markup sink.
+        self._toast_overlay.add_toast(
+            Adw.Toast(title=GLib.markup_escape_text(str(msg)), timeout=2)
+        )
 
     # ------------------------------------------------------------------
     # Keyboard shortcuts (ROLO-0007)
@@ -2015,7 +2300,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._toast("Select an entry first")
             return
         field = next((f for f in self.vault["entries"][entry_id]["fields"]
-                      if f.get("sensitive")), None)
+                      if field_is_sensitive(f)), None)
         if field is None:
             self._toast("No sensitive field to copy")
             return
@@ -2062,8 +2347,16 @@ class MainWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._idle_source_id)
             self._idle_source_id = None
         self._cancel_search_debounce()
-        # Wipe secrets from memory before showing the lock screen. Every mutation already saves
-        # via _save(), so there is nothing unsaved to lose here.
+        self._cancel_pending_update()
+        self._clear_clipboard_on_lock()
+        # Drop the rendered entry as well: detail_box holds the last-viewed values as label text
+        # and one copy closure per field, so clearing self.vault alone leaves them reachable.
+        clear_container(self.detail_box)
+        self.detail_stack.set_visible_child_name("empty")
+        self._current_entry_id = None
+        # Wipe secrets from memory before showing the lock screen. Every mutation saves via
+        # _save(), which now surfaces a write failure rather than letting it escape -- so
+        # anything still unsaved at this point has already been reported to the user.
         self.vault = None
         self.salt = None
         self.password = None
@@ -2166,9 +2459,12 @@ class MainWindow(Adw.ApplicationWindow):
         if not filepath:
             return
 
+        if self.vault is None:
+            return  # the idle lock fired while the file dialog held the input grab
+
         try:
             parsed = parse_text_file(filepath)
-        except Exception as e:
+        except (OSError, UnicodeDecodeError, ValueError) as e:
             self._show_message("Import Error", str(e))
             return
 
@@ -2181,10 +2477,12 @@ class MainWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def _finish_import(self, parsed):
+        if self.vault is None:
+            return  # locked while the preview dialog was open
         imported, skipped = import_entries(self.vault, parsed)
         self._save()
         self._refresh_list()
-        msg = f"Imported {imported} entries."
+        msg = f"Imported {imported} {entries_noun(imported)}."
         if skipped:
             msg += f" Skipped {skipped} duplicates."
         self._toast(msg)
@@ -2211,11 +2509,18 @@ class MainWindow(Adw.ApplicationWindow):
         filepath = gfile.get_path()
         if not filepath:
             return
+        # write_private_file rather than copy2 + chmod: copyfile creates the destination through
+        # open(dst, 'wb'), i.e. 0644 under the usual umask, and writes the whole ciphertext
+        # before chmod narrows it -- a real window for a local reader, against
+        # security-standards.md's "created 0600". It also truncates the destination first, so an
+        # interrupted backup over a previous good one destroyed it; write_private_file stages a
+        # temp and os.replace()s, so the old backup survives a failure intact.
         try:
-            shutil.copy2(self.vault_path, filepath)
-            os.chmod(filepath, 0o600)
+            with open(self.vault_path, "rb") as fp:
+                blob = fp.read()
+            write_private_file(filepath, blob)
             self._toast("Vault backed up")
-        except Exception as e:
+        except OSError as e:
             self._show_message("Backup Error", str(e))
 
     # ------------------------------------------------------------------
@@ -2260,17 +2565,32 @@ class MainWindow(Adw.ApplicationWindow):
         filepath = gfile.get_path()
         if not filepath:
             return
+        if self.vault is None:
+            return  # the idle lock fired while the file dialog held the input grab
         # Prompt for the backup's master password
         self._restore_path = filepath
         pw_dialog = RestorePasswordDialog(self)
         pw_dialog.present(self)
 
     def _finish_restore(self, vault, salt, password):
-        migrate_vault(vault)
+        if self.vault is None:
+            return  # the vault was locked while the file dialog was open
+        migrate_vault(vault)  # INV-13: migrate before the backup becomes live
+        # Write first, adopt second -- the same ordering as the password change and for the same
+        # reason: a failed write would leave the session holding the backup's credentials while
+        # contacts.vault still held the original, and the next edit's save would then overwrite
+        # the original with a restore the user had been told did not happen.
+        try:
+            save_vault(vault, password, salt, self.vault_path)
+        except OSError as exc:
+            self._show_message(
+                "Restore Failed",
+                f"The backup could not be written to the vault, so nothing changed: {exc}",
+            )
+            return
         self.vault = vault
         self.salt = salt
         self.password = password
-        self._save()
         self._current_entry_id = None
         self.detail_stack.set_visible_child_name("empty")
         self._refresh_list()
@@ -2312,6 +2632,8 @@ class MainWindow(Adw.ApplicationWindow):
         filepath = gfile.get_path()
         if not filepath:
             return
+        if self.vault is None:
+            return  # the idle lock fired while the file dialog held the input grab
 
         entries = list_entries(self.vault)
         lines = []
@@ -2341,9 +2663,25 @@ class MainWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def _finish_change_password(self, new_pw):
+        """Rotate the salt and re-encrypt under the new password (INV-11).
+
+        The write comes FIRST and the session state is adopted only once it has landed. The
+        other order rotated self.password and self.salt unconditionally, so a failed write left
+        the session holding credentials the on-disk vault did not use: the change looked like it
+        had not taken, and the next successful save from any edit then silently re-encrypted the
+        vault under a password the user may never have written down. There is no recovery path.
+        """
+        new_salt = os.urandom(16)
+        try:
+            save_vault(self.vault, new_pw, new_salt, self.vault_path)
+        except OSError as exc:
+            self._show_message(
+                "Password Not Changed",
+                f"The vault could not be written, so your master password is unchanged: {exc}",
+            )
+            return
         self.password = new_pw
-        self.salt = os.urandom(16)
-        self._save()
+        self.salt = new_salt
         self._toast("Master password changed")
 
     # ------------------------------------------------------------------
@@ -2426,6 +2764,10 @@ class MainWindow(Adw.ApplicationWindow):
 
         popover.set_child(vbox)
         popover.connect("closed", lambda p: p.unparent())
+        # Also unparent if the row is disposed first: _refresh_list() can rebuild the sidebar
+        # from another source (the idle lock, the search debounce) while this menu is open,
+        # destroying the parent row out from under a live popover child.
+        entry_row.connect("destroy", lambda _r, p=popover: p.unparent() if p.get_parent() else None)
         popover.popup()
 
     # ------------------------------------------------------------------
@@ -2470,6 +2812,10 @@ class FieldRow(Gtk.ListBoxRow):
         self.value_entry.set_size_request(160, -1)
         box.append(self.value_entry)
 
+        # Latches once the user toggles "Hide" by hand, after which the label no longer drives
+        # sensitivity (see on_label_changed).
+        self._sens_user_set = False
+
         if sensitive is None:
             sensitive = is_sensitive_label(label)
 
@@ -2495,6 +2841,9 @@ class FieldRow(Gtk.ListBoxRow):
         # The "Hide" checkbox decides whether the value is a secret. Toggling it resets any
         # peek and shows/hides the generator button (generating only makes sense for secrets).
         def on_sens_toggled(check):
+            # The user has now decided this field's sensitivity by hand; stop re-deriving it
+            # from the label (see on_label_changed).
+            self._sens_user_set = True
             self._peek = False
             self.gen_btn.set_visible(check.get_active())
             self._update_value_visibility()
@@ -2503,6 +2852,12 @@ class FieldRow(Gtk.ListBoxRow):
         # Auto-check "Hide" when the label gains a sensitive keyword (one-way; the user can
         # un-check manually). Removing the keyword leaves the checkbox as-is.
         def on_label_changed(entry):
+            # Auto-detect only until the user overrides it. This fires on every KEYSTROKE, not
+            # on a keyword transition, so without the latch: un-tick "Hide" on a field labelled
+            # "Password", then fix a typo anywhere in that label, and it silently re-ticked.
+            # INV-10 promises the override works in both directions.
+            if self._sens_user_set:
+                return
             if is_sensitive_label(entry.get_text()):
                 self.sens_check.set_active(True)
         self.label_entry.connect("changed", on_label_changed)
@@ -2533,6 +2888,17 @@ class FieldRow(Gtk.ListBoxRow):
         the user is peeking; the icon appears only on sensitive fields and reflects state."""
         sensitive = self.sens_check.get_active()
         self.value_entry.set_visibility(not sensitive or self._peek)
+        # Tell the platform this is a secret. Without these an input method may keep it in
+        # candidate/history state that outlives the process, and spellcheck and the emoji picker
+        # stay live over a vault password -- none of which set_visibility(False) prevents.
+        if sensitive:
+            self.value_entry.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+            self.value_entry.set_input_hints(
+                Gtk.InputHints.PRIVATE | Gtk.InputHints.NO_SPELLCHECK | Gtk.InputHints.NO_EMOJI
+            )
+        else:
+            self.value_entry.set_input_purpose(Gtk.InputPurpose.FREE_FORM)
+            self.value_entry.set_input_hints(Gtk.InputHints.NONE)
         pos = Gtk.EntryIconPosition.SECONDARY
         if sensitive:
             self.value_entry.set_icon_from_icon_name(
@@ -2579,6 +2945,11 @@ class FieldRow(Gtk.ListBoxRow):
             pw = generate_password(length=int(length_spin.get_value()), **opts)
             self.value_entry.set_text(pw)
             self.sens_check.set_active(True)  # a generated value is a secret — save it masked
+            # The generator button is only visible when "Hide" is already on, so set_active(True)
+            # is a no-op and the toggled handler never runs -- which left _peek set, so a
+            # password generated while peeking stayed on screen in cleartext. Reset it here.
+            self._peek = False
+            self._update_value_visibility()
             pop.popdown()
         gen.connect("clicked", do_generate)
 
@@ -2680,7 +3051,7 @@ class AddEditDialog(Adw.Dialog):
 
         if entry:
             for field in entry["fields"]:
-                row = FieldRow(self, field["label"], field["value"], field.get("sensitive", False))
+                row = FieldRow(self, field["label"], field["value"], field_is_sensitive(field))
                 self.fields_listbox.append(row)
         else:
             self.fields_listbox.append(FieldRow(self, "Username", ""))
@@ -2801,12 +3172,19 @@ class AddEditDialog(Adw.Dialog):
         fields = []
         for row in self._get_field_rows():
             label = row.label_entry.get_text().strip()
-            value = row.value_entry.get_text().strip()
-            if label or value:
+            # The value is stored VERBATIM. Stripping it silently altered any secret with a
+            # meaningful leading or trailing space, with no warning and no way to express one --
+            # and _snapshot() compares the unstripped text, so the dirty check and the commit
+            # disagreed about what the form held. Only the emptiness test trims.
+            value = row.value_entry.get_text()
+            if label or value.strip():
                 fields.append({
                     "label": label or "Unlabeled",
                     "value": value,
-                    "sensitive": row.sens_check.get_active(),
+                    # A recognised TOTP seed is stored sensitive whatever the checkbox says --
+                    # see field_is_sensitive() for why the label keywords cannot decide this.
+                    "sensitive": row.sens_check.get_active()
+                    or parse_totp_field(label, value) is not None,
                 })
 
         buf = self.notes_view.get_buffer()
@@ -3070,6 +3448,11 @@ class RestorePasswordDialog(Adw.Dialog):
             GLib.idle_add(self._unlock_fail, str(e))
 
     def _unlock_ok(self, vault, salt, pw):
+        # The KDF runs on a background thread and Cancel/Esc only closes this dialog -- it does
+        # not cancel or disown the thread. Without this check a cancelled restore still landed
+        # and overwrote the live vault, which is the one operation here that cannot be undone.
+        if not self.get_presented():
+            return
         self.main_win._finish_restore(vault, salt, pw)
         self.close()
 
@@ -3280,9 +3663,17 @@ class ManageCategoriesDialog(Adw.Dialog):
 
     def _reorder_category(self, dragged_row, target_row):
         cats = self.main_win.vault["categories"]
+        if dragged_row.cat_name not in cats or target_row.cat_name not in cats:
+            return  # stale row reference (matches _reorder_field's guard)
         old_idx = cats.index(dragged_row.cat_name)
+        target_idx = cats.index(target_row.cat_name)
         cats.pop(old_idx)
         new_idx = cats.index(target_row.cat_name)
+        # Dropping onto a row BELOW the dragged one inserts after it. Computing the index after
+        # the pop and always inserting before the target made the last slot unreachable by drag,
+        # and there is no other way to reorder categories.
+        if old_idx < target_idx:
+            new_idx += 1
         cats.insert(new_idx, dragged_row.cat_name)
         self.main_win._save()
         self._rebuild_list()
@@ -3303,7 +3694,19 @@ class UpdateDialog(Adw.AlertDialog):
     """
 
     def __init__(self, main_win, info):
-        notes = (info.notes or "").strip()
+        # info.notes is the GitHub release body: fetched over TLS but NOT covered by the Ed25519
+        # signature, which per INV-8 protects only the asset bytes. So this is unauthenticated
+        # remote text rendering inside a native-looking dialog in a password manager. Strip the
+        # control and bidi-override characters that would let it disguise itself as app UI --
+        # markup is already off, since AdwAlertDialog:body-use-markup defaults FALSE.
+        # str.isprintable() is False for every Cf format character, which is the whole
+        # bidi-override family (U+202A-U+202E, U+200E/F, U+2066-U+2069) as well as the C0/C1
+        # controls -- so it covers the attack on its own. An explicit range here would have to
+        # spell those codepoints out, and writing them as literals puts real bidi overrides into
+        # this source file: the Trojan Source hazard, introduced by the guard against it.
+        notes = "".join(
+            ch for ch in (info.notes or "") if ch in "\n\t" or ch.isprintable()
+        ).strip()
         if len(notes) > 1500:
             notes = notes[:1500].rstrip() + "\n\n(...)"
         super().__init__(
@@ -3758,6 +4161,8 @@ class RolodexApp(Adw.Application):
 
     def do_startup(self):
         Adw.Application.do_startup(self)
+        # INV-15: remove update temps orphaned by a download whose process did not outlive it.
+        sweep_stale_update_temps()
         css_provider = Gtk.CssProvider()
         css_provider.load_from_string(CUSTOM_CSS)
         Gtk.StyleContext.add_provider_for_display(
@@ -3767,6 +4172,15 @@ class RolodexApp(Adw.Application):
         )
 
     def do_activate(self):
+        # Single-instance app (FLAGS_NONE): a second launch delivers activate() to the running
+        # process rather than starting a new one. Without this guard that built a fresh
+        # UnlockDialog over the live window, and unlocking it created a SECOND MainWindow --
+        # two owners of persistence, each saving the whole vault, so edits made in one were
+        # silently destroyed by the next save from the other.
+        existing = self.props.active_window
+        if existing is not None:
+            existing.present()
+            return
         is_new = not os.path.exists(self.vault_path)
         win = UnlockDialog(self, self.vault_path, is_new)
         win.present()
@@ -3786,7 +4200,9 @@ def main():
         print("rolodex selftest: OK (GTK/Adw/cryptography loaded)")
         return
     app = RolodexApp()
-    app.run(sys.argv)
+    # Propagate the exit status: discarding it meant a GApplication startup failure still exited
+    # 0, so a wrapper script or a CI step could not tell that the app never started.
+    sys.exit(app.run(sys.argv))
 
 
 if __name__ == "__main__":

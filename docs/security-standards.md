@@ -11,14 +11,25 @@ internal checklist. When the two overlap, they must agree.
    Do not add logging, temp files, crash dumps, or caches that contain field values or the
    master password.
 
-2. **Every secret-bearing file (vault, export, backup) is created `0600`.** Use
-   `os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)` and write through the returned
-   fd. Never `open(path, "w")` for vault or export data — that respects the umask and can be
-   world-readable. Backups also `os.chmod(..., 0o600)` after copy. (The non-secret
-   `.rolodex.conf` window-geometry file is deliberately written with plain `open` and is exempt —
-   it holds no secrets.)
+2. **Every secret-bearing file (vault, export, backup) is created `0600`.** Route every such
+   write through `write_private_file()`, which stages via `tempfile.mkstemp` (0600 from
+   creation), `fsync`s, and `os.replace`s into position — so the file is never briefly
+   world-readable and an interrupted write cannot truncate the previous good copy
+   (`vault-format-and-crypto.md` INV-9 / INV-16). Never `open(path, "w")` for vault, export or
+   backup data — that respects the umask and can be world-readable. **Never `shutil.copy2` then
+   `chmod` either**: `copyfile` creates the destination through `open(dst, 'wb')` and writes the
+   whole payload before `copystat` narrows it. (The non-secret `.rolodex.conf` file is exempt
+   from the 0600 rule — it holds no secrets — though it is written atomically for durability.)
 
-3. **Don't weaken the KDF.** `ITERATIONS = 600_000` PBKDF2-HMAC-SHA256 is the floor. It may be
+   This clause described `os.open(..., O_TRUNC, 0o600)` until 1.3.1 made vault writes atomic.
+   That form is no longer used anywhere and following it would silently undo INV-16.
+
+3. **A secret-bearing file that is a signing key is covered too.** `scripts/gen-signing-key.py`
+   writes the release private key with `os.open(..., O_CREAT | O_EXCL, 0o600)`, and CI never
+   writes it to disk at all — `.github/workflows/build.yml` reads it from the environment. Do
+   not add a path that stages it in a workspace.
+
+4. **Don't weaken the KDF.** `ITERATIONS = 600_000` PBKDF2-HMAC-SHA256 is the floor. It may be
    raised (with a migration path), never lowered. The salt stays 16 random bytes, unique per
    vault, generated with `os.urandom`.
 

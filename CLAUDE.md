@@ -35,9 +35,11 @@ contract: `docs/specs/vault-format-and-crypto.md`:
 - On-disk format is `MAGIC(4 bytes "VLT1") + salt(16 bytes) + Fernet ciphertext`.
 - Key = PBKDF2-HMAC-SHA256, 600k iterations, over the master password + per-vault salt,
   fed into Fernet. The salt is stored in the clear inside the file (standard practice).
-- Secret files are written owner-only (`0o600`): `save_vault` and the plaintext export use
-  `os.open(..., O_CREAT, 0o600)`; the backup path copies the vault then `os.chmod(..., 0o600)`.
-  Keep any new secret-writing path `0o600`.
+- Secret files are written owner-only (`0o600`) through **one helper**: `write_private_file()`,
+  which `mkstemp`s at 0600, `fsync`s and `os.replace`s. `save_vault`, the plaintext export and
+  the backup path all route through it. Keep any new secret-writing path on that helper — a
+  plain `open(path, "w")` respects the umask, and `shutil.copy2` + `chmod` leaves the file
+  world-readable for the length of the copy.
 
 **Data model** — the decrypted vault is one dict:
 ```

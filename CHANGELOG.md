@@ -8,6 +8,9 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Regression tests for every fix above that can be tested without a display**
+  31 new tests covering the vault, config, import, clipboard, two-factor and updater fixes. Verified by mutation testing: reintroducing each defect makes the suite fail.
+
 - **Opt-in update check that only ever installs a signed release** (ROLO-0037)
   Rolodex can now tell you when a newer version is out and install it for you.
   It **never checks on its own until you turn it on** — tick "Check for updates
@@ -32,6 +35,69 @@ All notable changes to Rolodex are documented here. The format is based on
   signing key added to the repository, the built-in key is a placeholder that
   verifies nothing, so the feature offers updates it will refuse to install.
   That is deliberate — it fails closed rather than open.
+
+### Changed
+
+- **Build and CI hardening**
+  All GitHub Actions are pinned to a specific commit rather than a moving tag, so a re-pointed tag cannot introduce new code into a release build. Checkout no longer leaves credentials in the workspace. The Linux and macOS build self-tests have the same timeout the Windows one already had, so a hang fails the build instead of blocking a runner for six hours. certifi is now named in the build scripts' prerequisites and asserted by the local CI gate, since the release binaries are built with it. A missing typelib now fails the Windows build immediately rather than producing a binary that fails mysteriously at runtime.
+
+### Fixed
+
+- **Several smaller correctness fixes**
+  A failed update download now reports itself instead of ending silently. A vault written by a future version of Rolodex is refused rather than relabelled. "Hide" no longer re-ticks itself after you un-tick it and then edit the label. Secret fields tell the system not to keep them in input-method history or spellcheck. Generating a password while peeking no longer leaves it on screen. Short generated passwords can now contain digits and symbols. A malformed otpauth:// link no longer makes an entry unopenable. Two-factor settings outside the standard ranges are rejected. A base32 seed containing characters that look like base32 after case-folding is rejected rather than silently decoded to the wrong secret. Toast messages escape field labels, so a label containing "&" or "<" displays correctly. Release notes from GitHub are stripped of control and text-direction characters before being shown.
+
+- **Dragging a category to the bottom of the list now works**
+  A dragged category always landed just above the one you dropped it on, so the last position was unreachable and there was no other way to get there.
+
+- **Backups are created private, and an interrupted backup cannot destroy the previous one**
+  The backup was created readable by other users and only made private afterwards, leaving a window during which the whole encrypted vault was exposed. It also overwrote the destination in place, so a backup interrupted over a previous good one destroyed it.
+
+- **Importing an empty file no longer creates a nameless entry**
+  An empty or blank file produced one entry with no name instead of the "No entries found in file." message.
+
+- **Clearing the search box brings back the entry you had selected**
+  Typing until the selected entry dropped out of the results discarded the selection for good; clearing the search then showed nothing. Collapsing a category did the same.
+
+- **A hand-edited settings file can no longer stop the app opening**
+  A stray value in .rolodex.conf — which the README invites you to edit — crashed during startup and left the unlock window stuck on "Unlocking..." forever. Bad values now fall back to their defaults, the settings file is written atomically so an interrupted save cannot blank it, and any failure after a successful unlock is now shown rather than freezing the dialog.
+
+- **A corrupt vault now says so instead of reporting a wrong password**
+  A truncated or damaged vault file failed to decrypt and was reported as "Wrong password." — which, for an app with no password recovery, invites you to delete the file and start again, destroying something a backup restore could have salvaged.
+
+- **Passwords with a leading or trailing space are stored exactly as typed**
+  Saving an entry trimmed spaces off every value, silently altering any secret that deliberately had one, with no way to express it.
+
+- **Copying works on macOS and Windows, and no longer fails on Linux when wl-clipboard is installed under X11**
+  Copying only ever tried the three Linux clipboard tools, so it did nothing at all on macOS and Windows. Separately, it gave up on the first tool it found even when that tool failed — so merely having wl-clipboard installed on an X11 desktop broke every copy, while a working alternative sat untried.
+
+- **Typing now counts as activity for the auto-lock**
+  Only mouse movement reset the idle timer, so writing a long note without touching the mouse got you locked out mid-edit, losing the open dialog. The comment in the code had claimed key presses counted; now they do.
+
+- **Cancelling a restore now actually cancels it**
+  Pressing Cancel or Escape while a backup was being unlocked closed the dialog but did not stop the work, so a cancelled restore still went on to overwrite your live vault.
+
+- **Opening Rolodex a second time no longer creates a second window that overwrites the first**
+  Launching Rolodex while it was already running put a fresh unlock screen over the live window, and unlocking made a second, independent copy of your vault in memory. Whichever window saved last wiped out the other's changes with no warning. A second launch now just brings the existing window forward.
+
+- **Changing your master password can no longer leave you locked out**
+  The new password was adopted before the re-encrypted vault was known to have been written. If that write failed, the app looked like the change had not taken while actually holding the new password — and the next edit would quietly re-encrypt your vault with a password you may never have written down. The vault is now written first and the new password adopted only once it has landed. Restoring from a backup had the same flaw and is fixed the same way.
+
+- **A failed save is now reported instead of silently pretending to work**
+  If the vault could not be written — a full disk, a read-only folder — the app carried on as though it had saved. You would only find out at the next unlock, with the change gone. It now tells you.
+
+- **An update that finishes after you lock the app no longer installs itself**
+  If a download completed after you locked or closed Rolodex, it went ahead and replaced the program and restarted it — potentially while you were typing your master password into the lock screen. It now discards the download instead. Leftover part-downloaded files, which nothing previously removed, are also cleaned up at startup.
+
+### Security
+
+- **Locking now clears the clipboard and the on-screen entry**
+  Locking the vault left a copied password on the clipboard until its timer ran out — and forever if you had turned the clipboard timer off. It also left the last-viewed entry's values in the window. Both are now cleared when you lock.
+
+- **Two-factor seeds are now hidden like any other secret**
+  A field holding a 2FA seed was shown in plain text unless its label happened to contain one of the general secret keywords — so a field named "2FA" or "TOTP" displayed the long-term secret openly, right next to the code generated from it. Recognised seeds are now always hidden, including an otpauth:// link pasted under any label at all. This applies to entries already in your vault, not only newly saved ones.
+
+- **The release-signing key no longer sits in a job that has already run third-party code**
+  The workflow that builds Rolodex is now split in two. Building happens with no signing key present and read-only permissions; a separate step downloads the finished binaries onto one clean machine, installs a fixed version of its one dependency, and only then signs them. The key is also read straight from its secret store rather than being written to a file, so it can no longer be left behind on disk when a step fails partway.
 
 ## [1.3.1] - 2026-08-27
 

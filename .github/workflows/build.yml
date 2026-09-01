@@ -9,6 +9,15 @@ name: Build binaries
 # (packaging/{linux,windows,macos}-build.sh). Keeping the build logic in those scripts means
 # CI-local.sh and this workflow can't drift. The Windows and macOS jobs are best-effort — GTK
 # is Linux-first.
+#
+# TWO JOBS, and the split is a security boundary rather than tidiness. `build` runs a large
+# amount of unpinned third-party code — apt, MSYS2/pacman, Homebrew, pip, PyInstaller itself —
+# so it holds no secret and only a read-scoped token. `sign-and-release` never builds anything:
+# it downloads the finished artifacts onto one clean runner, installs a pinned cryptography
+# BEFORE the signing key is in scope, and only then signs. Compromise of the release-signing key
+# is remote code execution on every Rolodex user (SECURITY.md § The update check), so it must
+# not sit in a job that has already executed arbitrary upstream code — and it is now held on one
+# runner per release rather than three.
 
 on:
   workflow_dispatch:
@@ -16,13 +25,22 @@ on:
     tags:
       - "v*"
 
+# Least privilege at the top; sign-and-release raises its own job to contents: write.
 permissions:
-  contents: write # needed to attach binaries to a Release on tag builds
+  contents: read
+
+# Three matrix jobs previously raced to create the same release. One publisher now, but keep a
+# group so two pushes to one tag cannot interleave.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     name: ${{ matrix.asset }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false # one OS failing must not cancel the others
       matrix:
@@ -35,7 +53,9 @@ jobs:
             asset: rolodex-macos-arm64
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # ---- Linux: GTK stack from apt, PyInstaller from pip ----
       - name: Install GTK stack (Linux)
@@ -53,7 +73,7 @@ jobs:
       # ---- Windows: GTK stack + Python from MSYS2 (UCRT64) ----
       - name: Set up MSYS2 (Windows)
         if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: UCRT64
           update: true
@@ -71,31 +91,53 @@ jobs:
           bash packaging/windows-build.sh "${{ matrix.asset }}"
 
       # ---- macOS: GTK stack from Homebrew (unsigned build) ----
+      #
+      # No `|| true` on the pip install: certifi is the CA bundle the frozen binary's TLS trust
+      # depends on (ROLO-0037 D7), and rolodex.py imports it defensively, so a swallowed failure
+      # here shipped a macOS release with no bundled trust store and nothing reported it.
       - name: Build + self-test (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install gtk4 libadwaita pygobject3 py3cairo pyinstaller
-          "$(brew --prefix)/bin/python3" -m pip install --break-system-packages --upgrade cryptography certifi || true
+          "$(brew --prefix)/bin/python3" -m pip install --break-system-packages --upgrade cryptography certifi
           bash packaging/macos-build.sh "${{ matrix.asset }}"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.asset }}
           path: out/${{ matrix.asset }}
           if-no-files-found: error
 
-      # ---- Sign the binary so the in-app updater will install it (ROLO-0037) ----
-      #
-      # Ed25519 over the exact bytes of the artifact, published beside it as <asset>.sig.
-      # rolodex.py carries the matching PUBLIC key and installs a download only if it
-      # verifies, so an unsigned or wrongly-signed release is one the updater refuses.
-      #
-      # Skipped when ROLODEX_SIGNING_KEY is unset, which is the state before anyone has run
-      # scripts/gen-signing-key.py. That degrades safely: no .sig means the updater makes no
-      # offer at all, rather than offering something it cannot verify.
-      - name: Sign the binary (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/v')
+  # ---- Sign the binaries so the in-app updater will install them (ROLO-0037) ----
+  #
+  # Ed25519 over the exact bytes of each artifact, published beside it as <asset>.sig.
+  # rolodex.py carries the matching PUBLIC key and installs a download only if it verifies, so
+  # an unsigned or wrongly-signed release is one the updater refuses.
+  #
+  # Skipped when ROLODEX_SIGNING_KEY is unset, which is the state before anyone has run
+  # scripts/gen-signing-key.py. That degrades safely: no .sig means the updater makes no offer
+  # at all, rather than offering something it cannot verify.
+  sign-and-release:
+    name: Sign + publish
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to attach binaries to a Release
+    steps:
+      - name: Download built binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: out
+          merge-multiple: true
+
+      # Deliberately a SEPARATE step from the signing one, and pinned: this installs from the
+      # network, and it must not run while the signing key is in the environment.
+      - name: Install signing dependency (no secret in scope)
+        run: python3 -m pip install --break-system-packages 'cryptography==50.0.1'
+
+      - name: Sign the binaries
         env:
           SIGNING_KEY: ${{ secrets.ROLODEX_SIGNING_KEY }}
         shell: bash
@@ -105,29 +147,34 @@ jobs:
             echo "The in-app updater will not offer this release. See scripts/gen-signing-key.py."
             exit 0
           fi
-          python3 -m pip install --upgrade --break-system-packages cryptography 2>/dev/null \
-            || python3 -m pip install --upgrade cryptography
-          printf '%s' "$SIGNING_KEY" > signing.pem
-          python3 - "out/${{ matrix.asset }}" <<'EOF'
-          import sys
+          # The key is read from the environment and never written to disk. A shell redirect
+          # created signing.pem at the process umask (0644), and its `rm -f` sat after the
+          # heredoc — unreachable under `bash -eo pipefail` on any failure, so a raise inside
+          # the Python left the private key in the workspace for the rest of the job.
+          python3 <<'EOF'
+          import glob
+          import os
           from cryptography.hazmat.primitives import serialization
-          key = serialization.load_pem_private_key(open("signing.pem", "rb").read(), password=None)
-          target = sys.argv[1]
-          with open(target, "rb") as fh:
-              signature = key.sign(fh.read())
-          assert len(signature) == 64, len(signature)
-          with open(target + ".sig", "wb") as fh:
-              fh.write(signature)
-          print(f"signed {target} -> {target}.sig")
-          EOF
-          rm -f signing.pem
 
-      - name: Attach to Release (tag builds only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v3
+          key = serialization.load_pem_private_key(
+              os.environ["SIGNING_KEY"].encode(), password=None
+          )
+          targets = [p for p in glob.glob("out/*") if not p.endswith(".sig")]
+          if not targets:
+              raise SystemExit("no artifacts to sign under out/")
+          for target in sorted(targets):
+              with open(target, "rb") as fh:
+                  signature = key.sign(fh.read())
+              assert len(signature) == 64, len(signature)
+              with open(target + ".sig", "wb") as fh:
+                  fh.write(signature)
+              print(f"signed {target} -> {target}.sig")
+          EOF
+
+      - name: Attach to Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          # The .sig rides along when signing ran; the glob simply matches nothing when it
+          # The .sig files ride along when signing ran; the glob simply matches nothing when it
           # did not, so an unsigned release still publishes its binaries.
           files: |
-            out/${{ matrix.asset }}
-            out/${{ matrix.asset }}.sig
+            out/*

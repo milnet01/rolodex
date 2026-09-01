@@ -49,8 +49,9 @@ its GitHub Actions job:
 
 Windows and macOS **cannot** be built on Linux (no MSYS2 GTK under Wine; no macOS build
 environment off Apple hardware — see `ROADMAP.md` ROLO-0031). Build those on their native
-runners: push a `v*` tag to build + publish all three to a Release, or run the workflow without
-publishing via `gh workflow run "Build binaries"`.
+runners: push a `v*` tag to build + publish all three to a Release, or run the workflow from a
+branch without publishing via `gh workflow run "Build binaries"`. (`workflow_dispatch` also
+accepts a tag as its ref — a manual run launched against a `v*` tag does sign and publish.)
 
 **Before every push, run the local CI gate** — it runs the test suite and the Linux
 build+self-test using the same script CI uses, catching failures before they reach GitHub:
