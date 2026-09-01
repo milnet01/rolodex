@@ -235,6 +235,73 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 9.
   Lanes: gui.
 
+- 📋 [ROLO-0058] **Constrain the update download to GitHub hosts and give it a wall-clock budget.**
+  Two verified findings in the same fetch path, neither addressed by the audit pass.
+
+  HOST: asset_url and sig_url come straight from the release JSON and are passed to download_to
+  with no constraint beyond _require_https. A tampered or attacker-authored release record can
+  point a 250 MB fetch at any TLS host, disclosing the user's IP and User-Agent outside GitHub --
+  weaker than INV-3's "the app's only network egress". The Ed25519 check still protects the
+  installed bytes, so this is defence in depth rather than an install compromise. Fix: require the
+  URL host to end in .github.com / .githubusercontent.com.
+
+  TIMEOUT: UPDATE_TIMEOUT_S is passed as urlopen's timeout, which is per socket OPERATION, not a
+  budget for the transfer. A server sending one byte every 29 s holds the connection open
+  indefinitely; MAX_UPDATE_BYTES bounds the bytes and nothing bounds the time. INV-9 specifies
+  only the socket timeout, so the invariant needs a sentence as well as the code.
+
+  The daemon thread means neither hangs the UI, which is why these are queued rather than urgent.
+  **Layman:** The updater will follow a download link to any secure address, and a server that trickles data can keep the download open forever.
+  Kind: security.
+  Source: review-code 2026-08-31 lane 4 (verified, not fixed in the audit pass).
+  Lanes: updater.
+
+- 📋 [ROLO-0059] **Clear the master password and secret values out of their widgets.**
+  Three widget buffers keep plaintext alive past the point the code believes it has disposed of
+  it:
+
+  - UnlockDialog.pw_entry is never cleared after a successful unlock, so _lock's "Wipe secrets
+    from memory" comment is an overstatement -- the same plaintext is still referenced by that
+    buffer.
+  - RestorePasswordDialog.pw_entry, likewise.
+  - FieldRow value entries are not cleared when AddEditDialog closes (neither _commit nor
+    _on_close_attempt touches them).
+
+  SECURITY.md puts in-process memory scraping outside the threat model, which is why this is
+  queued rather than fixed, and why it is not urgent. It is filed anyway because the code makes
+  a claim it does not honour, and the cheap half -- set_text("") on the entries once they have
+  been read -- costs nothing.
+
+  Note what this CANNOT fix: a Python str is immutable and cannot be zeroed, so holding the
+  password as a bytearray that can be overwritten is the only version of this that fully
+  delivers. That is a design decision, not an edit.
+  **Layman:** After you unlock, your master password is still sitting in the text box that took it, and a closed edit dialog still holds the secrets you were editing.
+  Kind: security.
+  Source: review-code 2026-08-31 lanes 5 and 8 (verified, not fixed in the audit pass).
+  Lanes: gui.
+
+- 📋 [ROLO-0060] **An interrupted vault write can still leave a temp holding the full ciphertext.**
+  write_private_file unlinks its temp on `except Exception`. KeyboardInterrupt and SystemExit are
+  BaseException, not Exception, so a Ctrl-C at the wrong moment -- and a power cut, which catches
+  nothing at all -- leaves a .rolodex-*.tmp holding the complete ciphertext in the vault
+  directory.
+
+  vault-format-and-crypto.md INV-16 claims an interrupted write "leaves no temp behind" for "a
+  crash, a full disk, a power cut". Only the disk-full case is actually covered, so the code and
+  the invariant disagree in the document's favour.
+
+  Both sides need deciding together, which is why this is queued rather than a one-word edit:
+  `except BaseException:` (or try/finally with a success flag) closes the signal case, and the
+  power-cut clause in INV-16 has to be narrowed regardless, because no handler can cover it.
+
+  RECORDED AS A CORRECTION: this session's close-findings ledger marked this finding `fixed`.
+  It was not -- the handler is unchanged at rolodex.py:120. Filed here so the wrong disposition
+  does not stand as the record.
+  **Layman:** If the app is killed at exactly the wrong moment while saving, it can leave behind a hidden copy of your whole encrypted vault next to the real one.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 1 (verified; a LEDGER CORRECTION -- the audit pass recorded this as fixed and it was not).
+  Lanes: crypto, docs.
+
 ## Medium priority
 
 - 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
@@ -581,6 +648,195 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 2, 4, 8, 9.
   Lanes: docs.
 
+- 📋 [ROLO-0061] **Write the missing specs for five shipped features that have no contract at all.**
+  docs/specs/ holds six feature specs. These five shipped features have NONE, so a reviewer has
+  no contract to judge them against and a change has nothing to conform to:
+
+  - ROLO-0002 auto-lock on idle + manual Lock. Lane 5 judged the activity-tracking defect
+    against a CODE COMMENT because there was nothing else, and that comment turned out to be
+    the thing that was wrong.
+  - ROLO-0003 clipboard auto-clear. Lane 6 could not tell whether "a lock must clear the
+    clipboard" was a requirement or its own inference, and had to say so rather than rule.
+  - ROLO-0004 built-in password generation.
+  - ROLO-0006 TOTP / live 2FA codes -- the largest gap. Its whole contract today is six lines of
+    CLAUDE.md, one line of DESIGN.md and a ROADMAP entry, so the digit range, the period bounds,
+    the >=80-bit floor and the label-keyword list were all reviewed against the RFCs alone.
+  - ROLO-0021 the peek/eye toggle, which is the feature that falsifies entries-and-fields.md
+    INV-9 (see ROLO-0057).
+
+  Password health (audit_passwords) is a sixth: it is not a roadmap feature of its own but it is
+  user-visible, and lane 3 could not settle whether "duplicate" and "reused" are two checks or
+  one because nothing states it.
+
+  Each wants spec-format.md's §1 test applied first -- several may honestly not need a full
+  spec, and that is a legitimate outcome. What is not legitimate is the current state, where
+  nobody has asked.
+  **Layman:** Five features that are finished and in use were never written down anywhere, so there is nothing to check them against when they change.
+  Kind: doc.
+  Source: review-code 2026-08-31 lanes 2, 3, 6 (each hit the gap independently).
+  Lanes: docs.
+
+- 📋 [ROLO-0062] **Run review-contract over docs/security-standards.md §2, which this audit rewrote.**
+  The audit pass rewrote security-standards.md §2. It had prescribed
+  `os.open(path, O_WRONLY|O_CREAT|O_TRUNC, 0o600)` for every secret write -- the pre-1.3.1 form,
+  which a contributor following it literally would have used to reintroduce the non-atomic write
+  and silently undo INV-16. It now routes every secret write through write_private_file, adds
+  the explicit ban on shutil.copy2-then-chmod, and adds a clause for the signing key as a fourth
+  class of secret file. The project CLAUDE.md carried the same stale claim and was corrected in
+  the same commit.
+
+  Why this is filed rather than closed: security-standards.md is a STANDARD, and under global
+  CLAUDE.md rule 14 the test is "would someone conforming to this document now do something
+  different?" -- which for this edit is plainly yes. That makes it a direction change owing a
+  `review-contract <path> --genre standard` cold read, and that gate has NOT been run. The
+  commit body records the same thing.
+
+  The edit is believed correct and is strictly better than what it replaced; this is about the
+  gate being owed, not about doubting the content.
+  **Layman:** A rule book that told developers to do the wrong thing was corrected, but the correction has not itself been reviewed.
+  Kind: doc-fix.
+  Source: close-findings 2026-08-31 (surfaced by the sweep; recorded in commit 5db68d2).
+  Lanes: docs.
+
+- 📋 [ROLO-0063] **Preference and config writes report success when the write was swallowed.**
+  _on_toggle_auto_updates calls set_update_check_enabled(enabled) and then unconditionally
+  toasts "Rolodex will check for updates on startup". save_config swallows OSError by design, so
+  a preference that failed to persist is reported to the user as set, and the app is not in fact
+  checking for updates.
+
+  ROLO-0037 INV-7 licenses the silent drop for the SKIP-a-version case explicitly -- "a skip that
+  cannot be written is dropped silently" -- and says nothing about the opt-in itself, which is the
+  one preference the whole feature's security value depends on.
+
+  The audit pass made save_config atomic, which removes the truncation route to losing it, but
+  not this one: a read-only directory or a full disk still fails silently. Fix: have save_config
+  report success, and toast the failure for the opt-in specifically.
+  **Layman:** Turning on automatic update checks says it worked even when the setting could not be saved — so it silently goes back to off.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 6 (verified, not fixed in the audit pass).
+  Lanes: updater, gui.
+
+- 📋 [ROLO-0064] **The plaintext export stages its temp in the directory the user picked.**
+  write_private_file stages `.rolodex-*.tmp` in the DESTINATION directory, which is correct and
+  necessary for the vault (INV-10 requires a same-filesystem os.replace) but is a different
+  trade for the plaintext export, whose destination is wherever the user pointed the file
+  chooser -- plausibly a cloud-synced or shared folder.
+
+  The temp is created 0600 and unlinked on the way out, so the exposure is narrow. A SIGKILL or
+  a power cut leaves decrypted credentials as a dotfile in that directory, and ROLO-0060's
+  BaseException gap widens the window to include Ctrl-C.
+
+  Two defensible answers and the choice is the work: document it in
+  import-export-backup.md as accepted, or accept a non-atomic 0600 os.open for the export alone,
+  where atomicity buys much less than it does for the vault.
+  **Layman:** Exporting your passwords briefly writes a hidden copy into whatever folder you chose — which might be a shared or cloud-synced one.
+  Kind: security.
+  Source: review-code 2026-08-31 lane 7 (verified, not fixed in the audit pass).
+  Lanes: import-export.
+
+- 📋 [ROLO-0065] **Two diverged implementations of “same name, case-insensitively”.**
+  import_entries compares `e["name"].lower()`; find_entry_by_name compares
+  `name.strip().lower()`. ROADMAP ROLO-0023 explicitly directed the second to "reuse the same
+  case-insensitive comparison used by import_entries", and it added .strip() instead.
+
+  Unreachable through normal paths today because both writers strip before storing, so it bites
+  only a hand-edited, legacy or restored vault holding an untrimmed name -- which is exactly the
+  population ROLO-0060 and the migrate_vault guard are about. Fix: one helper, both callers.
+  **Layman:** Two places in the code decide whether two entries have the same name, and they disagree about spaces.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 3 (verified, not fixed in the audit pass).
+  Lanes: data-model.
+
+- 📋 [ROLO-0066] **Decide what “reused” means in the password health report.**
+  audit_passwords counts occurrences of a value across all sensitive fields, so an entry holding
+  "Password" and "Password (recovery copy)" with the same value is reported "Reused x2" though
+  the secret is used in exactly one place.
+
+  The code matches its own docstring and ROADMAP ROLO-0009's wording -- "more than one sensitive
+  field" -- so this is the CONTRACT being questioned rather than the implementation being wrong.
+  Counting distinct entry_ids per value is the alternative.
+
+  Lane 3 also could not settle whether the lane contract's "duplicate detection" is a third check
+  or a second word for reuse; there is no mechanism for a third. Settling both belongs with the
+  missing password-health spec.
+  **Layman:** The health report can tell you a password is “reused twice” when it is only stored once, in two fields of the same entry.
+  Kind: investigate.
+  Source: review-code 2026-08-31 lane 3 (verified; a contract question, not a defect).
+  Lanes: data-model.
+
+- 📋 [ROLO-0067] **Imported entries always land uncategorised, and nothing says whether that is intended.**
+  import_entries calls add_entry with name, fields and notes and never passes a category, so
+  every imported entry gets "". Neither import-export-backup.md nor categories.md says whether
+  that is the intended behaviour or an omission.
+
+  Small on its own; filed because it is a promise nobody made either way, and the import preview
+  (ROLO-0047) is being revisited anyway -- offering a target category there would be the natural
+  place if the answer is that it should be settable.
+  **Layman:** Importing from a text file drops every entry into no category at all.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 3 (verified; unstated in either spec).
+  Lanes: import-export.
+
+- 📋 [ROLO-0068] **TOTP robustness: unvalidated direct-call arguments, and no clock-skew signal.**
+  Two items from the same lane.
+
+  VALIDATION: totp_code's digits, period and algorithm are validated in _parse_otpauth_uri and
+  nowhere else. _TOTP_HASHES[algorithm] raises KeyError, `// period` raises ZeroDivisionError,
+  and struct.pack(">Q", counter) raises struct.error for a negative counter (a system clock set
+  before 1970). Latent rather than live -- both real call sites receive a validated config -- so
+  this is a guard on a public function, not a bug fix.
+
+  CLOCK SKEW: RFC 6238 §6 requires prover and validator to agree on time. A machine whose clock
+  has drifted emits wrong codes with no user-visible indication, and it presents to the user as
+  "the site rejected my code" with nothing pointing at the real cause. The fix is UI-side -- a
+  hint in the detail pane when the system clock looks unsynchronised -- and wants stating in the
+  missing TOTP spec first.
+  **Layman:** If your computer's clock drifts, your 2FA codes are silently wrong and the app gives no hint why.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 2 (verified, not fixed in the audit pass).
+  Lanes: totp, gui.
+
+- 📋 [ROLO-0079] **Decide whether the 8-character master password floor is still the right one.**
+  MIN_PASSWORD_LENGTH = 8. The master password is the ONLY protection on a file an attacker can
+  brute-force offline as fast as their hardware allows -- SECURITY.md says so itself, and there is
+  no recovery path.
+
+  NIST SP 800-63B permits an 8-character floor for memorized secrets, so this is not a breach;
+  OWASP ASVS V2.1.1 requires 12, and this is a key-derivation passphrase rather than a
+  server-side credential with rate limiting behind it. security-standards.md §3 pins ITERATIONS
+  and the salt size and states no password minimum at all, so nothing is currently violated --
+  the floor is simply low and undocumented.
+
+  If raised: apply it to NEW vaults and password changes only (rolodex.py's two validation sites),
+  and leave existing vaults unlockable -- locking someone out of their own data to enforce a
+  policy change is worse than the policy gap. Whichever way it is settled, it belongs in
+  security-standards.md §3 rather than only in a constant.
+  **Layman:** The shortest master password Rolodex accepts is 8 characters, which is on the low side for the one password protecting everything.
+  Kind: security.
+  Source: review-code 2026-08-31 lane 1 (verified, not fixed in the audit pass).
+  Lanes: crypto.
+
+- 📋 [ROLO-0080] **Structural hardening of the updater's HTTP layer.**
+  Two observations from the same lane, neither a live defect, both worth recording so they are
+  not rediscovered.
+
+  - _opener() uses urllib.request.build_opener, which still registers the default HTTPHandler.
+    So plain http:// remains reachable AT THE URLLIB LAYER and only _require_https keeps it out.
+    Passing an explicit handler set would make the https-only property structural rather than
+    enforced by a check that a future edit could bypass. The check itself is correct today and is
+    re-applied on every redirect hop (INV-9).
+  - download_and_verify reads the whole asset (up to MAX_UPDATE_BYTES = 250 MB) into RAM to
+    verify it. cryptography's Ed25519 needs the full message, so a streaming verify is not
+    available, and the cap is what sizes the peak -- this is recorded as a known consequence
+    rather than something to fix. Revisit only if the cap is ever raised substantially.
+
+  Also noted: _opener() rebuilds an SSLContext and re-parses certifi's CA bundle on each of the
+  three requests a check-and-download makes. Cheap to cache, and purely a cost item.
+  **Layman:** The update code disallows insecure connections by a check rather than by construction, and holds an entire downloaded file in memory to verify it.
+  Kind: security.
+  Source: review-code 2026-08-31 lane 4 (verified; defence-in-depth, not live defects).
+  Lanes: updater.
+
 ## Low priority / nice-to-have
 
 - 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
@@ -743,3 +999,188 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: chore.
   Source: check-code 2026-08-31 (zizmor superfluous-actions).
   Lanes: packaging.
+
+- 📋 [ROLO-0069] **Password generation over-weights the smaller character classes.**
+  generate_password guarantees one character per enabled class and fills the rest from the
+  combined pool. That construction over-represents the smaller classes: at the default 20
+  characters over an 85-character pool, expected digits are about 2.9 against 2.35 under uniform
+  sampling.
+
+  Explicitly NOT a security defect -- the entropy loss is on the order of a few bits out of ~128,
+  and the class guarantee is a deliberate usability feature (sites that demand a digit). Filed so
+  the trade is recorded rather than rediscovered. The uniform alternative is rejection sampling:
+  draw all `length` characters from the combined pool, redraw while a selected class is missing.
+
+  The related fixed-order truncation bug at small lengths WAS fixed in the audit pass; this is
+  the remaining statistical half.
+  **Layman:** Generated passwords contain slightly more digits and symbols than pure chance would give, which costs a little randomness.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 3 (verified; NOT a security defect).
+  Lanes: data-model.
+
+- 📋 [ROLO-0070] **GUI robustness: silent no-ops, a rebuild inside a drop handler, and unbounded preview rows.**
+  Six small verified findings, grouped because they are one pass over the dialog layer.
+
+  - Silent no-ops with no feedback: AddEditDialog._on_save returns on an empty name (blessed by
+    INV-6, but the Save button visibly does nothing); ImportPreviewDialog._on_import with nothing
+    ticked; ManageCategoriesDialog rename on an empty/unchanged/duplicate name; _add_category
+    when add_category returns False. A user trying to merge two categories by renaming gets
+    silence.
+  - _move_entry_to_category runs _refresh_list() synchronously INSIDE the ::drop handler,
+    destroying the CategoryHeaderRow that owns the still-executing DropTarget. GLib.idle_add the
+    rebuild so the drop completes first.
+  - The create-a-vault path runs create_vault (a 600k-iteration KDF) on the main thread with the
+    button still sensitive and no "Creating..." label, so the window freezes with no feedback.
+    master-password.md INV-6 requires the thread for UNLOCK only, so this is the inconsistent
+    half rather than a breach.
+  - _refresh_list would render a category header and its entries TWICE if "" or a duplicate ever
+    reached vault["categories"]. Belt-and-braces given ROLO-0064's rename guard.
+  - ChangePasswordDialog connects no `activate` handler, so Enter does not submit -- unlike
+    RestorePasswordDialog and UnlockDialog, which both do.
+  - ImportPreviewDialog builds one Adw.ActionRow per parsed entry synchronously with no cap, so a
+    large import file freezes the UI in the constructor.
+  **Layman:** Several actions do nothing at all when they fail, with no message — and a couple of screens can misbehave in unusual cases.
+  Kind: fix.
+  Source: review-code 2026-08-31 lanes 5, 8, 9 (all verified, none fixed in the audit pass).
+  Lanes: gui.
+
+- 📋 [ROLO-0071] **A legacy or hand-edited vault can raise KeyError instead of degrading.**
+  Direct dict indexing sits beside defensive .get() calls in the same functions, so the code is
+  inconsistent about whether a malformed field is survivable:
+
+  - audit_passwords uses f["label"] after .get()-ing `sensitive` and `value` two lines earlier.
+  - search_entries uses field["label"] and field["value"] directly -- inside search-as-you-type.
+  - AddEditDialog.__init__ uses entry["name"] and field["label"]/["value"] while defensively
+    .get()-ing `sensitive`, so a vault missing either key makes Edit appear dead.
+
+  The migrate_vault guard added in the audit pass now rejects a vault with no `entries` dict, but
+  it does not validate individual FIELDS, so this population is still reachable. One finding was
+  dismissed during the audit as unreachable-in-practice; the AddEditDialog case is the one that
+  makes it worth doing anyway, since it presents as a dead button rather than an error.
+  **Layman:** An old or hand-edited vault file can make an entry refuse to open, rather than showing what it can.
+  Kind: fix.
+  Source: review-code 2026-08-31 lanes 3 and 8 (verified, not fixed in the audit pass).
+  Lanes: data-model, gui.
+
+- 📋 [ROLO-0072] **Error text puts the full backup path on screen.**
+  RestorePasswordDialog._try_unlock catches broadly and passes str(e) to _unlock_fail, so an
+  OSError's message -- which carries the full path of the backup file -- is rendered in the
+  dialog. Minor local disclosure, on a screen the user opened themselves.
+
+  Fix: map non-InvalidToken failures to a fixed "Could not read that backup file." and keep the
+  detail out of the UI. Pairs with the broader `except Exception` narrowing the audit pass began
+  but did not finish -- python.md § Spellings asks for named exceptions and several call sites
+  still catch Exception.
+  **Layman:** If a backup file cannot be read, the message shows exactly where it lives on your disk.
+  Kind: security.
+  Source: review-code 2026-08-31 lane 9 (verified, not fixed in the audit pass).
+  Lanes: gui.
+
+- 📋 [ROLO-0073] **GTK deprecations and an unguarded default display.**
+  Two items in do_startup:
+
+  - Gtk.StyleContext.add_provider_for_display has been deprecated since GTK 4.10. The project
+    deliberately avoided a comparable deprecation for Gtk.ShortcutsWindow, so this is
+    inconsistent rather than merely old. Gtk.StyleProvider on the display is the replacement.
+  - Gdk.Display.get_default() can return None, which makes that call a TypeError rather than a
+    diagnosable message. This session's verify-delivery run hit exactly that class of failure
+    headlessly, so it is not hypothetical.
+
+  Related to ROLO-0049, which covers declaring the GTK 4.12 floor that load_from_string needs;
+  switching to load_from_data would remove that floor and could be done in the same pass.
+  **Layman:** The startup code uses an older way of loading styles that newer versions warn about, and assumes a screen is always available.
+  Kind: chore.
+  Source: review-code 2026-08-31 lane 9 (verified, not fixed in the audit pass).
+  Lanes: gui.
+
+- 📋 [ROLO-0074] **CI-local.sh invokes ruff differently from ci.yml.**
+  CI-local.sh runs `python3 -m ruff check rolodex.py tests/`; ci.yml runs bare
+  `ruff check rolodex.py tests/`. The module form only works for a pip-installed ruff, not a
+  distro-packaged or standalone-installer one.
+
+  It fails LOUDLY rather than silently, so the gate does not go falsely green -- which is why this
+  is low rather than medium. But it makes the local mirror unusable on a machine where CI's own
+  invocation would work, and CLAUDE.md's whole argument for CI-local.sh is that the two stay in
+  lockstep.
+  **Layman:** The local pre-push check runs the linter in a way that only works for one kind of install, unlike the real CI.
+  Kind: chore.
+  Source: review-code 2026-08-31 lane 10 (verified, not fixed in the audit pass).
+  Lanes: tooling.
+
+- 📋 [ROLO-0075] **Three packaging assumptions nobody has verified.**
+  Lane 10 raised these as open questions rather than findings, having verified it could not
+  settle them from a read. Each is cheap to answer and expensive to be wrong about.
+
+  - rolodex.spec passes ["../rolodex.py"] to Analysis. All three build scripts cd to the repo
+    root first, so this resolves only if PyInstaller anchors Analysis script paths to SPECPATH
+    rather than CWD. CI is green, so it evidently does -- but the two rules disagree here, and
+    os.path.join(SPECPATH, "..", "rolodex.py") is unambiguous under both.
+  - build.yml's signing step is `shell: bash` (Git Bash) and calls python3. On the
+    windows-latest image, python3 on Git Bash's PATH is the classic WindowsApps store-alias trap.
+    It fails safe (the job fails, nothing is attached) but the Windows binary would then be
+    silently missing from a release. NOTE: the audit pass moved signing to an ubuntu-latest job,
+    which removes the exposure -- confirm and then close this half.
+  - packaging/rolodex.spec's ROLODEX_CONSOLE escape hatch appears nowhere else in the tree, so
+    the Windows console-diagnostic path has never been exercised from CI.
+  **Layman:** Three things in the build setup work today but for reasons nobody has actually confirmed.
+  Kind: investigate.
+  Source: review-code 2026-08-31 lane 10 (open questions the lane declined to guess at).
+  Lanes: packaging.
+
+- 📋 [ROLO-0076] **Publish build provenance alongside the Ed25519 signature.**
+  The release carries an Ed25519 signature over the artifact bytes, which meets the spec's stated
+  threat model (artifact authenticity). OpenSSF/SLSA would additionally expect
+  actions/attest-build-provenance, which binds the artifact to the workflow run, commit and
+  builder that produced it.
+
+  Lane 10 explicitly filed this as a coverage note rather than a defect, and it is recorded on
+  those terms. It becomes more valuable now that the audit pass split signing into its own job:
+  provenance is what would let a user verify WHICH run signed a binary, not merely that the key
+  did.
+  **Layman:** Releases are signed, but there is no machine-checkable record of which workflow run built them.
+  Kind: security.
+  Source: review-code 2026-08-31 lane 10 (recorded as a coverage note, not a defect).
+  Lanes: packaging.
+
+- 📋 [ROLO-0077] **A registered move-to-category action that nothing can fire.**
+  MainWindow registers a `move-to-category` window action with a (ss) parameter wired to
+  _on_move_to_category_action. A project-wide search (tests excluded) finds no menu model, no
+  set_action_name, no accelerator and no activate_action that fires it -- the shipped right-click
+  menu uses plain Gtk.Buttons and make_move_handler instead.
+
+  Not a zombie feature: categories.md INV-11/INV-12 promise the MENU, which exists and works. So
+  the promise is kept and this is dead wiring behind it. No tool catches it -- vulture sees the
+  connect() and considers the handler used.
+
+  Either route the menu through the action or remove the registration; leaving both is the trap,
+  because the next person to touch that menu will reasonably assume the action is the live path.
+  **Layman:** There is a leftover menu action wired up in the code that no part of the app can actually trigger.
+  Kind: chore.
+  Source: review-code 2026-08-31 lane 7 (verified; a maintenance trap, not a defect).
+  Lanes: gui.
+
+- 📋 [ROLO-0078] **Two behaviour changes 1.3.1 introduced that no document records.**
+  The 1.3.1 move from os.open to mkstemp + os.replace changed two behaviours, neither recorded
+  in CHANGELOG.md, vault-format-and-crypto.md or DESIGN.md:
+
+  - A vault path that is a SYMLINK is now REPLACED by a regular file. The old os.open followed
+    the link and wrote through it. Anyone keeping contacts.vault as a symlink into a synced
+    folder gets a silently different arrangement after their first save.
+  - Saving now requires WRITE PERMISSION ON THE DIRECTORY, not just on the vault file. A
+    read-only directory holding a writable vault used to work and no longer does.
+
+  Both are narrow, both are defensible, and neither is wrong -- os.replace is the correct
+  primitive. They are filed because they are user-visible consequences that shipped unannounced,
+  and the second now surfaces as ROLO-0045's "Could Not Save" dialog rather than as silence,
+  which makes it likelier someone hits it and asks.
+
+  Separately from the same lane: a user moving from `python3 rolodex.py` to the packaged binary
+  gets the create-a-new-vault dialog with their real vault intact but invisible, because the
+  frozen build uses GLib.get_user_data_dir()/Rolodex and the source run uses the script
+  directory. README.md:49 and CHANGELOG.md:132 document the paths, so this is a missing
+  affordance rather than a doc divergence -- offer "import an existing vault" on first frozen
+  start with no vault.
+  **Layman:** Making saves safer quietly changed how the app behaves for people whose vault is a shortcut, or in a folder they cannot write to.
+  Kind: fix.
+  Source: review-code 2026-08-31 lane 1 (verified; undocumented consequences of a shipped change).
+  Lanes: crypto, docs.
