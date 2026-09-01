@@ -98,6 +98,16 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
 ## Conventions
 
 - Keep the pure logic layer GTK-free so it stays trivially testable/reasoned-about.
+- **To exercise the GUI headlessly, start `Xvfb` yourself — `xvfb-run` is not installed here.**
+  `Xvfb :99 -screen 0 1280x1024x24 &` then `DISPLAY=:99 python3 …`. Do NOT reach for
+  `GDK_BACKEND=broadway`: `Gtk.init_check()` returns **True** under it and window construction
+  then raises `RuntimeError: Gtk couldn't be initialized`, so the probe says the display works
+  and every later step fails for a reason that looks like a product defect. A whole
+  verify-delivery run was thrown away to that once. With a real `DISPLAY`, `MainWindow` can be
+  constructed directly against a throwaway vault and its handlers driven in-process, which is
+  how the end-to-end feature checks were done — `contacts.vault` is never involved.
+- **The live TOTP code renders grouped: `"543 878"`, not `"543878"`.** A check asserting six
+  contiguous digits fails against a working feature. Strip spaces before comparing.
 - Master-password changes (`_finish_change_password`) rotate the salt and re-encrypt on save;
   they verify the *current* password against the in-memory `self.password`, not by re-decrypting.
 - **`__version__` in `rolodex.py` is version-bearing.** The updater compares against it, so
