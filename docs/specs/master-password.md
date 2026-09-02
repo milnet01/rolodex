@@ -7,7 +7,7 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
 
 - **INV-1** When no vault file exists, `UnlockDialog` is in "create" mode and requires a
   password plus a matching confirmation.
-- **INV-2** A new master password must be at least `MIN_PASSWORD_LENGTH` (8) characters;
+- **INV-2** A new master password must be at least `MIN_PASSWORD_LENGTH` (12) characters;
   shorter passwords are rejected with an inline error.
 - **INV-3** Mismatched password/confirmation is rejected with an inline error and no vault is
   created.
@@ -30,8 +30,8 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
 - **INV-9** Changing the password requires the correct current password, verified against the
   in-memory session password (`self.password`), not by re-decrypting the file. A wrong current
   password shows "Incorrect current password." and aborts.
-- **INV-10** The new password must be ≥ 8 characters and match its confirmation; violations
-  show an inline error and abort.
+- **INV-10** The new password must be ≥ `MIN_PASSWORD_LENGTH` characters and match its
+  confirmation; violations show an inline error and abort.
 - **INV-11** On success the session password is replaced, a **new random salt** is generated,
   and the vault is re-encrypted and saved with the new password + salt. The old salt/password no
   longer decrypt `contacts.vault`, but any backup made *before* the change still opens with the

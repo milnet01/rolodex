@@ -52,7 +52,7 @@ the download.
 
 ## First launch
 
-The first time you open Rolodex, you'll create your **master password** (at least 8
+The first time you open Rolodex, you'll create your **master password** (at least 12
 characters). This one password protects everything.
 
 > ⚠️ **There is no way to recover a forgotten master password.** It is never saved anywhere —

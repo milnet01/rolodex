@@ -38,6 +38,19 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **New master passwords must be at least 12 characters, up from 8** (ROLO-0079)
+  Your existing vault is unaffected and still opens exactly as before —
+  unlocking never checks the length. The new minimum applies when you
+  create a vault or change your master password. Eight characters is
+  weak against the offline guessing that SECURITY.md names as the main
+  threat this app faces.
+
+- **Password health no longer calls two fields in the same entry "reused"** (ROLO-0066)
+  The reuse warning is there to tell you one password is protecting two
+  different accounts. It used to fire on any repeat at all, so an entry
+  with a "Password" and a matching "Backup password" was flagged even
+  though that is a single account. It now counts across entries only.
+
 - **Saving is no longer slowed by re-scrambling your master password on every edit** (ROLO-0043)
   Rolodex turns your master password into an encryption key using a
   deliberately slow calculation, so that guessing it is expensive. That

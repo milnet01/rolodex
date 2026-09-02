@@ -58,7 +58,7 @@ CONFIG_FILE = os.path.join(APP_DIR, ".rolodex.conf")
 MAGIC = b"VLT1"
 ITERATIONS = 600_000
 SENSITIVE_KEYWORDS = {"password", "pass", "secret", "key", "token", "pin", "authenticator"}
-MIN_PASSWORD_LENGTH = 8
+MIN_PASSWORD_LENGTH = 12
 MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
 
 # Password generator (ROLO-0004): character classes and default length.
@@ -394,14 +394,18 @@ def audit_passwords(vault: dict) -> list[dict]:
     """Analyse every non-empty sensitive field across the vault, worst first.
 
     Returns one finding per field: {entry_id, entry_name, label, strength, strength_label,
-    reused, reuse_count}. `reused` is True when the same secret value appears in more than one
-    sensitive field anywhere in the vault. Pure — nothing leaves the process.
+    reused, reuse_count}. `reuse_count` is the number of distinct ENTRIES sharing this value and
+    `reused` is True when that exceeds one. Pure — nothing leaves the process.
     """
-    counts: dict[str, int] = {}
-    for entry in vault["entries"].values():
+    # Reuse is counted across entries, not fields, because the risk it names is one secret
+    # protecting two different accounts. Two sensitive fields inside a single entry -- a password
+    # and its backup password, say -- are one account, and flagging those is noise that teaches
+    # the user to ignore the warning (ROLO-0066).
+    entry_ids: dict[str, set[str]] = {}
+    for eid, entry in vault["entries"].items():
         for f in entry["fields"]:
             if f.get("sensitive") and f.get("value"):
-                counts[f["value"]] = counts.get(f["value"], 0) + 1
+                entry_ids.setdefault(f["value"], set()).add(eid)
 
     findings = []
     for eid, entry in vault["entries"].items():
@@ -410,7 +414,7 @@ def audit_passwords(vault: dict) -> list[dict]:
             if not f.get("sensitive") or not value:
                 continue
             score = password_strength(value)
-            reuse_count = counts.get(value, 0)
+            reuse_count = len(entry_ids.get(value, ()))
             findings.append({
                 "entry_id": eid,
                 "entry_name": entry["name"],

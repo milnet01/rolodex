@@ -432,3 +432,67 @@ def test_ROLO0043_legacy_wrappers_keep_their_signatures(tmp_path):
     loaded, loaded_salt = rolodex.load_vault(PW, path)
     assert loaded == vault
     assert loaded_salt == salt
+
+
+# --- ROLO-0066: password reuse is counted across entries, not fields -----------------------
+
+
+def _reuse_vault():
+    return {
+        "version": 2,
+        "categories": [],
+        "entries": {
+            "e1": {"name": "Bank", "category": "", "notes": "", "fields": [
+                {"label": "Password", "value": "same-secret-value", "sensitive": True},
+                {"label": "Backup password", "value": "same-secret-value", "sensitive": True},
+            ]},
+            "e2": {"name": "Mail", "category": "", "notes": "", "fields": [
+                {"label": "Password", "value": "a-different-secret", "sensitive": True},
+            ]},
+        },
+    }
+
+
+def test_ROLO0066_two_fields_in_one_entry_are_not_reuse():
+    """One account holding the same secret twice is not password reuse.
+
+    Reuse warns that a single secret protects two different accounts. Counting per FIELD flagged
+    an entry whose "Password" and "Backup password" hold one value -- which is one account, and
+    a warning that fires there teaches the user to ignore the warning everywhere.
+    """
+    findings = {(f["entry_name"], f["label"]): f for f in rolodex.audit_passwords(_reuse_vault())}
+
+    for label in ("Password", "Backup password"):
+        f = findings[("Bank", label)]
+        assert not f["reused"], f"Bank/{label} flagged as reused; both fields are one account"
+        assert f["reuse_count"] == 1, f"Bank/{label} reuse_count {f['reuse_count']}, expected 1"
+
+
+def test_ROLO0066_same_secret_in_two_entries_is_reuse():
+    """The case the check exists for must still fire."""
+    vault = _reuse_vault()
+    vault["entries"]["e2"]["fields"][0]["value"] = "same-secret-value"
+
+    findings = {(f["entry_name"], f["label"]): f for f in rolodex.audit_passwords(vault)}
+
+    assert findings[("Mail", "Password")]["reused"]
+    assert findings[("Bank", "Password")]["reused"]
+    # Two entries share it, not three fields -- reuse_count counts accounts.
+    assert findings[("Bank", "Password")]["reuse_count"] == 2, (
+        "reuse_count must count distinct entries, not sensitive fields"
+    )
+
+
+# --- ROLO-0079: the master-password minimum is a floor -------------------------------------
+
+
+def test_ROLO0079_min_password_length_is_a_floor_of_12():
+    """MIN_PASSWORD_LENGTH may be raised, never lowered below 12.
+
+    Same shape as the KDF iteration floor: an 8-character master password is weak against the
+    offline guessing SECURITY.md names as the main threat, and lowering the bound is a silent
+    security regression that no other test would notice. Raising it is fine and keeps this green.
+    """
+    assert rolodex.MIN_PASSWORD_LENGTH >= 12, (
+        f"MIN_PASSWORD_LENGTH is {rolodex.MIN_PASSWORD_LENGTH}; 12 is the floor (ROLO-0079)"
+    )

@@ -768,7 +768,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 3 (verified, not fixed in the audit pass).
   Lanes: data-model.
 
-- 📋 [ROLO-0066] **Decide what “reused” means in the password health report.**
+- ✅ [ROLO-0066] **Decide what “reused” means in the password health report.**
   audit_passwords counts occurrences of a value across all sensitive fields, so an entry holding
   "Password" and "Password (recovery copy)" with the same value is reported "Reused x2" though
   the secret is used in exactly one place.
@@ -780,6 +780,14 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Lane 3 also could not settle whether the lane contract's "duplicate detection" is a third check
   or a second word for reuse; there is no mechanism for a third. Settling both belongs with the
   missing password-health spec.
+  Resolved (2026-09-02): settled by the user as "reuse means across entries".
+  audit_passwords now counts distinct entry ids per secret value rather than
+  sensitive fields, so two fields inside one entry -- a password and its backup
+  password -- are one account and are not flagged. reuse_count changes meaning
+  with it, from fields to entries; it is returned but never displayed, and the
+  only consumer of the finding is the boolean. Two regression tests added and
+  proved red against a mutant that restores per-field counting. The pre-existing
+  test_audit_passwords_detects_reuse_across_entries still passes unchanged.
   **Layman:** The health report can tell you a password is “reused twice” when it is only stored once, in two fields of the same entry.
   Kind: investigate.
   Source: review-code 2026-08-31 lane 3 (verified; a contract question, not a defect).
@@ -817,7 +825,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 2 (verified, not fixed in the audit pass).
   Lanes: totp, gui.
 
-- 📋 [ROLO-0079] **Decide whether the 8-character master password floor is still the right one.**
+- ✅ [ROLO-0079] **Decide whether the 8-character master password floor is still the right one.**
   MIN_PASSWORD_LENGTH = 8. The master password is the ONLY protection on a file an attacker can
   brute-force offline as fast as their hardware allows -- SECURITY.md says so itself, and there is
   no recovery path.
@@ -832,6 +840,14 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   and leave existing vaults unlockable -- locking someone out of their own data to enforce a
   policy change is worse than the policy gap. Whichever way it is settled, it belongs in
   security-standards.md §3 rather than only in a constant.
+  Resolved (2026-09-02): MIN_PASSWORD_LENGTH raised from 8 to 12 on the user's
+  call, per OWASP ASVS. Verified first that this locks nobody out: the constant
+  gates only vault creation (rolodex.py:1360) and the change-password dialog
+  (rolodex.py:3404), plus the generator's lower slider bound; unlock never
+  re-checks length, so an existing vault with a shorter password still opens.
+  master-password.md INV-2/INV-10 and the README's first-launch line updated in
+  the same change. Locked by a floor test in the shape of the KDF iteration
+  floor -- the value may be raised, never lowered below 12.
   **Layman:** The shortest master password Rolodex accepts is 8 characters, which is on the low side for the one password protecting everything.
   Kind: security.
   Source: review-code 2026-08-31 lane 1 (verified, not fixed in the audit pass).
