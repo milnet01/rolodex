@@ -14,8 +14,9 @@ This covers everything Rolodex depends on:
 - **Bundled build-time deps** — `certifi` and PyInstaller, installed by
   `.github/workflows/build.yml` and named as prerequisites in `packaging/*-build.sh`, rather
   than coming from `requirements.txt`. `certifi` is security-critical too: it is the CA bundle
-  the frozen binaries' TLS trust depends on, so a stale one ships *inside* the released binary.
-  The freshness check below covers it.
+  the frozen binaries' TLS trust depends on. A released binary gets a current one by
+  construction, because `build.yml` installs it with `--upgrade`; the check below reads the
+  LOCAL copy, which is what a local `packaging/*-build.sh` bundles.
 - **GTK 4 / libadwaita** — system-provided; keep current via the distro. Note the minimum
   versions the code relies on (GTK 4, libadwaita 1).
 - **Dev/CI tooling** — linters, test runners, GitHub Actions, and runner images. GitHub Actions
@@ -24,10 +25,9 @@ This covers everything Rolodex depends on:
   obligation on it is to move the SHA to each new release under the latest-by-default rule and
   keep the comment accurate. Repointing an action at a floating tag to "comply" is the breach,
   not the fix. An exact `==` version inside a workflow step is the same category when its inline
-  comment gives a determinism or supply-chain reason — `build.yml` pins the signing step's
-  install so it cannot pull an unverified version while the key is in scope. Neither is a
-  forced-older pin, neither owes a ledger row, and both stay bound by latest-by-default: they
-  move up as new releases land.
+  comment gives a determinism or supply-chain reason. Neither is a forced-older pin, neither owes
+  a ledger row, and both stay bound by latest-by-default: they move up as new releases land, and
+  the sweep below is where that gets noticed.
 
 ### Sweep posture
 
@@ -41,13 +41,16 @@ python3 -c "import cryptography; print(cryptography.__version__)"   # current cr
 # warning; if it changes, `pip install cryptography==` also lists available versions):
 python3 -m pip index versions cryptography | head -1
 python3 -c "import certifi; print(certifi.__version__)"   # bundled CA bundle, build-time only
-pinact run --check   # every `uses:` SHA behind its latest release (exit 0 = all current)
+pinact run --update --check   # uses: SHAs behind latest. Needs a GitHub token: unauthenticated
+                              # calls hit a 60/hour limit and report errors, not staleness.
+grep -rn "pip install.*==" .github/workflows/   # exact pins in workflow steps
 ```
 
 When bumping a dependency, **update the calling code to the current idioms in the same change**
 (see `docs/coding-standards.md`), and record the bump in `CHANGELOG.md`. That `CHANGELOG`
 obligation fires on a change to a tracked file — a raised floor, a new or lifted pin, a new
-dependency, or a moved action SHA. Upgrading only your own environment changes no shipped
+dependency, a moved action SHA, or a moved `==` pin in a workflow step. Upgrading only your own
+environment changes no shipped
 artefact, and is recorded only if it changes shipped behaviour. The build-time deps are
 unpinned, so their versions live in no tracked file at all: a release picks up whatever was
 current, and that earns a `CHANGELOG` line only when it changes what ships — a new CA bundle,
@@ -65,8 +68,9 @@ When that happens, all of the following are mandatory:
 2. **Apply the pin everywhere that dependency is installed**, and list those places in the same
    inline reason. `requirements.txt` alone is not enough: both workflows install with their own
    `pip install` lines and never read the manifest, so a pin they do not carry is silently
-   ignored and CI stays green against a version nobody ships. Check every `pip install` line in
-   `.github/workflows/`, not the subset that happens to carry a particular flag.
+   ignored and CI stays green against a version nobody ships. Search `.github/workflows/` for the
+   dependency by NAME: it arrives by `pip`, by the Windows job's MSYS2 `install:` list and by
+   Homebrew, so searching for one command misses the others.
 3. **Add a ledger entry** in the table below.
 4. **Never silently pin.** An undocumented `==` pin is a standards violation.
 
@@ -102,8 +106,9 @@ and move the row to "Resolved".
 
 The pure-logic test suite (`pytest tests/`) runs in CI on every push to `main` and every pull
 request targeting `main` (ROLO-0001 / ROLO-0020), so a dependency bump's KDF + Fernet round-trip
-and vault migration are checked automatically once it reaches one of those. A bump pushed to a
-topic branch triggers no CI at all — run `./CI-local.sh` there.
+and vault migration are checked automatically once it reaches one of those. A push to a topic
+branch that already has a PR open into `main` runs them too; with no open PR nothing runs at
+all — use `./CI-local.sh` there.
 For a `cryptography` bump specifically, also manually exercise the affected flow, at minimum:
 
 1. Create a fresh vault, add an entry, quit.
