@@ -19,6 +19,9 @@ Rolodex is a small app, so this set is small.
 | [search.md](search.md) | Sidebar search behaviour and match rules |
 | [import-export-backup.md](import-export-backup.md) | Text import + preview, encrypted backup/restore, plaintext export |
 | [master-password.md](master-password.md) | Create, unlock, and change the master password |
+| [totp-codes.md](totp-codes.md) | 2FA seed detection, RFC 6238 codes, the live Code row |
+| [auto-lock.md](auto-lock.md) | Idle auto-lock, manual Lock, and what locking tears down |
+| [clipboard-auto-clear.md](clipboard-auto-clear.md) | Copying a secret and wiping it again |
 | [ROLO-0037-auto-update.md](ROLO-0037-auto-update.md) | Opt-in signed auto-update: the check, the Ed25519 gate, the install and relaunch |
 
 ## Spec format

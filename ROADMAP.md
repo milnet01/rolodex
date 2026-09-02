@@ -669,7 +669,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 2, 4, 8, 9.
   Lanes: docs.
 
-- 📋 [ROLO-0061] **Write the missing specs for five shipped features that have no contract at all.**
+- ✅ [ROLO-0061] **Write the missing specs for five shipped features that have no contract at all.**
   docs/specs/ holds six feature specs. These five shipped features have NONE, so a reviewer has
   no contract to judge them against and a change has nothing to conform to:
 
@@ -692,6 +692,45 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Each wants spec-format.md's §1 test applied first -- several may honestly not need a full
   spec, and that is a legitimate outcome. What is not legitimate is the current state, where
   nobody has asked.
+  Resolved (2026-09-02): spec-format.md §1's test applied to all five features
+  first, as this item asked. Three needed a spec and now have one; two are
+  recorded skips, which §1 names as a legitimate outcome.
+
+  WRITTEN:
+  - docs/specs/totp-codes.md — the largest gap, and the clearest trigger: the
+    otpauth:// Key URI is a contract something else binds to, and the detection
+    rules, the digit/period bounds and the 80-bit floor were reviewable against
+    the RFCs alone. 22 invariants.
+  - docs/specs/auto-lock.md — a security boundary plus a config key
+    (idle_lock_seconds), and edge cases nobody holds in their head: the sampling
+    interval, the monotonic clock, and the teardown order at lock. 16 invariants,
+    one of them (INV-4a, the CAPTURE propagation phase) a detail I had omitted
+    from the draft and caught by checking the code rather than trusting it.
+  - docs/specs/clipboard-auto-clear.md — config key clipboard_clear_seconds, a
+    security boundary, and the clear-only-if-unchanged rule with its
+    trailing-newline and no-reader-available branches. 13 invariants.
+
+  SKIPPED, with reasons:
+  - ROLO-0004 password generation. One subsystem, obvious in shape, cheap to
+    redo, and nothing else binds to it. §1's skip case exactly. The invariant
+    worth having (a generated password includes at least one character from each
+    enabled class) is a test, not a document.
+  - ROLO-0021 the peek/eye toggle. One subsystem, view-only, never persists. Its
+    real problem is not a missing spec but that it falsifies
+    entries-and-fields.md INV-9's "the value entry's visibility always tracks the
+    Hide checkbox" — which is ROLO-0057, already filed. A new document would not
+    fix that sentence.
+  - Password health (audit_passwords) was the sixth candidate named here. Its
+    open contract question -- what "reused" means -- was settled by the user this
+    session and implemented as ROLO-0066, so the ambiguity that made it a
+    candidate is gone.
+
+  These are RETROACTIVE specs, so per docs/specs/README.md they carry no Status
+  line and no review loop log, and the cold-read gate that README specifies is
+  for specs written BEFORE implementation. Global CLAUDE.md rule 14 points the
+  same way: a document recording what was actually built has nothing left to
+  protect, because the build was the review. A gate on them is therefore
+  available but not owed; ROLO-0082 records the offer rather than an obligation.
   **Layman:** Five features that are finished and in use were never written down anywhere, so there is nothing to check them against when they change.
   Kind: doc.
   Source: review-code 2026-08-31 lanes 2, 3, 6 (each hit the gap independently).
@@ -951,6 +990,33 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ROLO-0043 implementation).
   Lanes: docs, crypto.
+
+- 💭 [ROLO-0082] **Optionally cold-read the three retroactive specs ROLO-0061 wrote.**
+  ROLO-0061 produced docs/specs/totp-codes.md, auto-lock.md and
+  clipboard-auto-clear.md. Filed as CONSIDERED rather than PLANNED, because the
+  gate is available but not owed, and recording it as owed would be false.
+
+  Two rules agree on that. docs/specs/README.md says the review-contract gate is
+  for specs written BEFORE implementation, and marks retroactive specs as
+  carrying no Status line and no loop log -- which these do not. Global CLAUDE.md
+  rule 14 exempts a document that records what was actually built, on the grounds
+  that a cold read before implementation has nothing left to protect once the
+  code exists.
+
+  What a gate would still buy is a check that each invariant matches the code,
+  since these were extracted by one reader in one pass. That is real value, just
+  not an obligation. Two invariants were already corrected that way before the
+  files landed -- the CAPTURE propagation phase in auto-lock.md INV-4a, and the
+  immediate first tick in totp-codes.md INV-21 -- both found by opening the code
+  rather than trusting the draft.
+
+  If it is run: `review-contract docs/specs/<name>.md --genre spec`, cap 2 each.
+  Distinct from ROLO-0081, which covers two documents that DID gain new rules and
+  therefore do owe a gate.
+  **Layman:** Three newly written descriptions of how existing features work could be checked by a fresh reader, but nothing depends on that happening.
+  Kind: doc.
+  Source: in-session-2026-09-02 (ROLO-0061).
+  Lanes: docs.
 
 ## Low priority / nice-to-have
 
