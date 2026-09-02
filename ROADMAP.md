@@ -334,6 +334,34 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 1 (verified; a LEDGER CORRECTION -- the audit pass recorded this as fixed and it was not).
   Lanes: crypto, docs.
 
+- 📋 [ROLO-0084] **security-standards.md calls cryptography "the one security-critical dependency"; certifi is a second one.**
+  docs/security-standards.md reads "`cryptography` is the one security-critical
+  dependency, and it follows `dependency-management-standards.md` like any other".
+
+  certifi is a second one. It is the CA bundle the frozen binaries' TLS trust
+  depends on: rolodex.py uses it for the updater's SSL context, build.yml installs
+  it on all three platforms, packaging/*-build.sh names it a prerequisite with
+  "certifi is NOT optional", and CI-local.sh fails the gate when it is missing. It
+  is deliberately absent from requirements.txt because it is build-time only
+  (ROLO-0037 D7), so it matches none of that standard's dependency bullets either.
+
+  Consequence: a conformer running the freshness sweep checks cryptography, never
+  certifi, and ships release binaries carrying a stale CA bundle -- the staleness
+  risk the latest-by-default policy exists to prevent.
+
+  dependency-management-standards.md was corrected in this session's gate; this
+  is the same claim in the second document.
+
+  Filed rather than fixed inline for two reasons. It is a neighbouring document's
+  rule, and the run that found it had the dependency standard as its subject. And
+  security-standards.md reached its review-contract cap on 2026-09-02 (ROLO-0062);
+  this edit changes what a conformer sweeps, so it is a direction change that
+  re-arms that document's gate rather than a correction that rides along.
+  **Layman:** A security document says we have only one security-sensitive add-on library. We have two, and the second one supplies the list of trusted certificates the auto-updater checks downloads against.
+  Kind: doc-fix.
+  Source: review-contract 2026-09-02 loop 1 on dependency-management-standards.md (4b sweep collateral).
+  Lanes: docs, security.
+
 ## Medium priority
 
 - 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
