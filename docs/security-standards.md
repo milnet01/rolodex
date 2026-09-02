@@ -11,9 +11,11 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
 1. **Secrets never touch disk unencrypted — except where the user explicitly asks.** The only
    plaintext-writing path is the *Export* feature, which is gated behind a confirmation dialog.
    Do not add logging, temp files, crash dumps, or caches that contain field values or the
-   master password.
+   master password. The `0600` temp that `write_private_file()` stages is not such a temp file —
+   rule 2 requires it, and `os.replace` moves it into place within the same call.
 
-2. **Every secret-bearing file (vault, export, backup) is created `0600`.** Route every such
+2. **Every secret-bearing file (vault, export, backup) is created — and overwritten — `0600`.**
+   Route every such
    write through `write_private_file()`, which stages via `tempfile.mkstemp` (0600 from
    creation), `fsync`s, and `os.replace`s into position — so the file is never briefly
    world-readable and an interrupted write cannot truncate the previous good copy
@@ -24,8 +26,11 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
    from the 0600 rule — it holds no secrets — though it is written atomically for durability.)
 
    This clause described `os.open(..., O_TRUNC, 0o600)` until 1.3.1 made vault writes atomic.
-   That `O_TRUNC` form is no longer used anywhere and following it would silently undo INV-16.
-   (The `O_EXCL` form in rule 3 is a different case and is still correct — see there.)
+   That `O_TRUNC` form is no longer used anywhere. Following it would undo INV-16's atomicity
+   **and** INV-9's overwrite guarantee: `os.open`'s mode argument applies only when the file is
+   created, so re-opening an existing `0644` file with `0o600` leaves it `0644`. Atomicity is
+   not the only thing that form cost. (The `O_EXCL` form in rule 3 is a different case and is
+   still correct — see there.)
 
 3. **A secret-bearing file that is a signing key is covered too.** `scripts/gen-signing-key.py`
    writes the release private key with `os.open(..., O_CREAT | O_EXCL, 0o600)`, and CI never
@@ -39,8 +44,15 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
    the operator noticing is unrecoverable — every already-published signature stops verifying.
 
 4. **Don't weaken the KDF.** `ITERATIONS = 600_000` PBKDF2-HMAC-SHA256 is the floor. It may be
-   raised (with a migration path), never lowered. The salt stays 16 random bytes, unique per
-   vault, generated with `os.urandom`.
+   raised, never lowered. The salt stays 16 random bytes, unique per vault, generated with
+   `os.urandom`.
+
+   Raising it is a **format change, not a constant change.** The header carries no iteration
+   count, so an existing vault re-read at a higher count fails as `InvalidToken` — which the
+   unlock dialog reports as "Wrong password.", the worst available error for an app with no
+   recovery path. A raise therefore needs a new magic and a `migrate_vault` branch that reads
+   the old count from the header: the mechanism `vault-format-and-crypto.md`'s notes reserve
+   for ROLO-0005. Bumping the constant alone is the breakage, not the migration.
 
 5. **Never persist the master password.** It lives only as a local variable / `self.password`
    for the session. No writing it to config, no environment variables, no clipboard.
@@ -76,10 +88,14 @@ Before merging anything that touches crypto, file I/O, import/export, or clipboa
 
 ## Dependencies & supply chain
 
-- Keep `cryptography` reasonably current; it is the one security-critical dependency. When
-  bumping it, skim its changelog for anything affecting Fernet/PBKDF2. `requirements.txt` pins a
-  floor of `>=44.0.0` because older releases carry known CVEs — never drop below it; prefer the
-  latest (see `dependency-management-standards.md`).
+- `cryptography` is the one security-critical dependency, and it follows
+  `dependency-management-standards.md` like any other: **latest stable by default**, with a
+  forced-older pin allowed only through that standard's process (inline reason plus a ledger
+  entry). Sitting on an older release because it is "current enough" breaches that standard.
+  When bumping, skim its changelog for anything affecting Fernet/PBKDF2.
+- `requirements.txt` sets a floor of `>=44.0.0` because older releases carry known CVEs, and
+  **that floor overrides the forced-older-pin exception** — a pin below it is never permitted,
+  ledger entry or not. A break fixable only by going below the floor is a release blocker.
 - Adding any new dependency that handles secrets or does crypto requires explicit review — the
   default answer is "use the standard library or `cryptography`."
 

@@ -18,8 +18,11 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 
 - **INV-4** The encryption key is `base64.urlsafe_b64encode(PBKDF2HMAC(SHA256, length=32,
   salt, iterations=600_000).derive(password_utf8))`.
-- **INV-5** `ITERATIONS` is 600,000 and is treated as a floor — it may increase (with a
-  migration), never decrease.
+- **INV-5** `ITERATIONS` is 600,000 and is treated as a floor — it may increase, never decrease.
+  An increase is a **format change**, because INV-1's header records no iteration count: an
+  existing vault re-read at a higher count fails as `InvalidToken`, indistinguishable from a
+  wrong password. It therefore needs a new magic and a `migrate_vault` branch that reads the old
+  count from the header — the mechanism the notes reserve for ROLO-0005.
 - **INV-6** The salt passed to `derive_key` is the exact 16 bytes read from (or written to)
   the file header for that vault.
 
