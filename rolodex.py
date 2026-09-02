@@ -121,15 +121,31 @@ def write_private_file(path: str, data: bytes) -> None:
         raise
 
 
-def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
-    key = derive_key(password, salt)
+def save_vault_with_key(vault_data: dict, key: bytes, salt: bytes, path: str) -> None:
+    """Encrypt and write the whole vault under an ALREADY-DERIVED key.
+
+    derive_key is deliberately expensive, so a caller that already holds the key for this
+    salt -- an open window, which derived it at unlock -- must not pay for it again on every
+    save (ROLO-0043). `key` and `salt` must be the pair that belong together: the salt is
+    stored in the clear beside the ciphertext, so writing a key derived from a different salt
+    produces a vault no password can open.
+    """
     f = Fernet(key)
     plaintext = json.dumps(vault_data, ensure_ascii=False).encode("utf-8")
     ciphertext = f.encrypt(plaintext)
     write_private_file(path, MAGIC + salt + ciphertext)
 
 
-def load_vault(password: str, path: str) -> tuple[dict, bytes]:
+def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
+    save_vault_with_key(vault_data, derive_key(password, salt), salt, path)
+
+
+def load_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]:
+    """Decrypt the vault, returning the derived key alongside it.
+
+    Unlocking already runs the KDF once. Handing the key back lets the session keep it
+    instead of deriving it a second time for the first save (ROLO-0043).
+    """
     with open(path, "rb") as fp:
         magic = fp.read(4)
         if magic != MAGIC:
@@ -147,13 +163,25 @@ def load_vault(password: str, path: str) -> tuple[dict, bytes]:
     key = derive_key(password, salt)
     f = Fernet(key)
     plaintext = f.decrypt(ciphertext)
-    return json.loads(plaintext.decode("utf-8")), salt
+    return json.loads(plaintext.decode("utf-8")), salt, key
+
+
+def load_vault(password: str, path: str) -> tuple[dict, bytes]:
+    vault, salt, _key = load_vault_with_key(password, path)
+    return vault, salt
+
+
+def create_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]:
+    """Create an empty vault, returning its derived key alongside (see load_vault_with_key)."""
+    salt = os.urandom(16)
+    key = derive_key(password, salt)
+    vault_data = {"version": 2, "categories": [], "entries": {}}
+    save_vault_with_key(vault_data, key, salt, path)
+    return vault_data, salt, key
 
 
 def create_vault(password: str, path: str) -> tuple[dict, bytes]:
-    salt = os.urandom(16)
-    vault_data = {"version": 2, "categories": [], "entries": {}}
-    save_vault(vault_data, password, salt, path)
+    vault_data, salt, _key = create_vault_with_key(password, path)
     return vault_data, salt
 
 
@@ -1337,11 +1365,11 @@ class UnlockDialog(Gtk.Window):
                 self._show_error("Passwords do not match.")
                 return
             try:
-                vault, salt = create_vault(pw, self.vault_path)
+                vault, salt, key = create_vault_with_key(pw, self.vault_path)
             except Exception as e:
                 self._show_error(str(e))
                 return
-            self.app.open_main(vault, salt, pw, self.vault_path)
+            self.app.open_main(vault, salt, pw, self.vault_path, key)
             self.close()
         else:
             self.btn.set_sensitive(False)
@@ -1352,14 +1380,14 @@ class UnlockDialog(Gtk.Window):
 
     def _try_unlock(self, pw):
         try:
-            vault, salt = load_vault(pw, self.vault_path)
-            GLib.idle_add(self._unlock_ok, vault, salt, pw)
+            vault, salt, key = load_vault_with_key(pw, self.vault_path)
+            GLib.idle_add(self._unlock_ok, vault, salt, pw, key)
         except InvalidToken:
             GLib.idle_add(self._unlock_fail, "Wrong password.")
         except Exception as e:
             GLib.idle_add(self._unlock_fail, str(e))
 
-    def _unlock_ok(self, vault, salt, pw):
+    def _unlock_ok(self, vault, salt, pw, key):
         # Everything after a SUCCESSFUL decrypt needs its own handler. This runs from a
         # GLib.idle_add callback with the unlock button already disabled, so an exception here
         # (a malformed vault reaching migrate_vault, a bad value in .rolodex.conf reaching
@@ -1367,7 +1395,7 @@ class UnlockDialog(Gtk.Window):
         # decrypted in memory and nothing on screen explaining why.
         try:
             migrate_vault(vault)
-            self.app.open_main(vault, salt, pw, self.vault_path)
+            self.app.open_main(vault, salt, pw, self.vault_path, key)
         except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
             self._unlock_fail(f"The vault opened but could not be loaded: {exc}")
             return
@@ -1494,12 +1522,18 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
 
 
 class MainWindow(Adw.ApplicationWindow):
-    def __init__(self, app, vault, salt, password, vault_path):
+    def __init__(self, app, vault, salt, password, vault_path, key=None):
         super().__init__(application=app, title="Rolodex")
         self.app_ref = app
         self.vault = vault
         self.salt = salt
         self.password = password
+        # The derived key for (password, salt), held for the session so that saving does not
+        # re-run the KDF on the UI thread (ROLO-0043). Unlock and create already derived it and
+        # pass it in; it is derived here only if they did not. It is the master password in
+        # another form, so it is cleared everywhere self.password is, and re-derived only where
+        # the salt rotates -- _finish_change_password and _finish_restore.
+        self._key = key if key is not None else derive_key(password, salt)
         self.vault_path = vault_path
         self._revealed = False
         # TOTP live-code tick (ROLO-0006): one 1s timer refreshes every code row on screen.
@@ -1727,7 +1761,7 @@ class MainWindow(Adw.ApplicationWindow):
         call save_vault directly instead, so they can order the write before the assignment.
         """
         try:
-            save_vault(self.vault, self.password, self.salt, self.vault_path)
+            save_vault_with_key(self.vault, self._key, self.salt, self.vault_path)
             return True
         except OSError as exc:
             self._show_message("Could Not Save", f"The vault was not written to disk: {exc}")
@@ -2276,6 +2310,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.password = None
         self.vault = None
         self.salt = None
+        self._key = None
 
     def _toast(self, msg):
         # AdwToast:use-markup defaults to TRUE, so this is a Pango markup sink and callers
@@ -2360,6 +2395,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.vault = None
         self.salt = None
         self.password = None
+        self._key = None
         app, path = self.app_ref, self.vault_path
         self.close()
         UnlockDialog(app, path, is_new=False).present()
@@ -2572,7 +2608,7 @@ class MainWindow(Adw.ApplicationWindow):
         pw_dialog = RestorePasswordDialog(self)
         pw_dialog.present(self)
 
-    def _finish_restore(self, vault, salt, password):
+    def _finish_restore(self, vault, salt, password, key):
         if self.vault is None:
             return  # the vault was locked while the file dialog was open
         migrate_vault(vault)  # INV-13: migrate before the backup becomes live
@@ -2581,7 +2617,7 @@ class MainWindow(Adw.ApplicationWindow):
         # contacts.vault still held the original, and the next edit's save would then overwrite
         # the original with a restore the user had been told did not happen.
         try:
-            save_vault(vault, password, salt, self.vault_path)
+            save_vault_with_key(vault, key, salt, self.vault_path)
         except OSError as exc:
             self._show_message(
                 "Restore Failed",
@@ -2591,6 +2627,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.vault = vault
         self.salt = salt
         self.password = password
+        self._key = key
         self._current_entry_id = None
         self.detail_stack.set_visible_child_name("empty")
         self._refresh_list()
@@ -2672,8 +2709,9 @@ class MainWindow(Adw.ApplicationWindow):
         vault under a password the user may never have written down. There is no recovery path.
         """
         new_salt = os.urandom(16)
+        new_key = derive_key(new_pw, new_salt)
         try:
-            save_vault(self.vault, new_pw, new_salt, self.vault_path)
+            save_vault_with_key(self.vault, new_key, new_salt, self.vault_path)
         except OSError as exc:
             self._show_message(
                 "Password Not Changed",
@@ -2682,6 +2720,7 @@ class MainWindow(Adw.ApplicationWindow):
             return
         self.password = new_pw
         self.salt = new_salt
+        self._key = new_key
         self._toast("Master password changed")
 
     # ------------------------------------------------------------------
@@ -3440,20 +3479,20 @@ class RestorePasswordDialog(Adw.Dialog):
 
     def _try_unlock(self, pw):
         try:
-            vault, salt = load_vault(pw, self.main_win._restore_path)
-            GLib.idle_add(self._unlock_ok, vault, salt, pw)
+            vault, salt, key = load_vault_with_key(pw, self.main_win._restore_path)
+            GLib.idle_add(self._unlock_ok, vault, salt, pw, key)
         except InvalidToken:
             GLib.idle_add(self._unlock_fail, "Wrong password for this backup.")
         except Exception as e:
             GLib.idle_add(self._unlock_fail, str(e))
 
-    def _unlock_ok(self, vault, salt, pw):
+    def _unlock_ok(self, vault, salt, pw, key):
         # The KDF runs on a background thread and Cancel/Esc only closes this dialog -- it does
         # not cancel or disown the thread. Without this check a cancelled restore still landed
         # and overwrote the live vault, which is the one operation here that cannot be undone.
         if not self.get_presented():
             return
-        self.main_win._finish_restore(vault, salt, pw)
+        self.main_win._finish_restore(vault, salt, pw, key)
         self.close()
 
     def _unlock_fail(self, msg):
@@ -4185,8 +4224,8 @@ class RolodexApp(Adw.Application):
         win = UnlockDialog(self, self.vault_path, is_new)
         win.present()
 
-    def open_main(self, vault, salt, password, vault_path):
-        win = MainWindow(self, vault, salt, password, vault_path)
+    def open_main(self, vault, salt, password, vault_path, key=None):
+        win = MainWindow(self, vault, salt, password, vault_path, key)
         win.present()
 
 

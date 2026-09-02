@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Rolodex is a single-file GTK4/Adwaita desktop app (`rolodex.py`, ~3190 lines) that stores
+Rolodex is a single-file GTK4/Adwaita desktop app (`rolodex.py`) that stores
 credentials in one AES-encrypted vault file. There is no build system; the only manifest is
 `requirements.txt` (the single pip dependency, `cryptography`). Tests are a seed suite in
 `tests/` (pytest — run `pytest tests/`); broader coverage is ROLO-0001. The project is a git
@@ -26,12 +26,13 @@ section). Don't hardcode a machine-specific absolute path into it.
 
 ## Architecture
 
-The file is organised top-to-bottom as **pure logic → GUI**. The pure layer (roughly the
-first 590 lines, up to the `# GTK4 / Adwaita GUI` banner) has no GTK imports and is the safest
-place to make and reason about changes.
+The file is organised top-to-bottom as **pure logic → GUI**. The pure layer — everything above
+the `# GTK4 / Adwaita GUI` banner — has no GTK imports and is the safest place to make and
+reason about changes. (Grep for the banner rather than trusting a line number; this file used to
+carry one and it drifted by hundreds of lines.)
 
-**Encryption layer** (`derive_key`, `save_vault`, `load_vault`, `create_vault`) — canonical
-contract: `docs/specs/vault-format-and-crypto.md`:
+**Encryption layer** (`derive_key`, `save_vault`, `load_vault`, `create_vault`, plus their
+`*_with_key` siblings) — canonical contract: `docs/specs/vault-format-and-crypto.md`:
 - On-disk format is `MAGIC(4 bytes "VLT1") + salt(16 bytes) + Fernet ciphertext`.
 - Key = PBKDF2-HMAC-SHA256, 600k iterations, over the master password + per-vault salt,
   fed into Fernet. The salt is stored in the clear inside the file (standard practice).
@@ -108,6 +109,12 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
   how the end-to-end feature checks were done — `contacts.vault` is never involved.
 - **The live TOTP code renders grouped: `"543 878"`, not `"543878"`.** A check asserting six
   contiguous digits fails against a working feature. Strip spaces before comparing.
+- **Never derive the key on a save path.** `MainWindow._key` holds the key derived at unlock,
+  and `_save()` writes through `save_vault_with_key`. Calling `save_vault` there instead still
+  works and still passes every round-trip test — it just silently puts 600k PBKDF2 rounds back
+  on the GTK main thread, measured at ~81 ms per mutation (ROLO-0043). Re-derive only where the
+  salt rotates: `_finish_change_password` and `_finish_restore`. A cached key and its salt are a
+  pair; writing one with the other's salt yields a vault no password opens.
 - Master-password changes (`_finish_change_password`) rotate the salt and re-encrypt on save;
   they verify the *current* password against the in-memory `self.password`, not by re-decrypting.
 - **`__version__` in `rolodex.py` is version-bearing.** The updater compares against it, so

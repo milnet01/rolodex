@@ -1,7 +1,8 @@
 # Spec: Vault Format & Cryptography
 
 Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vault`,
-`create_vault`, `migrate_vault`).
+`create_vault`, `migrate_vault`, and the `save_vault_with_key` / `load_vault_with_key` /
+`create_vault_with_key` siblings that carry an already-derived key).
 
 ## Behaviour
 
@@ -56,6 +57,17 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 - **INV-13** `migrate_vault` is called after every successful `load_vault` (both unlock and
   restore paths) before the data is used.
 
+- **INV-17** The KDF runs once per credential, not once per save. The `_with_key` siblings take
+  an already-derived key and do no derivation; `save_vault`, `load_vault` and `create_vault`
+  remain as wrappers that derive one, and keep their original signatures and return shapes. An
+  open session holds the key for its current `(password, salt)` pair and re-derives only where
+  the salt rotates — a master-password change and a backup restore. Two consequences bind any
+  new caller. A key must only ever be written alongside the salt it was derived from, because
+  the header salt is what a later unlock derives against and a mismatched pair yields a vault
+  no password opens (INV-6 is the same rule stated from the reading side). And the derived key
+  is the master password in another form: it lives only in memory, is never written, and is
+  cleared wherever the password is.
+
 - **INV-16** A secret write is **atomic**: the bytes are written to a temp in the destination's
   own directory, `flush`ed and `os.fsync`ed, then `os.replace`d into place. An interrupted write —
   a crash, a full disk, a power cut — therefore leaves the previous file byte-for-byte intact
@@ -65,7 +77,9 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 ## Notes
 
 - There is no password recovery by design (see `SECURITY.md`); the password is never stored.
-- Changing the master password rotates the salt (`os.urandom(16)`) and re-encrypts immediately
-  (its handler calls `_save`) — see `master-password.md`.
+- Changing the master password rotates the salt (`os.urandom(16)`) and re-encrypts immediately.
+  Its handler writes through `save_vault_with_key` directly rather than through `_save`, so the
+  write is ordered before the new credentials are adopted and a failed write leaves the session
+  on the old pair — see `master-password.md`.
 - Future KDF upgrade (Argon2id) is roadmap ROLO-0005 and will extend the header + INV-4/-5 with
   a recorded algorithm identifier and a `migrate_vault` upgrade branch.

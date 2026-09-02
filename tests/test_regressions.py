@@ -343,3 +343,92 @@ def test_download_and_verify_converts_a_non_update_error_to_update_error(tmp_pat
         "an OSError must become the plain UpdateError, not its UpdateVerificationError subclass"
     )
     assert isinstance(excinfo.value.__cause__, OSError)
+
+
+# --- ROLO-0043: saving must not re-run the KDF ---------------------------------------------
+
+
+def _counting_derive_key(monkeypatch):
+    """Wrap rolodex.derive_key with a call counter, returning the counter list."""
+    calls = []
+    real = rolodex.derive_key
+
+    def counted(password, salt):
+        calls.append((password, salt))
+        return real(password, salt)
+
+    monkeypatch.setattr(rolodex, "derive_key", counted)
+    return calls
+
+
+def test_ROLO0043_save_vault_with_key_never_derives(tmp_path, monkeypatch):
+    """save_vault_with_key must do zero KDF work.
+
+    _save() calls it from a GTK signal handler on every mutation -- add, edit, delete, field
+    reorder, drag-to-category. Deriving there put ITERATIONS rounds of PBKDF2 on the UI thread
+    for each one, which is the freeze this function exists to remove. If a later refactor makes
+    it derive again the app still works and the freeze silently returns, so the absence of the
+    call is the thing worth asserting.
+    """
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+
+    calls = _counting_derive_key(monkeypatch)
+    rolodex.save_vault_with_key(vault, key, salt, path)
+
+    assert calls == [], f"save_vault_with_key ran the KDF {len(calls)} time(s); it must run none"
+
+
+def test_ROLO0043_unlock_and_create_derive_exactly_once(tmp_path, monkeypatch):
+    """The two session-opening paths must each derive once, not twice.
+
+    The point of returning the key is that the caller keeps it. A wrapper that derived, then
+    let its caller derive again, would pass a round-trip test while costing two KDF runs per
+    unlock -- doubling the one wait the user cannot avoid.
+    """
+    path = str(tmp_path / "v.vault")
+
+    calls = _counting_derive_key(monkeypatch)
+    rolodex.create_vault_with_key(PW, path)
+    assert len(calls) == 1, f"create_vault_with_key derived {len(calls)} times, expected 1"
+
+    calls.clear()
+    rolodex.load_vault_with_key(PW, path)
+    assert len(calls) == 1, f"load_vault_with_key derived {len(calls)} times, expected 1"
+
+
+def test_ROLO0043_returned_key_round_trips_through_the_password(tmp_path):
+    """A vault written under the returned key must still open with the master password.
+
+    The key and salt are a pair. Writing under a key derived from a different salt produces a
+    file no password opens, and the vault is the user's only copy -- so this checks the key
+    handed back really is the one the stored salt implies.
+    """
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+    vault["entries"]["id-1"] = {"name": "Bank", "category": "", "fields": [], "notes": ""}
+
+    rolodex.save_vault_with_key(vault, key, salt, path)
+
+    reloaded, reloaded_salt = rolodex.load_vault(PW, path)
+    assert reloaded["entries"]["id-1"]["name"] == "Bank"
+    assert reloaded_salt == salt
+
+
+def test_ROLO0043_legacy_wrappers_keep_their_signatures(tmp_path):
+    """save_vault / load_vault / create_vault must keep their exact pre-ROLO-0043 shape.
+
+    They are the documented pure-layer contract and the tests, the spec and any future caller
+    bind to them. The _with_key siblings were added beside them precisely so this did not
+    change; a wrapper that leaked the third tuple member would break every existing caller.
+    """
+    path = str(tmp_path / "v.vault")
+
+    vault, salt = rolodex.create_vault(PW, path)
+    assert isinstance(salt, bytes) and len(salt) == 16
+
+    rolodex.save_vault(vault, PW, salt, path)
+
+    loaded, loaded_salt = rolodex.load_vault(PW, path)
+    assert loaded == vault
+    assert loaded_salt == salt

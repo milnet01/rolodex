@@ -38,6 +38,15 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **Saving is no longer slowed by re-scrambling your master password on every edit** (ROLO-0043)
+  Rolodex turns your master password into an encryption key using a
+  deliberately slow calculation, so that guessing it is expensive. That
+  calculation used to run again every single time anything changed — adding
+  an entry, renaming one, dragging it to a category, reordering a field.
+  It now runs once when you unlock, and again only if the password itself
+  changes or you restore a backup. Measured on a mid-range desktop, a save
+  went from about 81 milliseconds to under a tenth of one.
+
 - **Build and CI hardening**
   All GitHub Actions are pinned to a specific commit rather than a moving tag, so a re-pointed tag cannot introduce new code into a release build. Checkout no longer leaves credentials in the workspace. The Linux and macOS build self-tests have the same timeout the Windows one already had, so a hang fails the build instead of blocking a runner for six hours. certifi is now named in the build scripts' prerequisites and asserted by the local CI gate, since the release binaries are built with it. A missing typelib now fails the Windows build immediately rather than producing a binary that fails mysteriously at runtime.
 

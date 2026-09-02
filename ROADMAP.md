@@ -180,7 +180,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: in-session-2026-08-27.
 
-- 📋 [ROLO-0043] **Cache the derived Fernet key so saving does not re-run the 600k KDF on the UI thread.**
+- ✅ [ROLO-0043] **Cache the derived Fernet key so saving does not re-run the 600k KDF on the UI thread.**
   save_vault() calls derive_key(), which runs ITERATIONS = 600_000 PBKDF2 rounds. _save()
   calls it from a GTK signal handler on EVERY mutation -- add, edit, delete, field reorder,
   drag-to-category, category rename. That is the identical work the unlock and restore paths
@@ -195,7 +195,28 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Already acknowledged as a known gap in DESIGN.md and docs/coding-standards.md, which is why
   this is queued rather than fixed in the audit pass: it changes the crypto call path and
   wants its own change with tests.
-  **Layman:** Every edit currently freezes the window for about a second while it re-scrambles your master password. Doing that work once at unlock instead makes saving feel instant.
+  Resolved (2026-09-02): implemented as three `_with_key` siblings in the pure
+  layer -- save_vault_with_key / load_vault_with_key / create_vault_with_key --
+  each doing the real work, with save_vault / load_vault / create_vault kept as
+  thin wrappers at their original signatures so no existing caller or test
+  changed. MainWindow holds the key derived at unlock in self._key; _save()
+  writes through save_vault_with_key. The key is re-derived only where the salt
+  rotates (_finish_change_password, _finish_restore) and is cleared alongside
+  self.password in _lock and _wipe_secrets_for_update.
+
+  Measured, not estimated: a save went from 81 ms to 0.09 ms (858x). Driven
+  headlessly against a real MainWindow, 20 consecutive saves took 3 ms total
+  with zero KDF runs, the vault still reloaded under the master password, and a
+  password change rotated both salt and key with the vault reopening under the
+  new password.
+
+  Four regression tests added to tests/test_regressions.py, and proved red
+  against a mutant that puts the KDF back inside save_vault_with_key (2 of the 4
+  fail on the mutant, all 4 pass on the fix). Full CI-local green.
+
+  The item's Layman line said "about a second" per edit; the measured figure is
+  about 81 ms. Corrected in the trailer rather than left standing.
+  **Layman:** Every edit used to pause the window for about a tenth of a second while it re-scrambled your master password. Doing that work once at unlock instead makes saving effectively instant.
   Kind: perf.
   Source: review-code 2026-08-31 lanes 1, 5, 9 (independently).
   Lanes: crypto, gui.
@@ -836,6 +857,35 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: security.
   Source: review-code 2026-08-31 lane 4 (verified; defence-in-depth, not live defects).
   Lanes: updater.
+
+- 📋 [ROLO-0081] **Run review-contract over docs/specs/vault-format-and-crypto.md, which ROLO-0043 gave a new invariant.**
+  ROLO-0043 added INV-17 to docs/specs/vault-format-and-crypto.md: the KDF runs
+  once per credential rather than once per save, the `_with_key` siblings carry
+  an already-derived key, a key must only be written alongside the salt it was
+  derived from, and the derived key is cleared wherever the password is.
+
+  Under global CLAUDE.md rule 14 the test is "would someone conforming to this
+  document now do something different?" -- and the answer is plainly yes: a new
+  save path written against the spec before this edit would call save_vault and
+  silently reintroduce the defect ROLO-0043 removed. That makes it a direction
+  change owing `review-contract docs/specs/vault-format-and-crypto.md
+  --genre spec`, which has NOT been run.
+
+  The same commit also added a matching convention bullet to the project
+  CLAUDE.md, which is a built-under document and carries the same obligation.
+
+  Two corrections landed in the same commit and are NOT what this item is about,
+  since neither changes what a conformer builds: the spec's Notes said the
+  password-change handler "calls `_save`" when it has always written directly so
+  it can order the write before adopting new credentials, and CLAUDE.md placed
+  the pure/GUI boundary at "roughly the first 590 lines" when the banner sits far
+  below that.
+
+  The edits are believed correct; this is about the gate being owed.
+  **Layman:** A rule about how the vault must be saved was added to the design document, and that addition has not itself been reviewed by a fresh pair of eyes.
+  Kind: doc-fix.
+  Source: in-session-2026-09-02 (ROLO-0043 implementation).
+  Lanes: docs, crypto.
 
 ## Low priority / nice-to-have
 
