@@ -1009,7 +1009,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 4 (verified; defence-in-depth, not live defects).
   Lanes: updater.
 
-- 📋 [ROLO-0081] **Run review-contract over the two documents this session gave new rules: the vault spec and the dependency standard.**
+- ✅ [ROLO-0081] **Run review-contract over the two documents this session gave new rules: the vault spec and the dependency standard.**
   ROLO-0043 added INV-17 to docs/specs/vault-format-and-crypto.md: the KDF runs
   once per credential rather than once per save, the `_with_key` siblings carry
   an already-derived key, a key must only be written alongside the salt it was
@@ -1047,6 +1047,35 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   which has NOT been run.
 
   Both documents on this item are believed correct. What is owed is the gate.
+  Resolved (2026-09-02): both gates run and closed at their caps.
+
+  vault-format-and-crypto.md, genre spec, cap 2. Loop 1 Q1 3 / Q2 1 / Q3 1 -- five
+  verified, five fixed. Loop 2 Q1 2 / Q2 2 -- four verified, four fixed. Violent
+  cap: three of loop 2's four landed on loop 1's own text. The gate does not
+  re-arm on this text; the spec routes to implementation.
+
+  dependency-management-standards.md, genre standard, cap 3. Loop 1 six fixed,
+  loop 2 five fixed, loop 3 seven fixed. Violent cap: every one of loop 3's seven
+  landed on text this run wrote.
+
+  Twenty-two verified findings fixed across five loops. The best of them landed on
+  INV-17 itself -- the text that armed this item -- which claimed all three
+  _with_key siblings take an already-derived key when two take a password and
+  derive internally, a signature that cannot exist because the salt lives inside
+  the file being opened.
+
+  Records: the spec carries its loop log as section 12; the standard's is in
+  docs/review-2026-09-02-dependency-management-standards.md, per this project's
+  convention for standards.
+
+  Filed rather than fixed: ROLO-0083 (master-password.md ordering), ROLO-0084
+  (security-standards.md's "one security-critical dependency"), and two design
+  decisions annotated onto ROLO-0005.
+
+  Procedural defect recorded in the spec's loop-2 row: a project-wide
+  workspace_search returns the loop-log row from the unscrubbed original, so
+  scrubbing does not withhold review history from a lane that searches the tree.
+  Two lanes disclosed it unprompted.
   **Layman:** A rule about how the vault must be saved was added to the design document, and that addition has not itself been reviewed by a fresh pair of eyes.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ROLO-0043 implementation).
