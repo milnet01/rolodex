@@ -53,7 +53,7 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
    recovery path. A raise therefore needs a **new magic**, so `load_vault` can tell the two
    apart: `VLT1` implies 600,000 — the old header has no field to read it from — and the new
    format records its count so later raises can. That is the mechanism
-   `vault-format-and-crypto.md`'s notes reserve for ROLO-0005. Bumping the constant alone is the
+   `vault-format-and-crypto.md` INV-5 states for ROLO-0005. Bumping the constant alone is the
    breakage, not the migration.
 
 5. **Never persist the master password.** It lives only as a local variable / `self.password`

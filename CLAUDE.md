@@ -57,7 +57,9 @@ cosmetic and unrelated to the `sensitive` flag or the user-defined `categories`.
 
 **Migration** — `migrate_vault()` upgrades older vaults in place (adds `categories`, backfills
 `entry["category"]`, stamps `version: 2`). It is idempotent and MUST be called after every
-`load_vault` (unlock and restore both call it). If you change the on-disk shape, bump the
+successful load. Not after `load_vault` — nothing calls that; the app calls
+`load_vault_with_key` / `create_vault_with_key`, and unlock, restore and create each migrate
+before the data is used. If you change the on-disk shape, bump the
 version and extend this function rather than assuming fields exist.
 
 **GUI layer** (GTK4 + libadwaita):

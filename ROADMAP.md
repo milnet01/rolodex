@@ -1029,6 +1029,35 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-09-02 (ROLO-0061).
   Lanes: docs.
 
+- 📋 [ROLO-0083] **master-password.md states adopt-then-save, where the code and the vault spec both require save-then-adopt.**
+  docs/specs/master-password.md INV-11 reads "On success the session password is
+  replaced, a **new random salt** is generated, and the vault is re-encrypted and
+  saved with the new password + salt" -- adopt, then save.
+
+  The code does the opposite, deliberately. `_finish_change_password` calls
+  `save_vault_with_key` first and only then assigns `self.password`, `self.salt`
+  and `self._key`, and its own docstring says why: the other order rotated the
+  session credentials unconditionally, so a failed write left the session holding
+  credentials the on-disk vault did not use -- the change looked like it had not
+  taken, and the next save silently re-encrypted the vault under a password the
+  user may never have written down, with no recovery path.
+
+  vault-format-and-crypto.md's Notes state the correct order, so the two specs
+  disagree and master-password.md is the stale side.
+
+  Fix: reword INV-11 to make the ordering explicit -- the vault is re-encrypted
+  and written first, and the session password, salt and key are adopted only once
+  that write has landed.
+
+  Filed rather than fixed inline: it is a neighbouring document's rule, and the
+  review-contract run that found it had vault-format-and-crypto.md as its subject.
+  Reordering INV-11 changes what a conformer builds, so the edit owes its own
+  rule-14 gate.
+  **Layman:** A design document describes the password-change steps in the wrong order, which could lead someone to rebuild it in a way that loses your new password if the save fails.
+  Kind: doc-fix.
+  Source: review-contract 2026-09-02 loop 1 on vault-format-and-crypto.md (out-of-scope finding, one lane).
+  Lanes: docs, crypto.
+
 ## Low priority / nice-to-have
 
 - 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
