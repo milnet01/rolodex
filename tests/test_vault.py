@@ -384,6 +384,34 @@ def test_write_private_file_failure_leaves_original_intact(tmp_path):
     assert [p for p in os.listdir(tmp_path) if p != "vault.bin"] == []
 
 
+@pytest.mark.parametrize("signal_exc", [KeyboardInterrupt, SystemExit])
+def test_write_private_file_signal_mid_write_leaves_no_temp(tmp_path, monkeypatch, signal_exc):
+    """A signal raised mid-write still unlinks the temp holding the full ciphertext (INV-16).
+
+    KeyboardInterrupt and SystemExit derive from BaseException, not Exception, so a cleanup
+    handler catching Exception lets them past and orphans a .rolodex-*.tmp next to the vault
+    — a complete second copy of the ciphertext, at 0600 but unremoved (ROLO-0060).
+
+    os.replace is the interruption point on purpose: by then the temp has been written and
+    fsynced, so it holds the entire payload. That is the worst moment for the leak, not an
+    arbitrary one.
+    """
+    path = str(tmp_path / "vault.bin")
+    rolodex.write_private_file(path, b"original")
+
+    def interrupted(src, dst):
+        raise signal_exc
+
+    monkeypatch.setattr(rolodex.os, "replace", interrupted)
+
+    with pytest.raises(signal_exc):
+        rolodex.write_private_file(path, b"new ciphertext")
+
+    assert [p for p in os.listdir(tmp_path) if p != "vault.bin"] == []
+    with open(path, "rb") as f:
+        assert f.read() == b"original"
+
+
 # --- Field classification (entries-and-fields spec) ---------------------------------------
 
 

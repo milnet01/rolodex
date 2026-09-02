@@ -113,7 +113,11 @@ def write_private_file(path: str, data: bytes) -> None:
             fp.flush()
             os.fsync(fp.fileno())
         os.replace(tmp, path)
-    except Exception:
+    except BaseException:
+        # BaseException, not Exception: KeyboardInterrupt and SystemExit are not Exceptions,
+        # and a Ctrl-C after the fsync would otherwise strand a temp holding the complete
+        # ciphertext next to the vault (ROLO-0060). Nothing can cover a power cut or SIGKILL
+        # -- no handler runs -- which is why INV-16 states that limit rather than hiding it.
         try:
             os.unlink(tmp)
         except OSError:

@@ -301,7 +301,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 5 and 8 (verified, not fixed in the audit pass).
   Lanes: gui.
 
-- 📋 [ROLO-0060] **An interrupted vault write can still leave a temp holding the full ciphertext.**
+- ✅ [ROLO-0060] **An interrupted vault write can still leave a temp holding the full ciphertext.**
   write_private_file unlinks its temp on `except Exception`. KeyboardInterrupt and SystemExit are
   BaseException, not Exception, so a Ctrl-C at the wrong moment -- and a power cut, which catches
   nothing at all -- leaves a .rolodex-*.tmp holding the complete ciphertext in the vault
@@ -318,6 +318,17 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   RECORDED AS A CORRECTION: this session's close-findings ledger marked this finding `fixed`.
   It was not -- the handler is unchanged at rolodex.py:120. Filed here so the wrong disposition
   does not stand as the record.
+  Resolved (2026-09-02): the cleanup handler is now `except BaseException`, so a
+  signal that raises -- KeyboardInterrupt, SystemExit -- unlinks the temp instead
+  of walking past it. Regression test parametrised over both, interrupting at
+  `os.replace`, which is the worst moment: the temp is written and fsynced by then,
+  so it holds the whole ciphertext. Proved red before the fix (the failure named
+  the orphaned .rolodex-*.tmp), green after; suite 137 -> 139.
+
+  INV-16 narrowed in the same change rather than left over-claiming. It now says
+  cleanup reaches only what a handler reaches, and that a power cut or SIGKILL
+  strands a 0600 temp nothing removes later. That is a direction change and owes
+  its own cold read -- tracked on ROLO-0081, not silently skipped.
   **Layman:** If the app is killed at exactly the wrong moment while saving, it can leave behind a hidden copy of your whole encrypted vault next to the real one.
   Kind: fix.
   Source: review-code 2026-08-31 lane 1 (verified; a LEDGER CORRECTION -- the audit pass recorded this as fixed and it was not).

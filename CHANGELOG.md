@@ -65,6 +65,17 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Fixed
 
+- **An interrupted save no longer leaves a stray copy of your vault behind** (ROLO-0060)
+  Saving works by writing to a temporary file first and then swapping it into
+  place, so a failed save can never damage your real vault. If the app was
+  killed at exactly the wrong moment — a Ctrl-C in a terminal, or a shutdown
+  asking it to quit — that temporary file could be left sitting next to the
+  vault, holding a complete encrypted copy of everything in it. It is now
+  cleaned up in those cases too. A hard power cut or a force-kill still cannot
+  be cleaned up, because nothing gets the chance to run; any leftover file is
+  readable only by you, and the design document now says so plainly instead of
+  promising more than the code can deliver.
+
 - **Several smaller correctness fixes**
   A failed update download now reports itself instead of ending silently. A vault written by a future version of Rolodex is refused rather than relabelled. "Hide" no longer re-ticks itself after you un-tick it and then edit the label. Secret fields tell the system not to keep them in input-method history or spellcheck. Generating a password while peeking no longer leaves it on screen. Short generated passwords can now contain digits and symbols. A malformed otpauth:// link no longer makes an entry unopenable. Two-factor settings outside the standard ranges are rejected. A base32 seed containing characters that look like base32 after case-folding is rejected rather than silently decoded to the wrong secret. Toast messages escape field labels, so a label containing "&" or "<" displays correctly. Release notes from GitHub are stripped of control and text-direction characters before being shown.
 

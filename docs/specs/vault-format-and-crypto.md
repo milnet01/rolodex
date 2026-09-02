@@ -78,8 +78,13 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 - **INV-16** A secret write is **atomic**: the bytes are written to a temp in the destination's
   own directory, `flush`ed and `os.fsync`ed, then `os.replace`d into place. An interrupted write —
   a crash, a full disk, a power cut — therefore leaves the previous file byte-for-byte intact
-  rather than truncating it, and leaves no temp behind. The rename is not itself followed by a
-  directory `fsync`, so a power cut may lose the *new* contents; it can never corrupt the old.
+  rather than truncating it. The rename is not itself followed by a directory `fsync`, so a power
+  cut may lose the *new* contents; it can never corrupt the old.
+  Removing the temp is a handler, so it covers what a handler can reach: any exception, and a
+  signal that raises (`KeyboardInterrupt`, `SystemExit`) — hence `except BaseException`, since
+  neither of those is an `Exception` subclass. A power cut or `SIGKILL` runs no handler and can
+  strand a `.rolodex-*.tmp` holding the complete ciphertext; it is `0600` (INV-9) so it is not
+  world-readable, but nothing removes it later. Regression-tested in `tests/test_vault.py`.
 
 ## Notes
 
