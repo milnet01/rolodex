@@ -697,7 +697,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 2, 3, 6 (each hit the gap independently).
   Lanes: docs.
 
-- 📋 [ROLO-0062] **Run review-contract over docs/security-standards.md §2, which this audit rewrote.**
+- ✅ [ROLO-0062] **Run review-contract over docs/security-standards.md §2, which this audit rewrote.**
   The audit pass rewrote security-standards.md §2. It had prescribed
   `os.open(path, O_WRONLY|O_CREAT|O_TRUNC, 0o600)` for every secret write -- the pre-1.3.1 form,
   which a contributor following it literally would have used to reintroduce the non-atomic write
@@ -714,6 +714,41 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   The edit is believed correct and is strictly better than what it replaced; this is about the
   gate being owed, not about doubting the content.
+  Resolved (2026-09-02): gate run as `review-contract docs/security-standards.md
+  --genre standard`. Three loops, three cold lanes each, cap reached.
+  **Twelve verified findings, twelve fixed, one dismissed and recorded.**
+
+  Not one Q1 across three loops -- every factual claim the standard makes about
+  the code held, including four the lanes could not settle and the orchestrator
+  resolved by opening the code. What the document got wrong was internal
+  coherence, and two findings could only be settled by RUNNING something:
+  applying rule 2's helper to a signing key would silently destroy it
+  (write_private_file overwrote an existing file; O_EXCL raised FileExistsError),
+  and the retired O_TRUNC form cost the permission guarantee as well as
+  atomicity (re-opening a 0644 file with mode 0o600 left it 0644).
+
+  The sharpest finds: rule 2 forbade shutil.copy2 + chmod while citing a spec
+  that prescribed it (all three lanes, loop 1); rule 1 forbade temp files holding
+  field values while rule 2 mandated one for the plaintext export (two lanes,
+  loop 2); and the merge checklist twice tested something weaker than the rule it
+  gates, so a reviewer could tick the box on the exact code the rule forbids.
+
+  Collateral corrected in four neighbouring documents rather than carried into
+  the subject: vault-format-and-crypto.md INV-5 and INV-9,
+  import-export-backup.md INV-9 and INV-15, SECURITY.md's permissions table (the
+  outward-facing document this standard says must agree with it), and
+  dependency-management-standards.md's pin exception.
+
+  Cap verdict: two of loop 3's three findings landed on text this run wrote, so
+  by the measure it is a violent cap -- the review of the document as it stands
+  ends here and a fourth loop is not filed. Size is not the signal; the subject
+  is 105 lines. About a quarter of the twelve findings anchor inside the span
+  this item named, so the run was mostly audit rather than gate.
+
+  Loop log: docs/review-2026-09-02-security-standards.md. Two orchestrator packet
+  defects are recorded there honestly -- both were mis-cut source windows, and in
+  both cases every lane routed the discrepancy to Open questions rather than
+  filing a false finding.
   **Layman:** A rule book that told developers to do the wrong thing was corrected, but the correction has not itself been reviewed.
   Kind: doc-fix.
   Source: close-findings 2026-08-31 (surfaced by the sweep; recorded in commit 5db68d2).
@@ -874,7 +909,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 4 (verified; defence-in-depth, not live defects).
   Lanes: updater.
 
-- 📋 [ROLO-0081] **Run review-contract over docs/specs/vault-format-and-crypto.md, which ROLO-0043 gave a new invariant.**
+- 📋 [ROLO-0081] **Run review-contract over the two documents this session gave new rules: the vault spec and the dependency standard.**
   ROLO-0043 added INV-17 to docs/specs/vault-format-and-crypto.md: the KDF runs
   once per credential rather than once per save, the `_with_key` siblings carry
   an already-derived key, a key must only be written alongside the salt it was
@@ -898,6 +933,20 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   below that.
 
   The edits are believed correct; this is about the gate being owed.
+  Progress (2026-09-02): a second document joins this item.
+  `docs/dependency-management-standards.md` gained a precedence rule during
+  ROLO-0062's loop 3 -- its forced-older-pin exception now says outright that it
+  cannot take a dependency below a security floor, naming
+  `security-standards.md`'s `cryptography >= 44.0.0`.
+
+  That is a direction change for anyone reading only that document: before it,
+  a conformer facing a break fixable at 43.x would pin there with an inline
+  reason and a ledger row, exactly as that standard's process instructs, and ship
+  a crypto library with known CVEs. So it owes
+  `review-contract docs/dependency-management-standards.md --genre standard`,
+  which has NOT been run.
+
+  Both documents on this item are believed correct. What is owed is the gate.
   **Layman:** A rule about how the vault must be saved was added to the design document, and that addition has not itself been reviewed by a fresh pair of eyes.
   Kind: doc-fix.
   Source: in-session-2026-09-02 (ROLO-0043 implementation).
