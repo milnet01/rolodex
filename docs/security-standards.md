@@ -50,9 +50,11 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
    Raising it is a **format change, not a constant change.** The header carries no iteration
    count, so an existing vault re-read at a higher count fails as `InvalidToken` — which the
    unlock dialog reports as "Wrong password.", the worst available error for an app with no
-   recovery path. A raise therefore needs a new magic and a `migrate_vault` branch that reads
-   the old count from the header: the mechanism `vault-format-and-crypto.md`'s notes reserve
-   for ROLO-0005. Bumping the constant alone is the breakage, not the migration.
+   recovery path. A raise therefore needs a **new magic**, so `load_vault` can tell the two
+   apart: `VLT1` implies 600,000 — the old header has no field to read it from — and the new
+   format records its count so later raises can. That is the mechanism
+   `vault-format-and-crypto.md`'s notes reserve for ROLO-0005. Bumping the constant alone is the
+   breakage, not the migration.
 
 5. **Never persist the master password.** It lives only as a local variable / `self.password`
    for the session. No writing it to config, no environment variables, no clipboard.
@@ -70,8 +72,11 @@ Before merging anything that touches crypto, file I/O, import/export, or clipboa
       because the file is readable until it runs. A signing key is the one exception:
       `O_CREAT | O_EXCL`, per non-negotiable 3.
 - [ ] The master password is not logged, cached, or persisted.
-- [ ] KDF iterations and salt handling are unchanged or strengthened, with migration if the
-      on-disk format changed.
+- [ ] KDF iterations and salt handling are unchanged — or a raise ships as a format change, new
+      magic and `migrate_vault` branch together, per non-negotiable 4. "Strengthened" is not a
+      passing state on its own, and "did the on-disk format change?" is the wrong question: the
+      byte layout is identical after a raise, so asking only that merges a bump that locks every
+      existing vault out.
 - [ ] Imported/parsed input can't cause a crash that leaks state; parse errors surface as a
       dialog, not an unhandled traceback.
 - [ ] Subprocess calls pass their arguments as a list and never through a shell — no

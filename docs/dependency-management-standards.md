@@ -43,6 +43,12 @@ When that happens, all of the following are mandatory:
 2. **Add a ledger entry** in the table below.
 3. **Never silently pin.** An undocumented `==` pin is a standards violation.
 
+**This exception cannot take a dependency below a security floor.** Where a standard sets a
+minimum version on security grounds — `security-standards.md` § Dependencies & supply chain sets
+`cryptography >= 44.0.0`, because older releases carry known CVEs — no pin below it is permitted,
+ledger entry or not. A break fixable only by going below such a floor is a release blocker, not a
+forced-older pin.
+
 ## Known-incompatible versions ledger
 
 This ledger is how we recover from forced pins. Each entry records the version that broke a

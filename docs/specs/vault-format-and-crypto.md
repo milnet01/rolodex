@@ -21,8 +21,9 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 - **INV-5** `ITERATIONS` is 600,000 and is treated as a floor — it may increase, never decrease.
   An increase is a **format change**, because INV-1's header records no iteration count: an
   existing vault re-read at a higher count fails as `InvalidToken`, indistinguishable from a
-  wrong password. It therefore needs a new magic and a `migrate_vault` branch that reads the old
-  count from the header — the mechanism the notes reserve for ROLO-0005.
+  wrong password. It therefore needs a **new magic**: `VLT1` implies 600,000 — there is no field
+  in that header to read it from — and the new format records its count so later raises can read
+  it. That is the mechanism the notes reserve for ROLO-0005.
 - **INV-6** The salt passed to `derive_key` is the exact 16 bytes read from (or written to)
   the file header for that vault.
 
