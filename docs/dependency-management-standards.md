@@ -23,7 +23,11 @@ This covers everything Rolodex depends on:
   supply-chain integrity. That is **not** a forced-older pin and owes no ledger row: the
   obligation on it is to move the SHA to each new release under the latest-by-default rule and
   keep the comment accurate. Repointing an action at a floating tag to "comply" is the breach,
-  not the fix.
+  not the fix. An exact `==` version inside a workflow step is the same category when its inline
+  comment gives a determinism or supply-chain reason — `build.yml` pins the signing step's
+  install so it cannot pull an unverified version while the key is in scope. Neither is a
+  forced-older pin, neither owes a ledger row, and both stay bound by latest-by-default: they
+  move up as new releases land.
 
 ### Sweep posture
 
@@ -37,13 +41,17 @@ python3 -c "import cryptography; print(cryptography.__version__)"   # current cr
 # warning; if it changes, `pip install cryptography==` also lists available versions):
 python3 -m pip index versions cryptography | head -1
 python3 -c "import certifi; print(certifi.__version__)"   # bundled CA bundle, build-time only
+pinact run --check   # every `uses:` SHA behind its latest release (exit 0 = all current)
 ```
 
 When bumping a dependency, **update the calling code to the current idioms in the same change**
 (see `docs/coding-standards.md`), and record the bump in `CHANGELOG.md`. That `CHANGELOG`
 obligation fires on a change to a tracked file — a raised floor, a new or lifted pin, a new
 dependency, or a moved action SHA. Upgrading only your own environment changes no shipped
-artefact, and is recorded only if it changes shipped behaviour.
+artefact, and is recorded only if it changes shipped behaviour. The build-time deps are
+unpinned, so their versions live in no tracked file at all: a release picks up whatever was
+current, and that earns a `CHANGELOG` line only when it changes what ships — a new CA bundle,
+or a packaging change.
 
 ## The one allowed exception: a forced-older pin
 
@@ -54,11 +62,11 @@ When that happens, all of the following are mandatory:
 
 1. **Pin with an inline reason** in `requirements.txt` (or the relevant manifest) — a one-line
    comment stating what breaks and pointing at the ledger entry.
-2. **Apply the pin everywhere that dependency is installed**, and name each place in the ledger
-   row. `requirements.txt` alone is not enough: `.github/workflows/ci.yml` and
-   `.github/workflows/build.yml` install their dependencies directly with `pip install
-   --upgrade`, so a pin they do not carry is silently ignored and CI stays green against a
-   version nobody is shipping.
+2. **Apply the pin everywhere that dependency is installed**, and list those places in the same
+   inline reason. `requirements.txt` alone is not enough: both workflows install with their own
+   `pip install` lines and never read the manifest, so a pin they do not carry is silently
+   ignored and CI stays green against a version nobody ships. Check every `pip install` line in
+   `.github/workflows/`, not the subset that happens to carry a particular flag.
 3. **Add a ledger entry** in the table below.
 4. **Never silently pin.** An undocumented `==` pin is a standards violation.
 
