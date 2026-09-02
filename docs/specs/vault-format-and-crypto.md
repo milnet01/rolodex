@@ -34,10 +34,13 @@ Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vau
 ### File permissions
 
 - **INV-9** Every secret write ends owner-only (`0o600`), regardless of umask, **and so does an
-  overwrite**. `save_vault` and the plaintext export go through `write_private_file`, which stages
-  the bytes in a `tempfile.mkstemp` temp — created `0600` — in the destination's own directory and
-  `os.replace`s it into place, so the replacing inode's `0600` carries onto the destination
-  whatever mode the previous file had. Backups `shutil.copy2` then `os.chmod(..., 0o600)`.
+  overwrite**. `save_vault`, the plaintext export and the backup all go through
+  `write_private_file`, which stages the bytes in a `tempfile.mkstemp` temp — created `0600` — in
+  the destination's own directory and `os.replace`s it into place, so the replacing inode's `0600`
+  carries onto the destination whatever mode the previous file had. The backup does **not**
+  `shutil.copy2` then `chmod`: `copyfile` creates the destination through `open(dst, 'wb')` and
+  writes the whole payload before `copystat` narrows it, and it truncates an existing backup
+  first, so an interrupted backup destroyed the previous good one.
   (Before 1.3.1 the write was `os.open(path, O_WRONLY | O_CREAT | O_TRUNC, 0o600)`, under which an
   overwrite *kept* the existing file's permissions. That is no longer true; see
   `import-export-backup.md` INV-15.)

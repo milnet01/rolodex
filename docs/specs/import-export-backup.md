@@ -34,9 +34,10 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 
 ## Encrypted backup
 
-- **INV-9** Backup first saves the current vault, then copies the encrypted `contacts.vault`
-  byte-for-byte to the chosen path and `chmod`s it to `0600`. The backup is encrypted with the
-  *current* master password (it is a copy of the live file).
+- **INV-9** Backup first saves the current vault, then writes the encrypted `contacts.vault`
+  byte-for-byte to the chosen path through `write_private_file` — `0600` from creation, and
+  atomic, so an interrupted backup cannot destroy a previous one. The backup is encrypted with
+  the *current* master password (it is a copy of the live file).
 - **INV-10** The default backup filename is `contacts_backup_<YYYYMMDD>_<HHMMSS>.vault`.
 
 ## Restore
@@ -55,7 +56,7 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 - **INV-15** The export is a human-readable text dump (name, optional category, aligned
   label/value pairs, optional notes) written through `write_private_file`, which stages a
   `0600` temp and `os.replace`s it into place — so the export is `0600` on creation **and** on
-  overwrite, without the export path needing its own `chmod` (unlike the backup path). Before
+  overwrite, without needing its own `chmod`. Before
   1.3.1 it used `os.open(..., 0o600)` directly and an overwrite kept the existing file's
   permissions; see `vault-format-and-crypto.md` INV-9.
 - **INV-16** The default export filename is `rolodex_export_<YYYYMMDD>_<HHMMSS>.txt`.
