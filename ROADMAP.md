@@ -277,7 +277,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 4 (verified, not fixed in the audit pass).
   Lanes: updater.
 
-- 📋 [ROLO-0059] **Clear the master password and secret values out of their widgets.**
+- ✅ [ROLO-0059] **Clear the master password and secret values out of their widgets.**
   Three widget buffers keep plaintext alive past the point the code believes it has disposed of
   it:
 
@@ -296,6 +296,24 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Note what this CANNOT fix: a Python str is immutable and cannot be zeroed, so holding the
   password as a bytearray that can be overwritten is the only version of this that fully
   delivers. That is a design decision, not an edit.
+  Resolved (2026-09-03): the cheap half is done.
+  UnlockDialog._wipe_password_entries clears pw_entry on both success
+  paths, and pw_confirm too -- the create path holds the same master
+  password twice, which this item did not list. RestorePasswordDialog
+  clears its entry once the restore is handed over. AddEditDialog routes
+  every close through _close_wiped, so save and discard both clear the
+  row buffers. Wiping is a success-path action only: master-password.md
+  INV-7 refocuses the password field after a wrong password, and
+  clearing it there would hand the user an empty box to correct. Locked
+  by tests/test_widgets.py, a new GTK-touching file kept out of
+  test_regressions.py because that module's docstring promises it is
+  GTK-free. The tests construct real dialogs and drive their handlers
+  without presenting anything, so they need no display and no Xvfb and
+  run on the CI runner unchanged; all six were proved red first. What is
+  still NOT delivered, and is the design decision this item names: a
+  Python str is immutable, so the plaintext already read out of a buffer
+  cannot be zeroed. That needs the password held as a bytearray and is
+  not this change.
   **Layman:** After you unlock, your master password is still sitting in the text box that took it, and a closed edit dialog still holds the secrets you were editing.
   Kind: security.
   Source: review-code 2026-08-31 lanes 5 and 8 (verified, not fixed in the audit pass).

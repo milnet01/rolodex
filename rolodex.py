@@ -1378,6 +1378,7 @@ class UnlockDialog(Gtk.Window):
                 self._show_error(str(e))
                 return
             self.app.open_main(vault, salt, pw, self.vault_path, key)
+            self._wipe_password_entries()
             self.close()
         else:
             self.btn.set_sensitive(False)
@@ -1407,7 +1408,17 @@ class UnlockDialog(Gtk.Window):
         except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
             self._unlock_fail(f"The vault opened but could not be loaded: {exc}")
             return
+        self._wipe_password_entries()
         self.close()
+
+    def _wipe_password_entries(self):
+        """Drop the master password from the entry buffers once it has been handed over
+        (ROLO-0059). Success paths only: INV-7 refocuses this field after a wrong password,
+        so clearing it there would hand the user an empty box to correct. This cannot unmake
+        the Python str already read out of the buffer -- see the roadmap item."""
+        self.pw_entry.set_text("")
+        if self.is_new:
+            self.pw_confirm.set_text("")
 
     def _unlock_fail(self, msg):
         self.btn.set_sensitive(True)
@@ -3154,13 +3165,21 @@ class AddEditDialog(Adw.Dialog):
 
     def _on_close_attempt(self, _dialog):
         if not self._is_dirty():
-            self.force_close()
+            self._close_wiped()
             return
         self._confirm(
             "Discard changes?",
             "This entry has unsaved changes. Discard them?",
-            "Discard", Adw.ResponseAppearance.DESTRUCTIVE, self.force_close,
+            "Discard", Adw.ResponseAppearance.DESTRUCTIVE, self._close_wiped,
         )
+
+    def _close_wiped(self):
+        """Close, clearing the secrets the row buffers still hold (ROLO-0059). Every close
+        routes through here. _on_save has already read every value into its own list before
+        _commit runs, so the wipe cannot reach what is being saved."""
+        for row in self._get_field_rows():
+            row.value_entry.set_text("")
+        self.force_close()
 
     def _confirm(self, heading, body, action_label, appearance, on_confirm):
         """Present a modal Cancel / <action> confirmation over this dialog, invoking
@@ -3265,7 +3284,7 @@ class AddEditDialog(Adw.Dialog):
             self.main_win._finish_edit(self.entry_id, name, fields, notes, category)
         else:
             self.main_win._finish_add(name, fields, notes, category)
-        self.force_close()  # bypass the unsaved-changes guard — this is a deliberate save
+        self._close_wiped()  # bypass the unsaved-changes guard — this is a deliberate save
 
 
 # --------------------------------------------------------------------------
@@ -3501,6 +3520,7 @@ class RestorePasswordDialog(Adw.Dialog):
         if not self.get_presented():
             return
         self.main_win._finish_restore(vault, salt, pw, key)
+        self.pw_entry.set_text("")  # ROLO-0059: the backup password is handed over by now
         self.close()
 
     def _unlock_fail(self, msg):

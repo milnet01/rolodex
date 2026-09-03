@@ -123,6 +123,12 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Security
 
+- **Clear the master password and secret field values out of their widgets** (ROLO-0059)
+  The unlock and restore dialogs left the password sitting in the box that
+  took it, and closing an entry editor left every secret it had loaded in the
+  field rows. Each is now cleared once the value has been handed over. A
+  failed unlock still keeps what you typed, so you can correct it.
+
 - **Locking now clears the clipboard and the on-screen entry**
   Locking the vault left a copied password on the clipboard until its timer ran out — and forever if you had turned the clipboard timer off. It also left the last-viewed entry's values in the window. Both are now cleared when you lock.
 
