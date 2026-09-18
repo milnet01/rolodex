@@ -49,7 +49,7 @@ APP_ID = "com.rolodex.Contacts"
 # CHANGELOG heading and the git tag, and an updater cannot compare against a version the process
 # cannot read. .claude/bump.json rewrites this line and its post_check asserts it matches the
 # topmost dated CHANGELOG heading, so the two cannot drift.
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 
 if getattr(sys, "frozen", False):
     # Packaged (PyInstaller) build: __file__ lives in a temp extraction dir that is deleted on
