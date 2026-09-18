@@ -22,8 +22,21 @@
 # gi.require_version() before importing from gi.repository, so the `# noqa: E402`
 # comments on those imports are load-bearing. Keeping E4 selected keeps them meaningful.
 #
-# Widening this set is a deliberate, per-rule decision — not a drive-by. ROLO-0038 holds
-# the 20 deferred findings, broken down by rule class, with the reason each was parked.
+# Widening this set is a deliberate, per-rule decision — not a drive-by. ROLO-0038 decided
+# ruff 0.16's new defaults class by class (2026-09-18):
+#
+#   DTZ     adopted. Timestamps written into the vault carry their offset (ROLO-0048), and
+#           a naive datetime.now() is how that regresses.
+#   BLE     adopted. The blind `except Exception` sites that must stay -- a worker thread or
+#           a GTK callback whose escape would strand the UI -- carry a per-site noqa naming
+#           why. A new one has to argue for itself.
+#   PLW1510 adopted. subprocess.run states check= explicitly.
+#   RUF012  adopted. Mutable class attributes are annotated ClassVar.
+#   RUF100  adopted. A noqa that no longer suppresses anything is reported, so the
+#           per-site BLE001 reasons cannot outlive the code they excuse.
+#   I001    NOT adopted. In tests/, `from gi.repository import ...` must follow
+#           `import rolodex`, whose module body calls gi.require_version(). Sorting puts
+#           third-party gi above first-party rolodex, so GTK would load unversioned.
 
 [lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "DTZ", "BLE", "PLW1510", "RUF012", "RUF100"]

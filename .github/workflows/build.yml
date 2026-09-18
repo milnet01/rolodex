@@ -51,6 +51,11 @@ jobs:
             asset: rolodex-windows-x86_64.exe
           - os: macos-latest
             asset: rolodex-macos-arm64
+    # Scripts read the asset name from the environment rather than a ${{ }} expansion inside
+    # run: -- the value is workflow-controlled, but expanding into shell source is the pattern
+    # zizmor's template-injection audit exists to catch (ROLO-0055).
+    env:
+      ASSET: ${{ matrix.asset }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,7 +73,7 @@ jobs:
           python3 -m pip install --break-system-packages --upgrade pyinstaller cryptography certifi
       - name: Build + self-test (Linux)
         if: runner.os == 'Linux'
-        run: bash packaging/linux-build.sh "${{ matrix.asset }}"
+        run: bash packaging/linux-build.sh "$ASSET"
 
       # ---- Windows: GTK stack + Python from MSYS2 (UCRT64) ----
       - name: Set up MSYS2 (Windows)
@@ -83,12 +88,14 @@ jobs:
             mingw-w64-ucrt-x86_64-python-gobject
             mingw-w64-ucrt-x86_64-python-cryptography
             mingw-w64-ucrt-x86_64-python-pip
+      # `msys2 {0}` is the custom shell setup-msys2 provides; zizmor's auditor persona flags any
+      # non-standard shell as a misfeature, and this one is the only way into the UCRT64 env.
       - name: Build + self-test (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
           python -m pip install --upgrade pyinstaller certifi
-          bash packaging/windows-build.sh "${{ matrix.asset }}"
+          bash packaging/windows-build.sh "$ASSET"
 
       # ---- macOS: GTK stack from Homebrew (unsigned build) ----
       #
@@ -99,8 +106,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install gtk4 libadwaita pygobject3 py3cairo pyinstaller
-          "$(brew --prefix)/bin/python3" -m pip install --break-system-packages --upgrade cryptography certifi
-          bash packaging/macos-build.sh "${{ matrix.asset }}"
+          "$(brew --prefix)/bin/python3" -m pip install --break-system-packages --upgrade \
+            cryptography certifi
+          bash packaging/macos-build.sh "$ASSET"
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -123,8 +131,14 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # A dedicated environment, so the signing key can be an ENVIRONMENT secret: required
+    # reviewers and a tag-only deployment rule can then gate it in the repository settings
+    # (zizmor secrets-outside-env, ROLO-0055). GitHub creates the environment on first use.
+    environment: release
     permissions:
       contents: write # needed to attach binaries to a Release
+      id-token: write # build provenance: the OIDC token that binds the attestation to this run
+      attestations: write # build provenance: store the attestation against the repository
     steps:
       - name: Download built binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -171,10 +185,56 @@ jobs:
               print(f"signed {target} -> {target}.sig")
           EOF
 
-      - name: Attach to Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      # SLSA build provenance (ROLO-0076). The Ed25519 .sig proves the release KEY signed a
+      # binary; this proves WHICH workflow run, commit and runner produced it. Verify with
+      #   gh attestation verify <file> --repo milnet01/rolodex
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          # The .sig files ride along when signing ran; the glob simply matches nothing when it
-          # did not, so an unsigned release still publishes its binaries.
-          files: |
-            out/*
+          subject-path: out/*
+
+      # The notes are the CHANGELOG section for this tag, verbatim (ROLO-0039): v1.3.1
+      # published with an empty body and had to be corrected by hand. A tag with no section
+      # fails here, before anything is published. Sparse: only CHANGELOG.md is needed.
+      - name: Check out CHANGELOG.md
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+          path: src
+
+      - name: Extract release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          version="${TAG#v}"
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' src/CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+
+      # The runner's own gh CLI, not a third-party action (ROLO-0056): this job holds
+      # contents: write and, when signing ran, the signed artifacts. A re-run of the job
+      # finds the release already there and replaces its files and notes instead of failing.
+      # The .sig files ride along when signing ran; an unsigned release publishes binaries only.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/* --clobber
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" out/* --verify-tag \
+              --title "Rolodex ${TAG#v}" --notes-file release-notes.md
+          fi

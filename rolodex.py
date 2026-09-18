@@ -19,6 +19,13 @@ import time
 import urllib.parse
 import uuid
 from datetime import datetime
+from typing import IO, TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
+
+if TYPE_CHECKING:  # for annotations only: INV-12 keeps these network modules out at runtime
+    import ssl
+    import urllib.request
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 import gi
 
@@ -144,7 +151,7 @@ class VaultChangedError(Exception):
     """The vault on disk changed since this session read or last wrote it (ROLO-0044)."""
 
 
-def vault_fingerprint(path: str):
+def vault_fingerprint(path: str) -> tuple[int, int, int] | None:
     """What the session last saw of the vault file: (inode, size, mtime_ns), or None if absent.
 
     Compared before every write. A different value means something else -- a second copy of
@@ -170,9 +177,9 @@ class VaultLock:
     what vault_fingerprint's check on every save is for (ROLO-0044).
     """
 
-    def __init__(self, vault_path: str):
+    def __init__(self, vault_path: str) -> None:
         self.path = os.path.realpath(vault_path) + ".lock"
-        self._fd = None
+        self._fd: int | None = None
 
     def acquire(self) -> None:
         """Take the lock or raise VaultBusyError. Safe to call when already held."""
@@ -198,14 +205,14 @@ class VaultLock:
 
 def _lock_fd(fd: int) -> None:
     """Non-blocking exclusive lock on *fd*; raises OSError when another process holds it."""
-    try:
-        import fcntl
-    except ImportError:  # Windows
+    if sys.platform == "win32":
         import msvcrt
 
         msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-        return
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    else:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def save_vault_with_key(vault_data: dict, key: bytes, salt: bytes, path: str) -> None:
@@ -288,7 +295,7 @@ def set_aside_vault(path: str) -> str | None:
     if not os.path.exists(path):
         return None
     real = os.path.realpath(path)
-    aside = f"{real}.unreadable-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    aside = f"{real}.unreadable-{datetime.now().astimezone().strftime('%Y%m%d-%H%M%S')}"
     os.replace(real, aside)
     return aside
 
@@ -636,7 +643,9 @@ def add_entry(vault: dict, name: str, fields: list[dict], notes: str = "", categ
     return entry_id
 
 
-def update_entry(vault, entry_id, name=None, fields=None, notes=None, category=None):
+def update_entry(vault: dict, entry_id: str, name: str | None = None,
+                 fields: list[dict] | None = None, notes: str | None = None,
+                 category: str | None = None) -> None:
     entry = vault["entries"][entry_id]
     if name is not None:
         entry["name"] = name
@@ -701,7 +710,7 @@ def find_entry_by_name(vault: dict, name: str, exclude_id: str | None = None) ->
     return None
 
 
-def move_item(items: list, item, target) -> list:
+def move_item(items: list, item: Any, target: Any) -> list:
     """Return *items* with *item* moved into *target*'s slot, for drag and keyboard reordering.
 
     Moving DOWN lands after the target and moving up lands before it, so a move onto the
@@ -832,7 +841,8 @@ def duplicate_flags(vault: dict, parsed: list[dict]) -> list[bool]:
     return flags
 
 
-def import_entries(vault, parsed, skip_duplicates=True, category=""):
+def import_entries(vault: dict, parsed: list[dict], skip_duplicates: bool = True,
+                   category: str = "") -> tuple[int, int]:
     """Add parsed entries to the vault, returning (imported, skipped).
 
     skip_duplicates=False imports every entry given. The import preview passes that, because
@@ -916,7 +926,7 @@ def read_clipboard() -> str | None:
     ]:
         if shutil.which(cmd[0]):
             try:
-                proc = subprocess.run(cmd, capture_output=True, timeout=5)
+                proc = subprocess.run(cmd, capture_output=True, timeout=5, check=False)
                 if proc.returncode == 0:
                     return proc.stdout.decode("utf-8", "replace")
             except (subprocess.TimeoutExpired, OSError):
@@ -934,7 +944,8 @@ def copy_to_clipboard(text: str) -> bool:
     ]:
         if shutil.which(cmd[0]):
             try:
-                proc = subprocess.run(cmd, input=text.encode("utf-8"), capture_output=True, timeout=5)
+                proc = subprocess.run(cmd, input=text.encode("utf-8"), capture_output=True,
+                                      timeout=5, check=False)
                 # Fall through to the next tool on a non-zero exit, exactly as read_clipboard
                 # does. Returning here unconditionally meant that wl-clipboard merely being
                 # INSTALLED under an X11 session -- which several distros arrange by default --
@@ -1093,7 +1104,7 @@ class UpdateVerificationError(UpdateError):
     """
 
 
-def parse_version(text: str):
+def parse_version(text: str) -> tuple[int, ...] | None:
     """Parse ``N(.N)*`` (optional leading v/V) to an int tuple, or None if unusable (D10).
 
     ``segment.isdigit()`` -- not ``int()`` -- is the guard. int() quietly accepts "1_0", " 1",
@@ -1114,7 +1125,7 @@ def parse_version(text: str):
     return tuple(out)
 
 
-def version_gt(latest, current) -> bool:
+def version_gt(latest: tuple[int, ...], current: tuple[int, ...]) -> bool:
     """True iff *latest* is strictly greater, zero-padding the shorter tuple so that
     (0, 1) and (0, 1, 0) compare EQUAL rather than one being newer (D10)."""
     width = max(len(latest), len(current))
@@ -1127,14 +1138,14 @@ def version_string(tag: str) -> str:
     return tag[1:] if tag[:1] in ("v", "V") else tag
 
 
-def platform_asset_name():
+def platform_asset_name() -> str | None:
     """This build's release asset name, or None where self-update is unsupported (D2)."""
     import platform
 
     return PLATFORM_ASSETS.get((sys.platform, platform.machine()))
 
 
-def detect_installer():
+def detect_installer() -> str | None:
     """The path of the binary to replace, or None where self-update cannot run (INV-2).
 
     None off a frozen build (a source checkout or a distro package -- updating those is the
@@ -1176,7 +1187,7 @@ def skip_update_version(version: str, path: str | None = None) -> None:
     save_config({UPDATE_SKIPPED_KEY: version}, path)
 
 
-def select_update_assets(assets, asset_name: str):
+def select_update_assets(assets: list[dict], asset_name: str) -> tuple[str, str] | None:
     """From a release's assets[] return (asset_url, sig_url), or None (INV-5).
 
     EQUALITY, not endswith/startswith -- see PLATFORM_ASSETS. Requires exactly one asset named
@@ -1196,7 +1207,7 @@ def select_update_assets(assets, asset_name: str):
     return asset_url, sig_url
 
 
-def release_public_key():
+def release_public_key() -> "Ed25519PublicKey":
     """The built-in release-signing public key (INV-8/INV-11)."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -1230,7 +1241,8 @@ def _require_update_url(url: str) -> None:
         raise UpdateError(f"refusing an update URL outside GitHub ({host or 'no host'})")
 
 
-def _read_capped(response, max_bytes: int, deadline: float, sink=None) -> bytes:
+def _read_capped(response: Any, max_bytes: int, deadline: float,
+                 sink: IO[bytes] | None = None) -> bytes:
     """Read *response* in chunks, enforcing a byte cap AND a wall-clock deadline (INV-9).
 
     urlopen's timeout bounds each socket operation, not the transfer, so a server sending one
@@ -1256,10 +1268,10 @@ def _read_capped(response, max_bytes: int, deadline: float, sink=None) -> bytes:
     return b"".join(parts)
 
 
-_TLS_CONTEXT = None
+_TLS_CONTEXT: "ssl.SSLContext | None" = None
 
 
-def _tls_context():
+def _tls_context() -> "ssl.SSLContext":
     """The updater's SSLContext, built once per process (ROLO-0080).
 
     CA trust is certifi when it is importable, else the system store (D7). The frozen binaries
@@ -1280,7 +1292,7 @@ def _tls_context():
     return _TLS_CONTEXT
 
 
-def _opener():
+def _opener() -> "urllib.request.OpenerDirector":
     """A urllib opener that can speak https ONLY and re-checks every redirect hop (INV-9).
 
     Built from an empty OpenerDirector rather than build_opener, which always registers the
@@ -1293,7 +1305,9 @@ def _opener():
     import urllib.request
 
     class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req, fp, code, msg, headers, newurl):
+        def redirect_request(self, req: "urllib.request.Request", fp: Any, code: int,
+                             msg: str, headers: Any,
+                             newurl: str) -> "urllib.request.Request | None":
             _require_update_url(newurl)  # raises before the redirect is followed
             return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -1351,14 +1365,16 @@ def download_to(url: str, dest: str, max_bytes: int) -> None:
 class UpdateInfo:
     """A newer, signed, non-skipped release the user may install (INV-5)."""
 
-    def __init__(self, version, asset_url, sig_url, notes):
+    def __init__(self, version: str, asset_url: str, sig_url: str, notes: str) -> None:
         self.version = version
         self.asset_url = asset_url
         self.sig_url = sig_url
         self.notes = notes
 
 
-def check_for_update(*, force=False, fetcher=None, current_version=None, config_path=None):
+def check_for_update(*, force: bool = False, fetcher: Callable[[], dict] | None = None,
+                     current_version: str | None = None,
+                     config_path: str | None = None) -> "UpdateInfo | None":
     """Return an UpdateInfo to offer, or None. The whole opt-in gate lives here (INV-1/2).
 
     Order matters. The platform/frozen gate runs FIRST, so an unsupported build never reaches
@@ -1387,7 +1403,10 @@ def check_for_update(*, force=False, fetcher=None, current_version=None, config_
         version = version_string(release.get("tag_name") or "")
         if version == update_skipped_version(config_path):
             return None
-        urls = select_update_assets(release.get("assets") or [], platform_asset_name())
+        asset_name = platform_asset_name()
+        if asset_name is None:
+            return None
+        urls = select_update_assets(release.get("assets") or [], asset_name)
         if urls is None:
             return None
         return UpdateInfo(version, urls[0], urls[1], release.get("body") or "")
@@ -1397,7 +1416,9 @@ def check_for_update(*, force=False, fetcher=None, current_version=None, config_
         return None
 
 
-def download_and_verify(info, *, downloader=None, target=None) -> str:
+def download_and_verify(info: UpdateInfo, *,
+                        downloader: Callable[[str, str, int], None] | None = None,
+                        target: str | None = None) -> str:
     """Download the asset and its .sig, verify Ed25519 over the exact bytes, return a temp path.
 
     Staged in the target binary's OWN directory so the eventual install is a same-filesystem
@@ -1492,7 +1513,8 @@ def _relaunch_command(binary: str, pid: int) -> list:
     ]
 
 
-def apply_update(new_file: str, *, target=None, on_before_exec=None):
+def apply_update(new_file: str, *, target: str | None = None,
+                 on_before_exec: Callable[[], None] | None = None) -> NoReturn:
     """Swap the verified download into place and relaunch, replacing this process (INV-14).
 
     chmod then os.replace: any failure before the replace completes leaves the running binary
@@ -1530,7 +1552,7 @@ def apply_update(new_file: str, *, target=None, on_before_exec=None):
     os._exit(0)
 
 
-def sweep_stale_update_temps(target=None) -> int:
+def sweep_stale_update_temps(target: str | None = None) -> int:
     """Delete orphaned update temps left by a download the process did not outlive (INV-15).
 
     download_and_verify stages into the target binary's own directory and unlinks on its way
@@ -1817,7 +1839,7 @@ class UnlockDialog(Gtk.Window):
             # Bad magic, a truncated salt, or ciphertext that decrypted to something that is not
             # a vault: the FILE is the problem, not the password (ROLO-0045).
             GLib.idle_add(self._unlock_fail, str(e), True)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - a thread's escape would strand "Unlocking..."
             GLib.idle_add(self._unlock_fail, str(e))
 
     def _unlock_ok(self, vault, salt, pw, key):
@@ -1839,7 +1861,7 @@ class UnlockDialog(Gtk.Window):
         try:
             vault, salt, key = create_vault_with_key(pw, self.vault_path)
             GLib.idle_add(self._create_ok, vault, salt, pw, key)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - a thread's escape would strand "Creating..."
             GLib.idle_add(self._create_fail, str(e))
 
     def _create_ok(self, vault, salt, pw, key):
@@ -3242,7 +3264,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         save_dialog = Gtk.FileDialog()
         save_dialog.set_title("Backup vault to...")
-        default_name = f"contacts_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.vault"
+        default_name = f"contacts_backup_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}.vault"
         save_dialog.set_initial_name(default_name)
         save_dialog.save(self, None, self._on_backup_file_chosen)
 
@@ -3327,9 +3349,11 @@ class MainWindow(Adw.ApplicationWindow):
         # the original with a restore the user had been told did not happen.
         try:
             self._write_vault(vault, key, salt)
-        except (OSError, VaultChangedError) as exc:
-            if isinstance(exc, VaultChangedError):
-                exc = "the vault file was changed elsewhere since you unlocked it"
+        except (OSError, VaultChangedError) as err:
+            exc = (
+                "the vault file was changed elsewhere since you unlocked it"
+                if isinstance(err, VaultChangedError) else err
+            )
             self._show_message(
                 "Restore Failed",
                 f"The backup could not be written to the vault, so nothing changed: {exc}",
@@ -3368,7 +3392,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         save_dialog = Gtk.FileDialog()
         save_dialog.set_title("Export to file")
-        default_name = f"rolodex_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        default_name = f"rolodex_export_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}.txt"
         save_dialog.set_initial_name(default_name)
         save_dialog.save(self, None, self._on_export_file_chosen)
 
@@ -3423,9 +3447,11 @@ class MainWindow(Adw.ApplicationWindow):
         new_key = derive_key(new_pw, new_salt)
         try:
             self._write_vault(self.vault, new_key, new_salt)
-        except (OSError, VaultChangedError) as exc:
-            if isinstance(exc, VaultChangedError):
-                exc = "the vault file was changed elsewhere since you unlocked it"
+        except (OSError, VaultChangedError) as err:
+            exc = (
+                "the vault file was changed elsewhere since you unlocked it"
+                if isinstance(err, VaultChangedError) else err
+            )
             self._show_message(
                 "Password Not Changed",
                 f"The vault could not be written, so your master password is unchanged: {exc}",
@@ -4954,7 +4980,7 @@ class ShortcutsDialog(Adw.Dialog):
     """Keyboard-shortcut reference (Ctrl+?). Hand-built because Gtk.ShortcutsWindow is
     deprecated as of GTK 4.18 (this ships against 4.22)."""
 
-    SHORTCUTS = [
+    SHORTCUTS: ClassVar[list[tuple[str, str]]] = [
         ("<Control>f", "Focus search"),
         ("<Control>n", "Add entry"),
         ("<Control><Shift>c", "Copy password / secret"),

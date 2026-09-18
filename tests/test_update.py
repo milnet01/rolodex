@@ -594,7 +594,7 @@ def _run_isolated(code):
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True,
-                          text=True, timeout=60)
+                          text=True, timeout=60, check=False)
 
 
 def test_ROLO0080_opener_has_no_handler_for_plain_http():

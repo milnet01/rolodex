@@ -45,8 +45,14 @@ why the feature is opt-in rather than assumed.
 
 **What it never sends.** Nothing derived from your vault. The request carries a fixed
 `User-Agent` and no identifier, account, or query string. The check reads only the plaintext
-`.rolodex.conf` and the app's own version, so it runs while the vault is locked and never
-touches the master password.
+`.rolodex.conf` and the app's own version, and never touches the vault or the master
+password. It runs only once you have unlocked: the app makes no network request at the lock
+screen.
+
+**Checking a download yourself.** Each release binary carries build provenance: a signed
+record of the workflow run, commit and runner that produced it. With the GitHub CLI,
+`gh attestation verify <downloaded file> --repo milnet01/rolodex` confirms it came from this
+repository's release workflow. This is separate from the Ed25519 signature the app checks.
 
 **Its current state.** Until a signing key is generated, the built-in key is an all-zero
 placeholder that verifies nothing — so the feature can offer an update and can never install

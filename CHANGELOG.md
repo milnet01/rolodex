@@ -8,6 +8,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Release downloads carry build provenance** (ROLO-0076)
+  Each binary comes with a signed record of the workflow run and commit
+  that built it. Check one with
+  `gh attestation verify <file> --repo milnet01/rolodex`.
+
 - **Reorder fields and categories from the keyboard** (ROLO-0053)
   Ctrl+Up and Ctrl+Down move the focused field or category. Screen
   readers now announce the icon-only buttons by name, and the category
@@ -93,6 +98,10 @@ All notable changes to Rolodex are documented here. The format is based on
   All GitHub Actions are pinned to a specific commit rather than a moving tag, so a re-pointed tag cannot introduce new code into a release build. Checkout no longer leaves credentials in the workspace. The Linux and macOS build self-tests have the same timeout the Windows one already had, so a hang fails the build instead of blocking a runner for six hours. certifi is now named in the build scripts' prerequisites and asserted by the local CI gate, since the release binaries are built with it. A missing typelib now fails the Windows build immediately rather than producing a binary that fails mysteriously at runtime.
 
 ### Fixed
+
+- **Release pages show what changed** (ROLO-0039)
+  A release's notes are now its section of this changelog. 1.3.1 was
+  published with a blank page.
 
 - **Copying a password can no longer freeze the window** (ROLO-0046)
   Clipboard helpers now run in the background. A helper that hangs no

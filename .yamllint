@@ -1,0 +1,18 @@
+# yamllint configuration (ROLO-0054). The only YAML here is the GitHub Actions workflows.
+# Without this file yamllint ran on defaults this project never adopted, so every run
+# produced dozens of findings, none of them defects, and its output went unread.
+extends: default
+
+rules:
+  # coding-standards.md's line length (~100), applied to YAML too.
+  line-length:
+    max: 100
+  # One space before a trailing comment is the pinned-action convention that pinact and
+  # zizmor write: `uses: owner/action@<sha> # vX.Y.Z`.
+  comments:
+    min-spaces-from-content: 1
+  # GitHub Actions' `on:` key is not a boolean.
+  truthy:
+    check-keys: false
+  # Workflows do not start with `---`, and GitHub does not need one.
+  document-start: disable

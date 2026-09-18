@@ -109,7 +109,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: user-request-2026-08-27.
 
-- 📋 [ROLO-0038] **Decide deliberately which of ruff's newer default rules to adopt.**
+- ✅ [ROLO-0038] **Decide deliberately which of ruff's newer default rules to adopt.**
   ruff.toml now declares select = [E4, E7, E9, F] -- ruff's historical default,
   and the set this codebase was written against. That fixed a CI gate that had
   drifted (see the ruff.toml header), but it also parks 20 real findings that
@@ -129,6 +129,11 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Each class wants its own decision. Adopting all of them in one sweep would
   breach coding-standards' surgical-change rule.
+  Resolved 2026-09-18: adopted DTZ, BLE (per-site noqa with reasons),
+  PLW1510, RUF012 and RUF100; declined I001 because sorting would put
+  `from gi.repository` above `import rolodex` in tests/, loading GTK
+  unversioned. Reasons recorded in ruff.toml. The DTZ005 timestamps were
+  ROLO-0048.
   **Layman:** Ruff learned some new warnings; decide one by one which are worth keeping rather than taking or ignoring all of them by accident.
   Kind: chore.
   Source: in-session-2026-08-27.
@@ -624,7 +629,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: doc.
   Source: adopt-project-run-2026-08-14 (from ~/.claude).
 
-- 📋 [ROLO-0039] **Publish release notes from CHANGELOG.md instead of an empty body.**
+- ✅ [ROLO-0039] **Publish release notes from CHANGELOG.md instead of an empty body.**
   build.yml's "Attach to Release" step uses softprops/action-gh-release@v3 with
   `files:` only -- no `body` and no `body_path`. So a v* tag creates the GitHub
   Release with an EMPTY body. Found on v1.3.1, which published with no notes at
@@ -642,6 +647,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Also worth pinning while in there: the action is on a mutable major tag (@v3)
   rather than a commit SHA.
+  Resolved 2026-09-18: a sparse checkout of CHANGELOG.md, an awk
+  extraction (checked against the 1.3.1 section locally), and
+  --notes-file. A tag with no CHANGELOG section fails before publishing.
   **Layman:** When a new version is published, the release page should show what changed instead of being blank.
   Kind: fix.
   Source: in-session-2026-08-27.
@@ -756,7 +764,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 6.
   Lanes: updater.
 
-- 📋 [ROLO-0052] **Turn on mypy's untyped-def checking and annotate the public signatures it then reports.**
+- ✅ [ROLO-0052] **Turn on mypy's untyped-def checking and annotate the public signatures it then reports.**
   coding-standards.md requires type hints on every public function signature. mypy runs clean
   because unannotated defs are UNCHECKED by default -- so roughly twenty functions are
   reported as passing without being analysed at all.
@@ -769,6 +777,12 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   regress. Doing it the other way round turns the whole file red at once. This is check-code's
   tool set, not the project's CI gate, so it also wants recording wherever that calibration
   lives.
+  Resolved 2026-09-18: mypy.ini sets check_untyped_defs, so every body
+  is analysed; it found two real issues (an asset name that could be
+  None, a mistyped reassignment). Every pure-layer def is annotated,
+  enforced by test_ROLO0052_pure_layer_functions_are_annotated since
+  mypy cannot scope disallow_untyped_defs to half a file. mypy now runs
+  in ci.yml and CI-local.sh.
   **Layman:** The type checker is skipping about twenty functions because they have no type labels, so it reports the code as clean without having looked at them.
   Kind: chore.
   Source: review-code 2026-08-31 lanes 3, 4, 8 (tool gap).
@@ -1367,7 +1381,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 8.
   Lanes: gui.
 
-- 📋 [ROLO-0054] **Give the project a .yamllint so the linter measures its own style.**
+- ✅ [ROLO-0054] **Give the project a .yamllint so the linter measures its own style.**
   yamllint has no project config, so it runs on defaults the project never adopted: 26 of the
   32 findings are the 80-column limit (coding-standards.md declares ~100, and that rule is
   Python-scoped anyway -- only one line in the tree exceeds 100), two are the GitHub Actions
@@ -1379,12 +1393,16 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   workflows would make a yamllint finding mean something.
 
   NOT a suppression of a rule that caught something: no finding here is a defect.
+  Resolved 2026-09-18: .yamllint extends default with line-length 100,
+  one space before trailing comments (the pinned-action convention),
+  truthy check-keys off, document-start off. Clean on both workflows
+  after wrapping one 110-column line.
   **Layman:** The YAML checker currently complains about 32 things using its own default rules, none of which this project ever agreed to.
   Kind: chore.
   Source: check-code 2026-08-31 (whole-tree).
   Lanes: tooling.
 
-- 📋 [ROLO-0055] **Decide whether zizmor should run at the auditor persona in the audit sweep.**
+- ✅ [ROLO-0055] **Decide whether zizmor should run at the auditor persona in the audit sweep.**
   check-code runs zizmor at its default `regular` persona, which suppressed 9 of 17 findings on
   this tree. Lane 10 reported excessive-permissions on build.yml's workflow-wide `contents:
   write`; that audit does not emit at the default persona, and a re-run at --persona=auditor
@@ -1395,12 +1413,19 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   The auditor persona is noisier -- the template-injection hits are ${{ matrix.asset }} in run:
   blocks, which is workflow-controlled and not attacker-controllable -- so this is a calibration
   decision, not an obvious yes.
+  Resolved 2026-09-18 by clearing the auditor findings, so the persona
+  question no longer decides anything here: matrix.asset moved to env
+  ASSET, signing job uses environment: release, CI has a concurrency
+  group, permissions are commented. The one remaining auditor finding is
+  `shell: msys2 {0}`, which the Windows build needs and which is
+  commented at the site. check-code's own persona default is a
+  global-skill calibration, not changed from this project.
   **Layman:** The workflow security scanner has a stricter mode that is turned off by default, and it spots things the default mode stays quiet about.
   Kind: chore.
   Source: review-code 2026-08-31 lane 10 (tool gap).
   Lanes: tooling.
 
-- 📋 [ROLO-0056] **Replace softprops/action-gh-release with a gh release script step.**
+- ✅ [ROLO-0056] **Replace softprops/action-gh-release with a gh release script step.**
   zizmor's superfluous-actions audit (informational) points out that `gh release upload` in a
   run: step does what softprops/action-gh-release@v3 is being used for, using the CLI already
   present on the runner.
@@ -1408,6 +1433,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Worth doing mainly to remove a third-party action from the job that now holds the signing key
   and contents: write -- one fewer upstream in the blast radius. The action is hash-pinned as of
   this audit, so it is not urgent.
+  Resolved 2026-09-18: softprops/action-gh-release replaced by `gh
+  release create/upload/edit` with GH_TOKEN; a re-run replaces files and
+  notes.
   **Layman:** The release step uses a third-party add-on to do something the runner can already do by itself.
   Kind: chore.
   Source: check-code 2026-08-31 (zizmor superfluous-actions).
@@ -1538,7 +1566,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 10 (verified, not fixed in the audit pass).
   Lanes: tooling.
 
-- 📋 [ROLO-0075] **Three packaging assumptions nobody has verified.**
+- ✅ [ROLO-0075] **Three packaging assumptions nobody has verified.**
   Lane 10 raised these as open questions rather than findings, having verified it could not
   settle them from a read. Each is cheap to answer and expensive to be wrong about.
 
@@ -1553,12 +1581,18 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
     which removes the exposure -- confirm and then close this half.
   - packaging/rolodex.spec's ROLODEX_CONSOLE escape hatch appears nowhere else in the tree, so
     the Windows console-diagnostic path has never been exercised from CI.
+  Resolved 2026-09-18: (1) Analysis now uses os.path.join(SPECPATH,
+  '..', 'rolodex.py'); the Linux build and selftest pass locally. (2)
+  Signing runs on ubuntu-latest in sign-and-release, confirmed in
+  build.yml, so the Git Bash python3 trap is gone. (3) ROLODEX_CONSOLE
+  is a manual diagnostic switch; the spec comment now says so and how to
+  use it.
   **Layman:** Three things in the build setup work today but for reasons nobody has actually confirmed.
   Kind: investigate.
   Source: review-code 2026-08-31 lane 10 (open questions the lane declined to guess at).
   Lanes: packaging.
 
-- 📋 [ROLO-0076] **Publish build provenance alongside the Ed25519 signature.**
+- ✅ [ROLO-0076] **Publish build provenance alongside the Ed25519 signature.**
   The release carries an Ed25519 signature over the artifact bytes, which meets the spec's stated
   threat model (artifact authenticity). OpenSSF/SLSA would additionally expect
   actions/attest-build-provenance, which binds the artifact to the workflow run, commit and
@@ -1568,6 +1602,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   those terms. It becomes more valuable now that the audit pass split signing into its own job:
   provenance is what would let a user verify WHICH run signed a binary, not merely that the key
   did.
+  Resolved 2026-09-18: actions/attest-build-provenance v4.2.2
+  (SHA-pinned) in sign-and-release with id-token and attestations write;
+  SECURITY.md says how to verify. First exercised by the next v* tag.
   **Layman:** Releases are signed, but there is no machine-checkable record of which workflow run built them.
   Kind: security.
   Source: review-code 2026-08-31 lane 10 (recorded as a coverage note, not a defect).

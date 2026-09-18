@@ -283,9 +283,12 @@ def test_ROLO0044_save_asks_instead_of_overwriting(tmp_path):
     asked = []
 
     class Win(_WriterWin):
-        vault = {"version": 2, "categories": [], "entries": {}}
         _key = b""
         salt = b""
+
+        def __init__(self, path):
+            super().__init__(path)
+            self.vault = {"version": 2, "categories": [], "entries": {}}
 
         def _write_vault(self, *a):
             raise rolodex.VaultChangedError()
@@ -320,7 +323,9 @@ def test_ROLO0070_import_with_nothing_ticked_says_so():
 
 
 class CategoryWin(FakeMainWindow):
-    _collapsed_categories = set()
+    def __init__(self, vault=None):
+        super().__init__(vault)
+        self._collapsed_categories = set()
 
     def _save(self):
         return True

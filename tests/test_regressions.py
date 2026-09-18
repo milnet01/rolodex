@@ -803,3 +803,32 @@ def test_ROLO0049_toolkit_too_old_names_what_is_missing(monkeypatch):
     assert rolodex.toolkit_too_old() is None  # the machine running the tests is new enough
     monkeypatch.setattr(rolodex.Adw, "get_minor_version", lambda: 4)
     assert "libadwaita 1.5" in rolodex.toolkit_too_old()
+
+
+# --- ROLO-0052: the pure layer is annotated, so mypy analyses it ---------------------------
+
+
+def test_ROLO0052_pure_layer_functions_are_annotated():
+    """coding-standards.md requires type hints in the pure-logic layer. mypy cannot scope
+    disallow_untyped_defs to part of one file, so this enforces it by parsing the source:
+    every def above the GUI banner annotates each parameter (bar self/cls) and its return."""
+    import ast
+
+    source_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "rolodex.py")
+    with open(source_path, "r", encoding="utf-8") as fh:
+        source = fh.read()
+    banner = next(n for n, line in enumerate(source.splitlines(), 1)
+                  if line.startswith("# GTK4 / Adwaita GUI"))
+    missing = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.lineno > banner:
+            continue
+        args = node.args.posonlyargs + node.args.args + node.args.kwonlyargs
+        unannotated = [a.arg for a in args if a.annotation is None and a.arg not in ("self", "cls")]
+        for star in (node.args.vararg, node.args.kwarg):
+            if star is not None and star.annotation is None:
+                unannotated.append(star.arg)
+        if unannotated or node.returns is None:
+            missing.append(f"{node.name} (line {node.lineno})")
+    assert missing == [], f"unannotated pure-layer functions: {missing}"

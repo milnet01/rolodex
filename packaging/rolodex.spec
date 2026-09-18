@@ -13,8 +13,10 @@ import sys
 
 from PyInstaller.utils.hooks import collect_all
 
-# Console vs windowed. Shipped builds are windowed (no terminal). Setting ROLODEX_CONSOLE=1
-# builds a console exe so --selftest output/tracebacks are visible in CI logs (Windows diag).
+# Console vs windowed. Shipped builds are windowed (no terminal). ROLODEX_CONSOLE=1 builds a
+# console exe so --selftest output and tracebacks are visible -- a MANUAL diagnostic switch for
+# a Windows build that fails its self-test. Nothing in CI sets it; export it before running
+# packaging/windows-build.sh (ROLO-0075).
 CONSOLE = os.environ.get("ROLODEX_CONSOLE") == "1"
 
 # collect_all('gi') pulls the GObject-introspection namespace: shared libs, typelibs, and the
@@ -39,7 +41,10 @@ if sys.platform == "win32":
     print(f"[rolodex.spec] bundling {len(_typelibs)} typelibs from {_mingw}")
 
 a = Analysis(
-    ["../rolodex.py"],
+    # Anchored to this spec's directory explicitly. A bare "../rolodex.py" resolved only because
+    # PyInstaller anchors script paths to SPECPATH rather than the CWD the build scripts cd to;
+    # this form is correct under either rule (ROLO-0075).
+    [os.path.join(SPECPATH, "..", "rolodex.py")],  # SPECPATH is defined by PyInstaller
     pathex=[],
     binaries=binaries,
     datas=datas,

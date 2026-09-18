@@ -30,8 +30,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "==> [1/3] ruff (lint) — same invocation as ci.yml's Lint step"
+echo "==> [1/3] ruff (lint) and mypy (types) — same invocations as ci.yml"
 ruff check rolodex.py tests/
+mypy rolodex.py
 
 echo
 echo "==> [2/3] pytest"
