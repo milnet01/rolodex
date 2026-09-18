@@ -408,6 +408,22 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-09-18 (found driving ROLO-0044 on Xvfb).
   Lanes: gui.
 
+- ✅ [ROLO-0086] **CI has been red since ROLO-0059: the widget tests segfault with no display.**
+  tests/test_widgets.py (added by ROLO-0059) constructs real GTK widgets. Its
+  docstring said no display was needed, and locally that looked true -- but GTK
+  falls back to the desktop session's Wayland socket even with DISPLAY unset, so
+  the claim was never tested. On the ubuntu-latest runner (GTK 4.14, libadwaita
+  1.5) three tests fail and the fourth segfaults the run (exit 139), so every
+  push from 3f3f964 onward was red and nobody saw it.
+
+  Resolved 2026-09-18: reproduced in a podman ubuntu:24.04 container -- no
+  display fails, xvfb-run passes all 212. ci.yml installs xvfb and runs pytest
+  under `xvfb-run -a`; the docstring and CI-local.sh say why.
+  **Layman:** The automatic checks on GitHub had been failing for two weeks because some tests need a screen and the build server has none.
+  Kind: fix.
+  Source: in-session-2026-09-18 (gh run 35341065208).
+  Lanes: tooling.
+
 ## Medium priority
 
 - 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
@@ -1506,7 +1522,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 9 (verified, not fixed in the audit pass).
   Lanes: gui.
 
-- 📋 [ROLO-0074] **CI-local.sh invokes ruff differently from ci.yml.**
+- ✅ [ROLO-0074] **CI-local.sh invokes ruff differently from ci.yml.**
   CI-local.sh runs `python3 -m ruff check rolodex.py tests/`; ci.yml runs bare
   `ruff check rolodex.py tests/`. The module form only works for a pip-installed ruff, not a
   distro-packaged or standalone-installer one.
@@ -1515,6 +1531,8 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   is low rather than medium. But it makes the local mirror unusable on a machine where CI's own
   invocation would work, and CLAUDE.md's whole argument for CI-local.sh is that the two stay in
   lockstep.
+  Resolved 2026-09-18: CI-local.sh runs bare `ruff check rolodex.py
+  tests/`, as ci.yml does.
   **Layman:** The local pre-push check runs the linter in a way that only works for one kind of install, unlike the real CI.
   Kind: chore.
   Source: review-code 2026-08-31 lane 10 (verified, not fixed in the audit pass).

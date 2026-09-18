@@ -30,11 +30,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             python3-gi python3-gi-cairo python3-cairo \
-            gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-1 libadwaita-1-0
+            gir1.2-gtk-4.0 gir1.2-adw-1 libgtk-4-1 libadwaita-1-0 xvfb xauth
           python3 -m pip install --break-system-packages --upgrade ruff pytest cryptography
 
       - name: Lint (ruff)
         run: ruff check rolodex.py tests/
 
+      # Under a virtual display. tests/test_widgets.py builds real GTK widgets, and on the
+      # runner's GTK 4.14 / libadwaita 1.5 that fails with no display and then segfaults the
+      # whole run -- which is how every run from ROLO-0059 onward went red. Reproduced in an
+      # ubuntu:24.04 container: no display fails, xvfb-run passes the full suite.
       - name: Test (pytest)
-        run: python3 -m pytest tests/ -q
+        run: xvfb-run -a python3 -m pytest tests/ -q

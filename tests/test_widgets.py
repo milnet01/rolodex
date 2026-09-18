@@ -1,8 +1,10 @@
 """GUI-layer regression tests for ROLO-0059 — secrets left behind in widget buffers.
 
 Unlike tests/test_regressions.py, which is deliberately GTK-free, these construct real
-widgets. They still need no display and no Xvfb: each dialog is built and its handlers
-called directly, so nothing is ever presented and no main loop runs. Run with: pytest tests/
+widgets. Each dialog is built and its handlers called directly, so nothing is presented and no
+main loop runs -- but GTK still needs a display to build them on. A desktop session always has
+one (GTK falls back to the session's Wayland socket even with DISPLAY unset); CI has none and
+runs this suite under xvfb-run. Run with: pytest tests/
 """
 
 import pytest

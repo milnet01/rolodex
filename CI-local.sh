@@ -3,7 +3,8 @@
 # waiting on (or paying for) a round-trip:
 #
 #   1. ruff                   — the lint gate, invoked exactly as ci.yml's Lint step does
-#                               (`ruff check rolodex.py tests/`). The scope matters: a bare
+#                               (`ruff check rolodex.py tests/`), not as `python3 -m ruff`,
+#                               which works only for a pip-installed ruff (ROLO-0074). The scope matters: a bare
 #                               `ruff check .` also sweeps build/ dist/ out/ build_pyi/ and
 #                               reports findings CI never sees. The rule set is declared in
 #                               ruff.toml so an unpinned ruff cannot drift the gate (ROLO-0038).
@@ -30,10 +31,13 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "==> [1/3] ruff (lint) — same invocation as ci.yml's Lint step"
-python3 -m ruff check rolodex.py tests/
+ruff check rolodex.py tests/
 
 echo
-echo "==> [2/3] pytest (pure-logic suite)"
+echo "==> [2/3] pytest"
+# ci.yml runs this under xvfb-run because the runner has no display. A desktop session always
+# has one -- GTK falls back to the session's Wayland socket even with DISPLAY unset -- and
+# xvfb-run is not installed here, so the plain invocation is the local equivalent.
 python3 -m pytest tests/ -q
 
 echo
