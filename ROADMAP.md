@@ -370,7 +370,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 1 (verified; a LEDGER CORRECTION -- the audit pass recorded this as fixed and it was not).
   Lanes: crypto, docs.
 
-- 📋 [ROLO-0084] **security-standards.md calls cryptography "the one security-critical dependency"; certifi is a second one.**
+- ✅ [ROLO-0084] **security-standards.md calls cryptography "the one security-critical dependency"; certifi is a second one.**
   docs/security-standards.md reads "`cryptography` is the one security-critical
   dependency, and it follows `dependency-management-standards.md` like any other".
 
@@ -393,6 +393,11 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   security-standards.md reached its review-contract cap on 2026-09-02 (ROLO-0062);
   this edit changes what a conformer sweeps, so it is a direction change that
   re-arms that document's gate rather than a correction that rides along.
+  Resolved 2026-09-18: security-standards.md names certifi as the second
+  security-critical dependency and says a requirements.txt-only sweep
+  misses it. The re-armed review-contract gate ran three loops (loops
+  4-6 in docs/review-2026-09-02-security-standards.md), fixed six
+  findings, and converged on an empty loop.
   **Layman:** A security document says we have only one security-sensitive add-on library. We have two, and the second one supplies the list of trusted certificates the auto-updater checks downloads against.
   Kind: doc-fix.
   Source: review-contract 2026-09-02 loop 1 on dependency-management-standards.md (4b sweep collateral).
