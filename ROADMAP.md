@@ -1382,7 +1382,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: test.
   Source: debt-sweep-2026-07-17.
 
-- 📋 [ROLO-0040] **Run the contract gate on documentation-standards.md.**
+- ✅ [ROLO-0040] **Run the contract gate on documentation-standards.md.**
   Two rules were added to the Style section on 2026-08-27 at the user's
   instruction: don't write counts or line numbers, and every claim must be
   checkable.
@@ -1397,6 +1397,12 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   widening a run's subject mid-flight; starting a second concurrent gate was
   judged worse than filing this. Run `review-contract
   docs/documentation-standards.md --genre standard` (cap 3 for a standard).
+  Resolved 2026-09-18: review-contract ran three cold loops on
+  docs/documentation-standards.md (record:
+  docs/review-2026-09-18-documentation-standards.md). Ten findings
+  verified and fixed, none on the two Style rules that armed it. Cap
+  reached, calm, tail empty. Neighbour fixes to coding-standards.md and
+  rolodex.py's banners.
   **Layman:** A rule change to the writing standard is owed an independent read-through that has not happened yet.
   Kind: doc.
   Source: in-session-2026-08-27.
