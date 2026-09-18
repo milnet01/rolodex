@@ -469,6 +469,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   ubuntu:24.04 passes --selftest and opens its window on openSUSE. Ships
   in 1.5.0; the macOS binary had the same default and is covered by the
   same fix.
+  Cosmetic, not fixed: the Ubuntu-built binary prints Fontconfig
+  warnings on openSUSE (the bundled fontconfig is older than the host's
+  /etc/fonts/conf.d/48-guessfamily.conf). It runs normally.
   **Layman:** The Linux download only starts on Ubuntu-like systems; on others, such as openSUSE, it crashes immediately.
   Kind: fix.
   Source: in-session-2026-09-18 (post-release check of v1.4.0).
@@ -552,6 +555,15 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 - 📋 [ROLO-0016] **Colourblind-friendly field cues that don't rely on colour alone.**
   Why: field types (credential/key/identity/url/date/other) are distinguished only by a coloured left-border today — invisible to many colourblind users, and colour-alone fails WCAG 1.4.1.
   Scope: add a redundant non-colour cue per field category — a small type icon and/or a short text tag next to the label — so the category is legible in greyscale. Verify the theme palettes (ROLO-0015) against common colourblindness simulations. Touches _show_detail and the CSS.
+  Groundwork 2026-09-18, no code yet: field rows are built in
+  MainWindow._show_detail, which adds the CSS class
+  field-<field_category>. Plan: one prefix icon per category plus
+  a11y_label(icon, <category name>). Icons present in Adwaita:
+  dialog-password-symbolic (credential), channel-secure-symbolic (key),
+  avatar-default-symbolic (identity), x-office-calendar-symbolic (date),
+  text-x-generic-symbolic (other). For url use insert-link-symbolic:
+  web-browser-symbolic lives in Adwaita's legacy/ set, which themes are
+  dropping.
   **Layman:** Make the field types tell-apart-able without needing to see colour.
   Kind: accessibility.
   Source: user-request-2026-07-04.
