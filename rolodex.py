@@ -86,6 +86,9 @@ DEFAULT_IDLE_LOCK_SECONDS = 300  # ROLO-0002: auto-lock after this much inactivi
 # than on every character (each rebuild re-scans every entry).
 SEARCH_DEBOUNCE_MS = 150
 
+# ROLO-0026: .rolodex.conf key for the entry to reopen on (an entry id, never a name).
+LAST_ENTRY_KEY = "last_entry_id"
+
 # ROLO-0050: the largest text file the importer will read. Far above any real credential
 # export, and far below what would exhaust memory.
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
@@ -2324,7 +2327,10 @@ class MainWindow(Adw.ApplicationWindow):
         self._collapsed_categories: set[str] = set()
         self._search_debounce_id = 0  # pending GLib timeout for debounced search (ROLO-0018)
         migrate_vault(self.vault)
-        self._refresh_list()
+        # ROLO-0026: reopen on the entry that was open last time. Only its random id is kept in
+        # .rolodex.conf -- no name or field -- and an id this vault does not hold is ignored.
+        last = conf.get(LAST_ENTRY_KEY)
+        self._refresh_list(select_id=last if last in self.vault["entries"] else None)
 
         # Auto-lock on idle (ROLO-0002): any pointer motion or key press resets the activity
         # clock; a periodic check locks the vault once the idle timeout is exceeded.
@@ -2419,6 +2425,8 @@ class MainWindow(Adw.ApplicationWindow):
         # A no-op after _lock, which already queued the wipe.
         self._clear_clipboard_on_lock()
         self._clip_pool.shutdown(wait=False)  # queued wipes still run; see _clear_clipboard_on_lock
+        if self.vault is not None:  # _lock has already recorded it and cleared the vault
+            save_config({LAST_ENTRY_KEY: self._current_entry_id})
         save_config({
             "window_width": self.get_width(),
             "window_height": self.get_height(),
@@ -3104,6 +3112,7 @@ class MainWindow(Adw.ApplicationWindow):
             dialog.force_close()
         # Drop the rendered entry as well: detail_box holds the last-viewed values as label text
         # and one copy closure per field, so clearing self.vault alone leaves them reachable.
+        save_config({LAST_ENTRY_KEY: self._current_entry_id})  # ROLO-0026
         clear_container(self.detail_box)
         self.detail_stack.set_visible_child_name("empty")
         self._current_entry_id = None

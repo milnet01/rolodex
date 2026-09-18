@@ -431,3 +431,22 @@ def test_ROLO0053_icon_buttons_carry_an_accessible_label():
     finally:
         rolodex.a11y_label = orig
     assert seen == ["3 entries", "Rename category Games", "Delete category Games"]
+
+
+# --- ROLO-0026: reopen on the entry that was open last ------------------------------------
+
+
+def test_ROLO0026_main_window_reopens_the_remembered_entry(app, tmp_path, monkeypatch):
+    conf = tmp_path / "conf"
+    monkeypatch.setattr(rolodex, "CONFIG_FILE", str(conf))
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+    rolodex.add_entry(vault, "Alpha", [])
+    beta = rolodex.add_entry(vault, "Beta", [])
+    rolodex.save_config({rolodex.LAST_ENTRY_KEY: beta})
+    win = rolodex.MainWindow(app, vault, salt, PW, path, key)
+    assert win._current_entry_id == beta
+    # An id the vault no longer holds is ignored rather than raising.
+    rolodex.save_config({rolodex.LAST_ENTRY_KEY: "gone"})
+    win2 = rolodex.MainWindow(app, vault, salt, PW, path, key)
+    assert win2._current_entry_id is None

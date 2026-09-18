@@ -1322,9 +1322,14 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: feature.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0026] **Remember and restore the last-selected entry across sessions.**
+- ✅ [ROLO-0026] **Remember and restore the last-selected entry across sessions.**
   Why: the app already persists window geometry to .rolodex.conf; restoring the last selection is a cheap continuity win.
   Scope: store the last-selected entry id (and optionally scroll position / collapsed-category state) in .rolodex.conf and reselect on launch. Config-only; no vault change.
+  Resolved 2026-09-18: LAST_ENTRY_KEY (`last_entry_id`) in
+  .rolodex.conf, written by _lock and by close-request, restored through
+  _refresh_list(select_id=...) when the id is in the vault. Driven on
+  Xvfb (lock -> reopen shows the entry's detail) and covered by
+  test_ROLO0026. Collapsed-category state was not added.
   **Layman:** Reopen the app where you left off, on the same entry.
   Kind: ux.
   Source: in-session-2026-07-04.

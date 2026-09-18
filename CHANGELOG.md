@@ -8,6 +8,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Rolodex reopens on the entry you last had open** (ROLO-0026)
+  After an unlock, the entry you were viewing when you locked or closed
+  the app is selected again. Only the entry's random ID is kept in the
+  settings file, never its name or contents.
+
 - **A sample import file and a description of the import format** (ROLO-0029)
   `examples/sample-import.txt` is a ready-made example, and the README's
   "Importing a list" section explains the format.
