@@ -842,7 +842,14 @@ def config_int(conf: dict, key: str, default: int) -> int:
         return default
 
 
-def save_config(data: dict, path: str | None = None) -> None:
+def save_config(data: dict, path: str | None = None) -> bool:
+    """Merge *data* into .rolodex.conf atomically. Returns False when the write failed.
+
+    Failure is still swallowed rather than raised -- nothing here is worth interrupting the user
+    over -- but it is REPORTED, so the one caller whose preference matters can say so
+    (ROLO-0063): the update opt-in toasted success even when a read-only directory or a full
+    disk had dropped it.
+    """
     try:
         existing = load_config(path)
         existing.update(data)
@@ -861,8 +868,9 @@ def save_config(data: dict, path: str | None = None) -> None:
     except OSError:
         # Best-effort: .rolodex.conf holds only non-secret prefs (window geometry,
         # timeouts). If it can't be written we drop the update rather than interrupt
-        # the user — there is nothing here worth surfacing an error or losing work over.
-        pass
+        # the user; the return value lets a caller say so where it matters.
+        return False
+    return True
 
 
 # ===========================================================================
@@ -908,6 +916,9 @@ MAX_UPDATE_BYTES = 250 * 1024 * 1024
 MAX_API_BYTES = 1024 * 1024
 MAX_SIG_BYTES = 4096
 UPDATE_TIMEOUT_S = 30
+# ROLO-0058: wall-clock budget for one download. UPDATE_TIMEOUT_S bounds each socket
+# operation only; this bounds the transfer. 15 minutes covers the asset cap at ~300 KB/s.
+UPDATE_DOWNLOAD_BUDGET_S = 15 * 60
 _DOWNLOAD_CHUNK = 64 * 1024
 
 UPDATE_ENABLED_KEY = "check_for_updates"
@@ -992,8 +1003,9 @@ def update_check_enabled(path: str | None = None) -> bool:
     return load_config(path).get(UPDATE_ENABLED_KEY) is True
 
 
-def set_update_check_enabled(enabled: bool, path: str | None = None) -> None:
-    save_config({UPDATE_ENABLED_KEY: bool(enabled)}, path)
+def set_update_check_enabled(enabled: bool, path: str | None = None) -> bool:
+    """Persist the opt-in. Returns False when it could not be written (ROLO-0063)."""
+    return save_config({UPDATE_ENABLED_KEY: bool(enabled)}, path)
 
 
 def update_skipped_version(path: str | None = None) -> str:
@@ -1042,35 +1054,103 @@ def _require_https(url: str) -> None:
         raise UpdateError("refusing a non-https update URL")
 
 
-def _opener():
-    """A urllib opener that verifies TLS and re-checks https on EVERY redirect hop (INV-9).
+# ROLO-0058: the only hosts the updater talks to. A release's download links point at
+# github.com and redirect to a *.githubusercontent.com asset host; the API is api.github.com.
+_UPDATE_HOST_SUFFIXES = (".github.com", ".githubusercontent.com")
 
-    urllib's default redirect handler would transparently follow a 3xx to http://, so guarding
-    only the first URL is not enough.
+
+def _require_update_url(url: str) -> None:
+    """Refuse any URL that is not https to a GitHub host (INV-9, ROLO-0058).
+
+    asset_url and sig_url come straight from the release JSON, so a tampered or
+    attacker-authored release record could point a 250 MB fetch at any TLS host and disclose the
+    user's IP outside GitHub -- weaker than INV-3's "the app's only network egress". The
+    Ed25519 check still guards the installed bytes; this keeps the connection itself on GitHub.
+    Applied to the first URL and to every redirect hop.
+    """
+    _require_https(url)
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    if host != "github.com" and not host.endswith(_UPDATE_HOST_SUFFIXES):
+        raise UpdateError(f"refusing an update URL outside GitHub ({host or 'no host'})")
+
+
+def _read_capped(response, max_bytes: int, deadline: float, sink=None) -> bytes:
+    """Read *response* in chunks, enforcing a byte cap AND a wall-clock deadline (INV-9).
+
+    urlopen's timeout bounds each socket operation, not the transfer, so a server sending one
+    byte every 29 s held the connection open indefinitely (ROLO-0058). The deadline is checked
+    between chunks, so the worst case is the budget plus one socket timeout. With *sink* the
+    chunks are written there and b"" is returned; without, they are returned joined.
+    """
+    received = 0
+    parts = []
+    while True:
+        if time.monotonic() > deadline:
+            raise UpdateError("the update server is too slow; try again later")
+        chunk = response.read(_DOWNLOAD_CHUNK)
+        if not chunk:
+            break
+        received += len(chunk)
+        if received > max_bytes:
+            raise UpdateError("download exceeds the size cap")
+        if sink is None:
+            parts.append(chunk)
+        else:
+            sink.write(chunk)
+    return b"".join(parts)
+
+
+_TLS_CONTEXT = None
+
+
+def _tls_context():
+    """The updater's SSLContext, built once per process (ROLO-0080).
 
     CA trust is certifi when it is importable, else the system store (D7). The frozen binaries
     are built on one distro and run on any, and a host whose CA bundle sits somewhere the
     frozen OpenSSL does not look yields no CAs at all -- which INV-13 would then swallow as a
     silent "no update". A source checkout has no such problem and needs no extra dependency.
     """
-    import ssl
+    global _TLS_CONTEXT
+    if _TLS_CONTEXT is None:
+        import ssl
+
+        try:
+            import certifi
+
+            _TLS_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            _TLS_CONTEXT = ssl.create_default_context()
+    return _TLS_CONTEXT
+
+
+def _opener():
+    """A urllib opener that can speak https ONLY and re-checks every redirect hop (INV-9).
+
+    Built from an empty OpenerDirector rather than build_opener, which always registers the
+    plain HTTPHandler: then http:// stayed reachable at the urllib layer and only a check kept
+    it out (ROLO-0080). Here there is no handler for any other scheme, so a non-https URL fails
+    with "unknown url type" even if a future edit dropped the check. The redirect handler still
+    refuses a hop off https or off GitHub before following it, because urllib's default would
+    transparently follow a 3xx to http://.
+    """
     import urllib.request
-
-    try:
-        import certifi
-
-        ctx = ssl.create_default_context(cafile=certifi.where())
-    except ImportError:
-        ctx = ssl.create_default_context()
 
     class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
-            _require_https(newurl)  # raises before the redirect is followed
+            _require_update_url(newurl)  # raises before the redirect is followed
             return super().redirect_request(req, fp, code, msg, headers, newurl)
 
-    return urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=ctx), _HttpsOnlyRedirect()
-    )
+    opener = urllib.request.OpenerDirector()
+    for handler in (
+        urllib.request.HTTPSHandler(context=_tls_context()),
+        _HttpsOnlyRedirect(),
+        urllib.request.UnknownHandler(),  # any other scheme -> URLError("unknown url type")
+        urllib.request.HTTPDefaultErrorHandler(),
+        urllib.request.HTTPErrorProcessor(),
+    ):
+        opener.add_handler(handler)
+    return opener
 
 
 def fetch_latest_release(owner: str = GITHUB_OWNER, repo: str = GITHUB_REPO) -> dict:
@@ -1082,15 +1162,14 @@ def fetch_latest_release(owner: str = GITHUB_OWNER, repo: str = GITHUB_REPO) -> 
     import urllib.request
 
     url = f"https://api.github.com/repos/{owner}/{repo}/releases/latest"
-    _require_https(url)
+    _require_update_url(url)
     request = urllib.request.Request(
         url,
         headers={"User-Agent": "rolodex-updater", "Accept": "application/vnd.github+json"},
     )
+    deadline = time.monotonic() + UPDATE_TIMEOUT_S
     with _opener().open(request, timeout=UPDATE_TIMEOUT_S) as response:
-        raw = response.read(MAX_API_BYTES + 1)
-    if len(raw) > MAX_API_BYTES:
-        raise UpdateError("release API response exceeds the size cap")
+        raw = _read_capped(response, MAX_API_BYTES, deadline)
     return json.loads(raw.decode("utf-8"))
 
 
@@ -1099,19 +1178,12 @@ def download_to(url: str, dest: str, max_bytes: int) -> None:
     Any failure deletes the partial file, so a broken download never leaves bytes behind."""
     import urllib.request
 
-    _require_https(url)
+    _require_update_url(url)
     request = urllib.request.Request(url, headers={"User-Agent": "rolodex-updater"})
-    received = 0
+    deadline = time.monotonic() + UPDATE_DOWNLOAD_BUDGET_S
     try:
         with _opener().open(request, timeout=UPDATE_TIMEOUT_S) as response, open(dest, "wb") as fh:
-            while True:
-                chunk = response.read(_DOWNLOAD_CHUNK)
-                if not chunk:
-                    break
-                received += len(chunk)
-                if received > max_bytes:
-                    raise UpdateError("download exceeds the size cap")
-                fh.write(chunk)
+            _read_capped(response, max_bytes, deadline, sink=fh)
     except BaseException:
         try:
             os.unlink(dest)
@@ -1847,6 +1919,10 @@ class MainWindow(Adw.ApplicationWindow):
         # that closed inside the three seconds.
         self._update_cancelled = False
         self._silent_check_id = 0
+        # ROLO-0051: one update flow at a time -- a check, its offer dialog, and any download
+        # it leads to. Repeated menu clicks used to start N checks and N offers, and two
+        # accepted offers raced two downloads onto the same os.replace.
+        self._update_busy = False
         self._clipboard_timer_id = 0
         self._clipboard_pending_value = None
         self._rebuilding = False
@@ -2313,10 +2389,24 @@ class MainWindow(Adw.ApplicationWindow):
 
     # --- Opt-in signed auto-update (ROLO-0037) --------------------------------------------
 
+    def _set_update_busy(self, busy):
+        """Claim or release the single update flow (ROLO-0051), greying the menu item while it
+        runs. Returns False so it can be scheduled with GLib.idle_add from a worker."""
+        self._update_busy = busy
+        action = self.lookup_action("check-updates")
+        if action is not None:
+            action.set_enabled(not busy)
+        return False
+
     def _on_toggle_auto_updates(self, action, value):
         """Turn the automatic check on or off (INV-1). The only in-app writer of the preference."""
         enabled = bool(value.get_boolean())
-        set_update_check_enabled(enabled)
+        if not set_update_check_enabled(enabled):
+            # ROLO-0063: the write was swallowed, so the setting did not change. Say so and
+            # leave the checkbox where it was, rather than toasting a preference that the
+            # next launch will not have.
+            self._toast("Couldn't save that setting — the settings file is not writable")
+            return
         action.set_state(value)
         self._toast(
             "Rolodex will check for updates on startup"
@@ -2330,6 +2420,9 @@ class MainWindow(Adw.ApplicationWindow):
         import threading
 
         self._silent_check_id = 0  # this source removes itself via the False return below
+        if self._update_busy:
+            return False
+        self._set_update_busy(True)
         threading.Thread(target=self._silent_update_worker, daemon=True).start()
         return False
 
@@ -2339,8 +2432,13 @@ class MainWindow(Adw.ApplicationWindow):
         info = check_for_update()
         if info is not None:
             GLib.idle_add(self._offer_update, info)
+        else:
+            GLib.idle_add(self._set_update_busy, False)
 
     def _offer_update(self, info):
+        """Present the offer. The update flow stays claimed until the user answers it."""
+        if self._update_cancelled:
+            return self._set_update_busy(False)
         UpdateDialog(self, info).present(self)
         return False
 
@@ -2359,8 +2457,11 @@ class MainWindow(Adw.ApplicationWindow):
                 "or from a distribution package, updating is handled outside the app.",
             )
             return
+        if self._update_busy:
+            return  # a check, an offer or a download is already running (ROLO-0051)
         import threading
 
+        self._set_update_busy(True)
         self._toast("Checking for updates...")
         threading.Thread(target=self._check_updates_worker, daemon=True).start()
 
@@ -2371,11 +2472,13 @@ class MainWindow(Adw.ApplicationWindow):
         except UpdateError as exc:
             # INV-13: a forced failure must not read as "you're up to date".
             GLib.idle_add(self._toast, f"Couldn't check for updates: {exc}")
+            GLib.idle_add(self._set_update_busy, False)
             return
         GLib.idle_add(self._finish_check_updates, info)
 
     def _finish_check_updates(self, info):
         if info is None:
+            self._set_update_busy(False)
             self._toast(f"Rolodex {__version__} is up to date")
             return
         self._offer_update(info)
@@ -2397,9 +2500,11 @@ class MainWindow(Adw.ApplicationWindow):
                 "The downloaded update was not signed by the Rolodex release key, so it was "
                 "discarded and nothing was installed. Your current version is untouched.",
             )
+            GLib.idle_add(self._set_update_busy, False)
             return
         except UpdateError as exc:
             GLib.idle_add(self._show_message, "Update failed", str(exc))
+            GLib.idle_add(self._set_update_busy, False)
             return
         # INV-15: the window may have been locked or closed while this ran. Drop the download
         # rather than installing something the user is no longer consenting to.
@@ -2408,6 +2513,7 @@ class MainWindow(Adw.ApplicationWindow):
                 os.unlink(staged)
             except OSError:
                 pass
+            GLib.idle_add(self._set_update_busy, False)
             return
         GLib.idle_add(self._install_update, staged)
 
@@ -2423,11 +2529,13 @@ class MainWindow(Adw.ApplicationWindow):
                 os.unlink(staged)
             except OSError:
                 pass
+            self._set_update_busy(False)
             return
         try:
             apply_update(staged, on_before_exec=self._wipe_secrets_for_update)
         except UpdateError as exc:
             self._show_message("Update failed", str(exc))
+            self._set_update_busy(False)
 
     def _wipe_secrets_for_update(self):
         """Drop the in-memory password and vault before the process is replaced.
@@ -3918,11 +4026,13 @@ class UpdateDialog(Adw.AlertDialog):
 
     def _on_response(self, _dialog, response):
         # "Later" persists nothing, by design (INV-7).
+        if response == "update":
+            self.main_win._start_update_download(self.info)  # keeps the flow claimed
+            return
         if response == "skip":
             skip_update_version(self.info.version)
             self.main_win._toast(f"Skipping Rolodex {self.info.version}")
-        elif response == "update":
-            self.main_win._start_update_download(self.info)
+        self.main_win._set_update_busy(False)
 
 
 # ===========================================================================

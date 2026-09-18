@@ -207,6 +207,9 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   a later, higher version is still offered. "Later" persists nothing. `save_config` swallows
   `OSError` by design, so a skip that cannot be written is dropped silently and the version is
   offered again next launch — acceptable, and not to be "fixed" by making config writes fatal.
+  The opt-in itself is different, and not silent: `save_config` returns whether the write
+  landed, and a failed write of the opt-in toasts "Couldn't save that setting" and leaves the
+  checkbox unchanged (ROLO-0063).
   *Test:* `tests/test_update.py` — skip `1.4.0`, re-check against `1.4.0` → `None`; re-check
   against `1.4.1` → offered. Assert the config file gained the key and the vault did not.
 - **INV-8** `download_and_verify` installs only bytes whose `.sig` verifies against the built-in
@@ -218,9 +221,13 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   the target's own directory, which contains the target, so an empty-directory assertion can never
   pass.
 - **INV-9** Downloads are bounded, and the bounds are these: asset 250 MB, API response 1 MB,
-  signature 4 KB, socket timeout 30 s. Exceeding a cap aborts and deletes the partial file.
-  Only `https://` URLs are opened, and that is re-checked on **every** redirect hop rather than
-  only the first. The asset cap is a floor sized with headroom over what `build.yml` currently
+  signature 4 KB, socket timeout 30 s per operation, and a wall-clock budget per transfer —
+  `UPDATE_DOWNLOAD_BUDGET_S` (15 minutes) for a download, `UPDATE_TIMEOUT_S` for the API
+  response. Exceeding a cap or a budget aborts and deletes the partial file. Only `https://`
+  URLs to `github.com`, a `*.github.com` or a `*.githubusercontent.com` host are opened, and
+  that is re-checked on **every** redirect hop rather than only the first (ROLO-0058). The
+  opener registers no handler for any other scheme, so https-only holds by construction as well
+  as by the check (ROLO-0080). The asset cap is a floor sized with headroom over what `build.yml` currently
   produces — re-derive with `gh release view <tag> --json assets -q '.assets[].size'` before
   lowering it, because a cap under the real artifact aborts every genuine update while a
   synthetic over-cap test still passes.
@@ -268,8 +275,12 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
 - **INV-15** The check and the download run off the GTK main thread, marshalling back with
   `GLib.idle_add`, matching the existing unlock/restore pattern. Locking or closing the window
   while a download is in flight tears the prompt down, and a download completing afterwards
-  installs nothing and deletes its temp.
-  *Test:* **none — GTK-layer behaviour, verified by hand.** See § 10.
+  installs nothing and deletes its temp. Only one update flow runs at a time — a check, its
+  offer and any download it leads to — and "Check for updates..." is disabled while one does
+  (ROLO-0051).
+  *Test:* `tests/test_update.py` — a second manual check while one runs starts no thread. The
+  teardown half is driven through `_update_worker` and `_install_update` with the cancel flag
+  set; see § 10.
 
 ## 6. Failure modes
 

@@ -537,3 +537,187 @@ def test_D9_relaunch_command_waits_for_the_old_pid(frozen):
     assert "kill -0 4242" in script, "must wait for the OLD process to tear down first"
     assert "exec" in script
     assert "-ge 600" in script, "the wait must be hard-capped so a wedged process cannot hang it"
+
+
+# --- ROLO-0058 / ROLO-0080: GitHub-only, https-only by construction, wall-clock budget -----
+
+
+@pytest.mark.parametrize("url", [
+    "https://api.github.com/repos/o/r/releases/latest",
+    "https://github.com/o/r/releases/download/v1/a",
+    "https://objects.githubusercontent.com/x",
+    "https://release-assets.githubusercontent.com/x",
+])
+def test_ROLO0058_github_hosts_are_accepted(url):
+    rolodex._require_update_url(url)
+
+
+@pytest.mark.parametrize("url", [
+    "https://example.com/a",
+    "https://github.com.evil.example/a",
+    "https://evilgithub.com/a",
+    "http://github.com/a",
+    "https:///nohost",
+])
+def test_ROLO0058_other_hosts_and_schemes_are_refused(url):
+    with pytest.raises(rolodex.UpdateError):
+        rolodex._require_update_url(url)
+
+
+def test_ROLO0058_a_trickling_server_hits_the_wall_clock_budget(monkeypatch):
+    """urlopen's timeout is per socket operation; one byte every 29 s never tripped it."""
+    clock = iter([0.0, 10.0, 99.0])
+    monkeypatch.setattr(rolodex.time, "monotonic", lambda: next(clock))
+
+    class Trickle:
+        def read(self, _n):
+            return b"x"
+
+    with pytest.raises(rolodex.UpdateError, match="too slow"):
+        rolodex._read_capped(Trickle(), 1000, deadline=50.0)
+
+
+def test_ROLO0058_read_capped_still_enforces_the_byte_cap():
+    class Flood:
+        def read(self, n):
+            return b"x" * n
+
+    with pytest.raises(rolodex.UpdateError, match="size cap"):
+        rolodex._read_capped(Flood(), 10, deadline=float("inf"))
+
+
+def _run_isolated(code):
+    """Run *code* in a fresh interpreter: it imports urllib.request, which INV-12's test
+    asserts this process never loads."""
+    import subprocess
+    import sys
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True,
+                          text=True, timeout=60)
+
+
+def test_ROLO0080_opener_has_no_handler_for_plain_http():
+    """build_opener always registered HTTPHandler, so only a check kept http:// out."""
+    proc = _run_isolated(
+        "import urllib.error, rolodex\n"
+        "try:\n"
+        "    rolodex._opener().open('http://github.com/x', timeout=1)\n"
+        "except urllib.error.URLError as e:\n"
+        "    print('refused', e.reason)\n"
+    )
+    assert "refused unknown url type" in proc.stdout, proc.stdout + proc.stderr
+
+
+def test_ROLO0058_redirect_off_github_is_refused_before_following():
+    proc = _run_isolated(
+        "import urllib.request, rolodex\n"
+        "op = rolodex._opener()\n"
+        "h = [x for x in op.handlers if isinstance(x, urllib.request.HTTPRedirectHandler)][0]\n"
+        "req = urllib.request.Request('https://github.com/a')\n"
+        "try:\n"
+        "    h.redirect_request(req, None, 302, 'Found', {}, 'https://example.com/b')\n"
+        "except rolodex.UpdateError:\n"
+        "    print('refused')\n"
+    )
+    assert "refused" in proc.stdout, proc.stdout + proc.stderr
+
+
+def test_ROLO0080_tls_context_is_built_once():
+    first = rolodex._tls_context()
+    assert rolodex._tls_context() is first
+
+
+# --- ROLO-0063: a swallowed opt-in write is reported, not toasted as success ---------------
+
+
+def test_ROLO0063_set_update_check_enabled_reports_a_failed_write(tmp_path):
+    assert rolodex.set_update_check_enabled(True, str(tmp_path / "conf")) is True
+    missing_dir = tmp_path / "no" / "such" / "dir" / "conf"
+    assert rolodex.set_update_check_enabled(True, str(missing_dir)) is False
+
+
+def test_ROLO0063_toggle_does_not_claim_success_when_the_write_failed(monkeypatch):
+    toasts, states = [], []
+
+    class FakeAction:
+        def set_state(self, v):
+            states.append(v)
+
+    fake = type("W", (), {"_toast": lambda self, m: toasts.append(m)})()
+    monkeypatch.setattr(rolodex, "set_update_check_enabled", lambda enabled: False)
+    from gi.repository import GLib
+
+    rolodex.MainWindow._on_toggle_auto_updates(fake, FakeAction(), GLib.Variant.new_boolean(True))
+    assert states == [], "the checkbox must not flip when the preference was not saved"
+    assert toasts and "Couldn't save" in toasts[0]
+
+
+# --- ROLO-0051: one update flow at a time ---------------------------------------------------
+
+
+def test_ROLO0051_a_second_check_while_one_runs_starts_nothing(monkeypatch):
+    import threading
+
+    started = []
+
+    class FakeThread:
+        def __init__(self, target, **_):
+            started.append(target)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(threading, "Thread", FakeThread)
+    monkeypatch.setattr(rolodex, "is_update_supported", lambda: True)
+
+    class Win:
+        _update_busy = False
+        _toast = staticmethod(lambda m: None)
+        _check_updates_worker = None
+
+        def _set_update_busy(self, busy):
+            self._update_busy = busy
+
+    win = Win()
+    rolodex.MainWindow._on_check_updates(win)
+    rolodex.MainWindow._on_check_updates(win)
+    assert len(started) == 1
+    assert win._update_busy is True
+
+
+# --- INV-15: a cancelled flow installs nothing and deletes its temp ------------------------
+
+
+class _CancelledWin:
+    _update_cancelled = True
+
+    def __init__(self):
+        self.busy_released = False
+
+    def _set_update_busy(self, busy):
+        self.busy_released = not busy
+        return False
+
+
+def test_INV15_install_after_cancel_unlinks_and_does_not_apply(tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.write_bytes(b"x")
+    monkeypatch.setattr(rolodex, "apply_update", lambda *a, **k: pytest.fail("installed"))
+    win = _CancelledWin()
+    rolodex.MainWindow._install_update(win, str(staged))
+    assert not staged.exists()
+    assert win.busy_released
+
+
+def test_INV15_download_finishing_after_cancel_unlinks_and_never_schedules_install(
+        tmp_path, monkeypatch):
+    staged = tmp_path / "staged"
+    staged.write_bytes(b"x")
+    monkeypatch.setattr(rolodex, "download_and_verify", lambda info: str(staged))
+    scheduled = []
+    monkeypatch.setattr(rolodex.GLib, "idle_add", lambda fn, *a: scheduled.append(fn))
+    win = _CancelledWin()
+    rolodex.MainWindow._update_worker(win, object())
+    assert not staged.exists()
+    assert scheduled == [win._set_update_busy]

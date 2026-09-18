@@ -69,6 +69,14 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Fixed
 
+- **Clicking "Check for updates" repeatedly no longer starts several checks** (ROLO-0051)
+  Only one check, offer or download runs at a time, and the menu item
+  is greyed out while it does.
+
+- **Turning on update checks says so when the setting could not be saved** (ROLO-0063)
+  Before, it reported success even when the settings file was not
+  writable, and the setting was silently lost.
+
 - **Ticking a duplicate in the import preview now imports it** (ROLO-0047)
   A duplicate starts unticked. Before, ticking it did nothing: it was
   thrown away at import. It now lands as a second entry with the same
@@ -154,6 +162,16 @@ All notable changes to Rolodex are documented here. The format is based on
   If a download completed after you locked or closed Rolodex, it went ahead and replaced the program and restarted it — potentially while you were typing your master password into the lock screen. It now discards the download instead. Leftover part-downloaded files, which nothing previously removed, are also cleaned up at startup.
 
 ### Security
+
+- **The updater only connects to GitHub, and a download has a time limit** (ROLO-0058)
+  A download link pointing anywhere but GitHub is refused, including
+  after a redirect. A server that sends data very slowly is cut off after
+  15 minutes instead of holding the download open forever.
+
+- **The updater cannot make an insecure connection even by mistake** (ROLO-0080)
+  Its network code has no way to open a plain http:// address at all,
+  rather than relying on a check. The secure-connection setup is also
+  built once instead of on every request.
 
 - **Clear the master password and secret field values out of their widgets** (ROLO-0059)
   The unlock and restore dialogs left the password sitting in the box that

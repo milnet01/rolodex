@@ -256,7 +256,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 9.
   Lanes: gui.
 
-- 📋 [ROLO-0058] **Constrain the update download to GitHub hosts and give it a wall-clock budget.**
+- ✅ [ROLO-0058] **Constrain the update download to GitHub hosts and give it a wall-clock budget.**
   Two verified findings in the same fetch path, neither addressed by the audit pass.
 
   HOST: asset_url and sig_url come straight from the release JSON and are passed to download_to
@@ -272,6 +272,11 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   only the socket timeout, so the invariant needs a sentence as well as the code.
 
   The daemon thread means neither hangs the UI, which is why these are queued rather than urgent.
+  Resolved 2026-09-18: _require_update_url allows github.com,
+  *.github.com and *.githubusercontent.com on the first URL and every
+  redirect; _read_capped enforces UPDATE_DOWNLOAD_BUDGET_S (15 min) and
+  UPDATE_TIMEOUT_S for the API. Live-checked against the v1.3.1 release.
+  Spec INV-9 amended.
   **Layman:** The updater will follow a download link to any secure address, and a server that trickles data can keep the download open forever.
   Kind: security.
   Source: review-code 2026-08-31 lane 4 (verified, not fixed in the audit pass).
@@ -689,7 +694,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 3 and 7.
   Lanes: import-export.
 
-- 📋 [ROLO-0051] **Guard the update check and download against re-entry.**
+- ✅ [ROLO-0051] **Guard the update check and download against re-entry.**
   _on_check_updates and _start_update_download take no re-entrancy guard, so repeated menu
   clicks spawn N threads and N offer dialogs, and two accepted offers give two concurrent
   downloads racing on the same os.replace.
@@ -697,6 +702,8 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   The INV-15 cancellation flag added in this audit makes the teardown correct but does not make
   the start path idempotent -- a second download still begins. Wants a simple in-flight flag on
   MainWindow, plus disabling the menu item while a check or download is running.
+  Resolved 2026-09-18: MainWindow._update_busy covers check, offer and
+  download; the check-updates action is disabled while it is held.
   **Layman:** Clicking “Check for updates” repeatedly starts a new check each time, and accepting two update offers downloads twice at once.
   Kind: fix.
   Source: review-code 2026-08-31 lane 6.
@@ -881,7 +888,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: close-findings 2026-08-31 (surfaced by the sweep; recorded in commit 5db68d2).
   Lanes: docs.
 
-- 📋 [ROLO-0063] **Preference and config writes report success when the write was swallowed.**
+- ✅ [ROLO-0063] **Preference and config writes report success when the write was swallowed.**
   _on_toggle_auto_updates calls set_update_check_enabled(enabled) and then unconditionally
   toasts "Rolodex will check for updates on startup". save_config swallows OSError by design, so
   a preference that failed to persist is reported to the user as set, and the app is not in fact
@@ -894,6 +901,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   The audit pass made save_config atomic, which removes the truncation route to losing it, but
   not this one: a read-only directory or a full disk still fails silently. Fix: have save_config
   report success, and toast the failure for the opt-in specifically.
+  Resolved 2026-09-18: save_config and set_update_check_enabled return
+  bool; the opt-in toggle toasts the failure and leaves the checkbox
+  unchanged. Spec INV-7 amended.
   **Layman:** Turning on automatic update checks says it worked even when the setting could not be saved — so it silently goes back to off.
   Kind: fix.
   Source: review-code 2026-08-31 lane 6 (verified, not fixed in the audit pass).
@@ -1026,7 +1036,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 1 (verified, not fixed in the audit pass).
   Lanes: crypto.
 
-- 📋 [ROLO-0080] **Structural hardening of the updater's HTTP layer.**
+- ✅ [ROLO-0080] **Structural hardening of the updater's HTTP layer.**
   Two observations from the same lane, neither a live defect, both worth recording so they are
   not rediscovered.
 
@@ -1042,6 +1052,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Also noted: _opener() rebuilds an SSLContext and re-parses certifi's CA bundle on each of the
   three requests a check-and-download makes. Cheap to cache, and purely a cost item.
+  Resolved 2026-09-18: _opener is an OpenerDirector with HTTPS,
+  redirect, error and UnknownHandler only, so http:// is 'unknown url
+  type'; _tls_context() is built once. The whole-asset-in-RAM verify
+  stays as recorded (Ed25519 needs the full message).
   **Layman:** The update code disallows insecure connections by a check rather than by construction, and holds an entire downloaded file in memory to verify it.
   Kind: security.
   Source: review-code 2026-08-31 lane 4 (verified; defence-in-depth, not live defects).
