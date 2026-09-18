@@ -6,6 +6,8 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-18
+
 ### Added
 
 - **Rolodex reopens on the entry you last had open** (ROLO-0026)
@@ -393,7 +395,8 @@ app reached this state, not a tagged release.)
 - Encrypted backup & restore, plaintext export, and master-password change.
 - Vault schema migration (v1 → v2) applied on load.
 
-[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/milnet01/rolodex/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/milnet01/rolodex/releases/tag/v1.4.0
 [1.3.1]: https://github.com/milnet01/rolodex/releases/tag/v1.3.1
 [1.3.0]: https://github.com/milnet01/rolodex/releases/tag/v1.3.0
 [1.2.0]: https://github.com/milnet01/rolodex/releases/tag/v1.2.0
