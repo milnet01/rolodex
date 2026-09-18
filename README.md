@@ -64,7 +64,8 @@ characters). This one password protects everything.
 Prefer to run the code directly? You'll need a few things first:
 
 - Python 3.10 or newer
-- GTK 4 and libadwaita — the desktop toolkit Rolodex is built with — via PyGObject
+- GTK 4.12 or newer and libadwaita 1.5 or newer — the desktop toolkit Rolodex is built with —
+  via PyGObject. Older releases (Debian 12's, for example) are too old; Rolodex says so and exits.
 - The Python [`cryptography`](https://pypi.org/project/cryptography/) package
 
 Install the toolkit from your system's package manager:

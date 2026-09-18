@@ -80,6 +80,18 @@ def test_ROLO0059_unlock_dialog_wipes_both_entries_after_creating_a_vault(app, t
         return {"version": 2, "categories": [], "entries": {}}, b"\x00" * 16, b"k"
 
     monkeypatch.setattr(rolodex, "create_vault_with_key", fake_create)
+    # Creation runs on a worker thread since ROLO-0070; run it and its idle callback inline.
+    import threading
+
+    class InlineThread:
+        def __init__(self, target, args=(), **_):
+            self.target, self.args = target, args
+
+        def start(self):
+            self.target(*self.args)
+
+    monkeypatch.setattr(threading, "Thread", InlineThread)
+    monkeypatch.setattr(rolodex.GLib, "idle_add", lambda fn, *a: fn(*a))
 
     dlg = rolodex.UnlockDialog(app, str(tmp_path / "new.vault"), is_new=True)
     dlg.app = FakeApp()
@@ -281,3 +293,134 @@ def test_ROLO0044_save_asks_instead_of_overwriting(tmp_path):
 
     assert rolodex.MainWindow._save(Win(str(tmp_path / "v"))) is False
     assert asked == [True]
+
+
+# --- ROLO-0070: no silent no-ops -------------------------------------------------------------
+
+
+def test_ROLO0070_saving_a_nameless_entry_highlights_the_name():
+    win = FakeMainWindow()
+    dlg = rolodex.AddEditDialog(win, "Add Entry")
+    dlg._on_save(None)
+    assert dlg.name_entry.has_css_class("error")
+    assert win.added is None
+    dlg.name_entry.set_text("x")
+    assert not dlg.name_entry.has_css_class("error")
+
+
+def test_ROLO0070_import_with_nothing_ticked_says_so():
+    win = FakeMainWindow()
+    win._finish_import = lambda *a: pytest.fail("imported")
+    dlg = rolodex.ImportPreviewDialog(win, [{"name": "A", "fields": [], "notes": ""}], "/x")
+    dlg._set_all(False)
+    dlg._on_import(None)
+    assert dlg.status.get_visible() and "at least one" in dlg.status.get_text()
+
+
+class CategoryWin(FakeMainWindow):
+    _collapsed_categories = set()
+
+    def _save(self):
+        return True
+
+    def _refresh_list(self):
+        pass
+
+
+def test_ROLO0070_adding_a_duplicate_category_says_so():
+    win = CategoryWin({"version": 2, "categories": ["Games"], "entries": {}})
+    dlg = rolodex.ManageCategoriesDialog(win)
+    dlg.new_cat_entry.set_text("Games")
+    dlg._add_category()
+    assert "already exists" in dlg.status.get_text()
+    dlg.new_cat_entry.set_text("Email")
+    dlg._add_category()
+    assert not dlg.status.get_visible()
+    assert win.vault["categories"] == ["Games", "Email"]
+
+
+def test_ROLO0070_enter_submits_the_change_password_dialog():
+    win = FakeMainWindow()
+    win.password = PW
+    dlg = rolodex.ChangePasswordDialog(win)
+    dlg.current_pw.set_text("wrong")
+    dlg.new_pw.emit("entry-activated")
+    assert dlg.status.get_text() == "Incorrect current password."
+
+
+# --- ROLO-0072: no file path in the restore error --------------------------------------------
+
+
+def test_ROLO0072_restore_read_error_shows_no_path(monkeypatch):
+    win = FakeMainWindow()
+    win._restore_path = "/home/someone/secret-place/backup.vault"
+    dlg = rolodex.RestorePasswordDialog(win)
+    monkeypatch.setattr(rolodex.GLib, "idle_add", lambda fn, *a: fn(*a))
+    dlg._try_unlock(PW)
+    assert dlg.status.get_text() == "Could not read that backup file."
+    assert "secret-place" not in dlg.status.get_text()
+
+
+# --- ROLO-0053: keyboard reordering and spoken names -----------------------------------------
+
+
+def _key_controller(row):
+    from gi.repository import Gtk
+
+    return [c for c in row.observe_controllers() if isinstance(c, Gtk.EventControllerKey)][0]
+
+
+def test_ROLO0053_ctrl_down_moves_a_field_one_place(monkeypatch):
+    from gi.repository import Gdk
+
+    monkeypatch.setattr(rolodex.GLib, "idle_add", lambda fn, *a: None)
+    dlg = rolodex.AddEditDialog(FakeMainWindow(), "Add Entry")
+    for lbl in ("one", "two", "three"):
+        dlg.fields_listbox.append(rolodex.FieldRow(dlg, lbl, "v"))
+    rows = dlg._get_field_rows()
+    first = [r for r in rows if r.label_entry.get_text() == "one"][0]
+    _key_controller(first).emit("key-pressed", Gdk.KEY_Down, 0, Gdk.ModifierType.CONTROL_MASK)
+    ours = ("one", "two", "three")  # a new entry also starts with default fields
+    labels = [r.label_entry.get_text() for r in dlg._get_field_rows()
+              if r.label_entry.get_text() in ours]
+    assert labels == ["two", "one", "three"]
+
+
+def test_ROLO0053_ctrl_up_moves_a_category_and_saves(monkeypatch):
+    from gi.repository import Gdk
+
+    monkeypatch.setattr(rolodex.GLib, "idle_add", lambda fn, *a: None)
+    win = CategoryWin({"version": 2, "categories": ["A", "B", "C"], "entries": {}})
+    dlg = rolodex.ManageCategoriesDialog(win)
+    row_c = [r for r in dlg.cat_listbox if r.cat_name == "C"][0]
+    _key_controller(row_c).emit("key-pressed", Gdk.KEY_Up, 0, Gdk.ModifierType.CONTROL_MASK)
+    assert win.vault["categories"] == ["A", "C", "B"]
+
+
+def test_ROLO0053_icon_buttons_carry_an_accessible_label():
+    from gi.repository import Gtk
+
+    win = CategoryWin({"version": 2, "categories": ["Games"], "entries": {}})
+    dlg = rolodex.ManageCategoriesDialog(win)
+    row = [r for r in dlg.cat_listbox if isinstance(r, rolodex.CategoryRow)][0]
+    labelled = []
+
+    def walk(w):
+        if isinstance(w, Gtk.Button) and w.get_icon_name():
+            labelled.append(w)
+        child = w.get_first_child()
+        while child is not None:
+            walk(child)
+            child = child.get_next_sibling()
+
+    walk(row)
+    assert len(labelled) == 2
+    # Gtk exposes no getter for an accessible property, so assert through the helper's call.
+    seen = []
+    orig = rolodex.a11y_label
+    rolodex.a11y_label = lambda w, t: seen.append(t) or orig(w, t)
+    try:
+        rolodex.CategoryRow(dlg, "Games", 3)
+    finally:
+        rolodex.a11y_label = orig
+    assert seen == ["3 entries", "Rename category Games", "Delete category Games"]

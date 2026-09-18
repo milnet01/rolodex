@@ -82,6 +82,7 @@ SEARCH_DEBOUNCE_MS = 150
 # ROLO-0050: the largest text file the importer will read. Far above any real credential
 # export, and far below what would exhaust memory.
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
+MAX_IMPORT_ENTRIES = 2000  # ROLO-0070: rows the import preview will build in one go
 _IMPORT_TOO_LARGE = "That file is too large to import (the limit is 10 MB)."
 
 # ---------------------------------------------------------------------------
@@ -328,6 +329,11 @@ def migrate_vault(vault: dict) -> dict:
         )
     if "categories" not in vault:
         vault["categories"] = []
+    # categories.md INV-1 says names are unique and non-empty. A hand-edited or legacy list
+    # holding "" or a repeat made _refresh_list draw that header and its entries twice
+    # (ROLO-0070); keep the first of each, in order.
+    raw = vault["categories"] if isinstance(vault["categories"], list) else []
+    vault["categories"] = list(dict.fromkeys(c for c in raw if isinstance(c, str) and c))
     for entry in vault["entries"].values():
         if not isinstance(entry, dict):
             raise ValueError("Vault contents are not a valid vault")
@@ -695,6 +701,24 @@ def find_entry_by_name(vault: dict, name: str, exclude_id: str | None = None) ->
     return None
 
 
+def move_item(items: list, item, target) -> list:
+    """Return *items* with *item* moved into *target*'s slot, for drag and keyboard reordering.
+
+    Moving DOWN lands after the target and moving up lands before it, so a move onto the
+    next row down swaps the two. Inserting before the target in both directions made a
+    one-row move down a no-op -- the bug categories once had, and fields still did until
+    Ctrl+Down depended on it (ROLO-0053).
+    """
+    items = list(items)
+    if item not in items or target not in items or item is target:
+        return items
+    old_idx, target_idx = items.index(item), items.index(target)
+    items.pop(old_idx)
+    new_idx = items.index(target) + (1 if old_idx < target_idx else 0)
+    items.insert(new_idx, item)
+    return items
+
+
 def entries_noun(n: int) -> str:
     """'entry' for exactly one, else 'entries' — for count labels."""
     return "entry" if n == 1 else "entries"
@@ -921,6 +945,22 @@ def copy_to_clipboard(text: str) -> bool:
             except (subprocess.TimeoutExpired, OSError):
                 continue
     return False
+
+
+def clear_clipboard_if_unchanged(value: str) -> None:
+    """Wipe the clipboard, but only if it still holds *value* (ROLO-0003).
+
+    If a reader is available and the clipboard has moved on, the user's new copy is left
+    alone. wl-copy --trim-newline stores a trailing-newline value trimmed, so the trimmed form
+    counts as unchanged too -- otherwise such a value never matches and the secret stays on
+    the clipboard for good. No reader available falls through to the wipe deliberately: for a
+    credential manager, clearing a clipboard we cannot inspect is the safe direction.
+    Runs helper processes, so the GUI calls it off the main thread (ROLO-0046).
+    """
+    current = read_clipboard()
+    if current is not None and current != value and current != value.rstrip("\n"):
+        return
+    copy_to_clipboard("")
 
 
 # ===========================================================================
@@ -1528,6 +1568,43 @@ def sweep_stale_update_temps(target=None) -> int:
 # ===========================================================================
 
 
+def a11y_label(widget, text: str):
+    """Give an icon-only widget a name a screen reader can speak (ROLO-0053). A tooltip is not
+    one: it is exposed as a description, so the button itself was announced as nameless."""
+    widget.update_property([Gtk.AccessibleProperty.LABEL], [text])
+    return widget
+
+
+def attach_reorder_keys(row, reorder, refocus) -> None:
+    """Ctrl+Up / Ctrl+Down on *row* call reorder(row, neighbour), mirroring drag-and-drop.
+
+    *refocus* runs once the move has settled and puts the focus back on the moved item: both
+    reorders rebuild their list, which drops the focus.
+
+    The drag handle is an image, which cannot take focus, so without this a keyboard-only user
+    could not reorder fields or categories at all (ROLO-0053). Capture phase, because the row's
+    entries would otherwise see the keys first.
+    """
+    def on_key(_ctrl, keyval, _code, state):
+        if not state & Gdk.ModifierType.CONTROL_MASK:
+            return False
+        if keyval == Gdk.KEY_Up:
+            neighbour = row.get_prev_sibling()
+        elif keyval == Gdk.KEY_Down:
+            neighbour = row.get_next_sibling()
+        else:
+            return False
+        if neighbour is not None:
+            reorder(row, neighbour)
+            GLib.idle_add(lambda: refocus() and False)
+        return True
+
+    ctrl = Gtk.EventControllerKey()
+    ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    ctrl.connect("key-pressed", on_key)
+    row.add_controller(ctrl)
+
+
 def clear_container(container) -> None:
     """Remove every child from a GTK container (ListBox rows, Box children, ...) (ROLO-0019)."""
     child = container.get_first_child()
@@ -1714,15 +1791,13 @@ class UnlockDialog(Gtk.Window):
                 return
             if not self._take_lock():
                 return
-            try:
-                vault, salt, key = create_vault_with_key(pw, self.vault_path)
-            except Exception as e:
-                self.lock.release()
-                self._show_error(str(e))
-                return
-            self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
-            self._wipe_password_entries()
-            self.close()
+            # The KDF runs off the main thread here too, as it does for unlock (INV-6). On the
+            # main thread the window froze for the whole derivation with the button still live
+            # and nothing saying why (ROLO-0070).
+            self.btn.set_sensitive(False)
+            self.btn.set_label("Creating...")
+            import threading
+            threading.Thread(target=self._try_create, args=(pw,), daemon=True).start()
         else:
             if not self._take_lock():
                 return
@@ -1759,6 +1834,26 @@ class UnlockDialog(Gtk.Window):
             return
         self._wipe_password_entries()
         self.close()
+
+    def _try_create(self, pw):
+        try:
+            vault, salt, key = create_vault_with_key(pw, self.vault_path)
+            GLib.idle_add(self._create_ok, vault, salt, pw, key)
+        except Exception as e:
+            GLib.idle_add(self._create_fail, str(e))
+
+    def _create_ok(self, vault, salt, pw, key):
+        self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
+        self._wipe_password_entries()
+        self.close()
+        return False
+
+    def _create_fail(self, msg):
+        self.lock.release()
+        self.btn.set_sensitive(True)
+        self.btn.set_label("Create Vault")
+        self._show_error(msg)
+        return False
 
     def _wipe_password_entries(self):
         """Drop the master password from the entry buffers once it has been handed over
@@ -1967,7 +2062,11 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
         widget = self.get_root()
         if not isinstance(widget, MainWindow):
             return False
-        widget._move_entry_to_category(dragged_row.entry_id, self.category_name)
+        # Deferred: the move rebuilds the sidebar, which destroys THIS row -- and the DropTarget
+        # whose ::drop handler is still executing. Letting the drop finish first keeps GTK from
+        # running a handler on a finalised widget (ROLO-0070).
+        GLib.idle_add(widget._move_entry_to_category_idle, dragged_row.entry_id,
+                      self.category_name)
         return True
 
 
@@ -2000,6 +2099,13 @@ class MainWindow(Adw.ApplicationWindow):
         # TOTP live-code tick (ROLO-0006): one 1s timer refreshes every code row on screen.
         self._totp_tick_id = None
         self._totp_widgets = []
+        # ROLO-0068: whether the system clock is synchronised, checked once per unlock off the
+        # main thread. None until known, and None where it cannot be known -- only an explicit
+        # False puts a warning on the code rows.
+        self._clock_synced = None
+        import threading
+
+        threading.Thread(target=self._check_clock, daemon=True).start()
 
         # Restore saved window size or use defaults
         conf = load_config()
@@ -2023,7 +2129,8 @@ class MainWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
 
         # Left side: Add button
-        add_btn = Gtk.Button(icon_name="list-add-symbolic", tooltip_text="Add entry (Ctrl+N)")
+        add_btn = a11y_label(
+            Gtk.Button(icon_name="list-add-symbolic", tooltip_text="Add entry (Ctrl+N)"), "Add entry")
         add_btn.connect("clicked", self._on_add)
         header.pack_start(add_btn)
 
@@ -2038,11 +2145,13 @@ class MainWindow(Adw.ApplicationWindow):
         menu.append("Change master password...", "win.chpass")
         menu.append("Check for updates...", "win.check-updates")
         menu.append("Check for updates automatically", "win.auto-updates")
-        menu_btn = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu)
+        menu_btn = a11y_label(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu),
+                              "Main menu")
         header.pack_end(menu_btn)
 
         # Manual Lock button (ROLO-0002), also on Ctrl+L.
-        lock_btn = Gtk.Button(icon_name="changes-prevent-symbolic", tooltip_text="Lock vault (Ctrl+L)")
+        lock_btn = a11y_label(Gtk.Button(icon_name="changes-prevent-symbolic",
+                                         tooltip_text="Lock vault (Ctrl+L)"), "Lock vault")
         lock_btn.connect("clicked", self._lock)
         header.pack_end(lock_btn)
 
@@ -2060,11 +2169,6 @@ class MainWindow(Adw.ApplicationWindow):
             action = Gio.SimpleAction(name=name)
             action.connect("activate", callback)
             self.add_action(action)
-
-        # "Move to category" action for right-click context menu
-        move_action = Gio.SimpleAction(name="move-to-category", parameter_type=GLib.VariantType.new("(ss)"))
-        move_action.connect("activate", self._on_move_to_category_action)
-        self.add_action(move_action)
 
         # Automatic-update-check toggle (ROLO-0037). A STATEFUL action, so the menu renders it
         # as a checkbox — this is the only in-app way to set `check_for_updates`, and without
@@ -2186,6 +2290,10 @@ class MainWindow(Adw.ApplicationWindow):
         self._update_busy = False
         self._clipboard_timer_id = 0
         self._clipboard_pending_value = None
+        import concurrent.futures
+
+        self._clip_pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="rolodex-clipboard")
         self._rebuilding = False
         if update_check_enabled() and is_update_supported():
             self._silent_check_id = GLib.timeout_add_seconds(3, self._start_silent_update_check)
@@ -2285,6 +2393,10 @@ class MainWindow(Adw.ApplicationWindow):
         self._cancel_pending_update()
         if self._vault_lock is not None:
             self._vault_lock.release()  # covers _lock too, which routes through close()
+        # Quitting must not leave a copied secret behind any more than locking may (ROLO-0034).
+        # A no-op after _lock, which already queued the wipe.
+        self._clear_clipboard_on_lock()
+        self._clip_pool.shutdown(wait=False)  # queued wipes still run; see _clear_clipboard_on_lock
         save_config({
             "window_width": self.get_width(),
             "window_height": self.get_height(),
@@ -2486,6 +2598,7 @@ class MainWindow(Adw.ApplicationWindow):
             # Copy button
             copy_btn = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
                                   tooltip_text=f"Copy {field['label']}")
+            a11y_label(copy_btn, f"Copy {field['label']}")
             copy_btn.add_css_class("flat")
             copy_btn.add_css_class("copy-btn")
             copy_btn.connect("clicked", self._make_copy_handler(field["value"], field["label"]))
@@ -2567,12 +2680,26 @@ class MainWindow(Adw.ApplicationWindow):
             self._totp_tick_id = None
         self._totp_widgets = []
 
+    def _check_clock(self):
+        GLib.idle_add(self._set_clock_synced, clock_synchronized())
+
+    def _set_clock_synced(self, synced):
+        self._clock_synced = synced
+        if synced is False and self._totp_widgets and self._current_entry_id:
+            self._show_detail(self._current_entry_id)  # add the warning to rows already drawn
+        return False
+
     def _build_totp_row(self, cfg):
         """A 'Code' row: grouped live digits, a depleting ring, seconds left, and copy."""
         state = {"code": "", "fraction": 1.0}
         row = Adw.ActionRow()
         row.set_title("Code")
         row.add_css_class("totp-row")
+        if self._clock_synced is False:
+            # RFC 6238 needs both sides to agree on the time. A drifted clock makes every code
+            # wrong, and it looks like "the site rejected my code" (ROLO-0068).
+            row.set_subtitle("Your computer's clock is not synchronised, so this code may be "
+                             "rejected. Turn on automatic time in your system settings.")
 
         code_label = Gtk.Label(valign=Gtk.Align.CENTER, selectable=True)
         code_label.add_css_class("totp-code")
@@ -2588,8 +2715,8 @@ class MainWindow(Adw.ApplicationWindow):
         rem_label.add_css_class("totp-remaining")
         row.add_suffix(rem_label)
 
-        copy_btn = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
-                              tooltip_text="Copy 2FA code")
+        copy_btn = a11y_label(Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
+                                         tooltip_text="Copy 2FA code"), "Copy 2FA code")
         copy_btn.add_css_class("flat")
         copy_btn.add_css_class("copy-btn")
         copy_btn.connect("clicked", lambda _b: self._copy_value(state["code"], "2FA code"))
@@ -2630,16 +2757,40 @@ class MainWindow(Adw.ApplicationWindow):
         cr.arc(cx, cy, radius, start, start + frac * 2 * math.pi)
         cr.stroke()
 
+    def _clipboard_submit(self, fn, *args, then=None):
+        """Run a clipboard helper on this window's single clipboard worker (ROLO-0046).
+
+        The helpers shell out with a five-second timeout, so on the GTK main thread a hung
+        wl-paste froze the window for up to ten seconds. ONE worker, not a thread per call, so
+        a copy and the clear that follows it can never run out of order. *then* receives the
+        result back on the main thread.
+        """
+        future = self._clip_pool.submit(fn, *args)
+        if then is not None:
+            future.add_done_callback(lambda f: GLib.idle_add(then, f.result()))
+        return future
+
     def _copy_value(self, value, label):
         """Copy a secret to the clipboard with the auto-clear timer + toast (ROLO-0003)."""
-        if not copy_to_clipboard(value):
-            self._toast("Clipboard not available")
-            return
-        delay = self._clipboard_clear_s
         # Remember what was copied whatever the delay: with clipboard_clear_seconds = 0 there is
-        # no timer at all, and a lock still has to be able to wipe it (ROLO-0003).
+        # no timer at all, and a lock still has to be able to wipe it (ROLO-0003). Set before
+        # the copy runs, so a lock that lands mid-copy still queues the wipe behind it.
         self._cancel_clipboard_timer()
         self._clipboard_pending_value = value
+        self._clipboard_submit(copy_to_clipboard, value,
+                               then=lambda ok: self._after_copy(ok, value, label))
+
+    def _after_copy(self, ok, value, label):
+        if self.vault is None:
+            return False  # locked while the copy ran; the lock already queued the wipe
+        if not ok:
+            if self._clipboard_pending_value == value:
+                self._clipboard_pending_value = None
+            self._toast("Clipboard not available")
+            return False
+        if self._clipboard_pending_value != value:
+            return False  # a later copy superseded this one
+        delay = self._clipboard_clear_s
         if delay > 0:
             self._toast(f"Copied {label} — clipboard clears in {delay}s")
             self._clipboard_timer_id = GLib.timeout_add_seconds(
@@ -2647,25 +2798,16 @@ class MainWindow(Adw.ApplicationWindow):
             )
         else:
             self._toast(f"Copied {label}")
+        return False
 
     def _make_copy_handler(self, value, label):
         return lambda _btn: self._copy_value(value, label)
 
     def _clear_clipboard_if_unchanged(self, value):
-        """Wipe the clipboard, but only if it still holds the secret we copied (ROLO-0003)."""
-        self._clipboard_timer_id = 0  # this source removes itself via the False returns below
-        current = read_clipboard()
-        # If a reader is available and the clipboard has moved on, leave the user's new copy
-        # alone. wl-copy --trim-newline stores a trailing-newline value trimmed, so compare
-        # against the trimmed form too -- otherwise such a value never matches and the secret
-        # stays on the clipboard for good.
-        if current is not None and current != value and current != value.rstrip("\n"):
-            self._clipboard_pending_value = None
-            return False
-        # No reader available falls through to the wipe deliberately: for a credential manager,
-        # clearing a clipboard we cannot inspect is the safe direction.
-        copy_to_clipboard("")
+        """The auto-clear timer: queue the wipe on the clipboard worker (ROLO-0003, ROLO-0046)."""
+        self._clipboard_timer_id = 0  # this source removes itself via the False return below
         self._clipboard_pending_value = None
+        self._clipboard_submit(clear_clipboard_if_unchanged, value)
         return False  # one-shot timeout
 
     def _cancel_clipboard_timer(self):
@@ -2684,6 +2826,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._cancel_clipboard_timer()
         if pending is not None:
             self._clear_clipboard_if_unchanged(pending)
+        # The worker's thread is not a daemon, so the interpreter joins it on exit and a wipe
+        # queued here still runs when this lock is really the app quitting.
 
     def _cancel_pending_update(self):
         """INV-15: tear down anything the update path has in flight.
@@ -3061,6 +3205,15 @@ class MainWindow(Adw.ApplicationWindow):
         if not parsed:
             self._show_message("Import", "No entries found in file.")
             return
+        if len(parsed) > MAX_IMPORT_ENTRIES:
+            # The preview builds one row per entry up front, so an enormous file froze the UI in
+            # its constructor (ROLO-0070).
+            self._show_message(
+                "Import",
+                f"That file holds {len(parsed)} entries. Import at most {MAX_IMPORT_ENTRIES} at "
+                "a time — split the file and import each part.",
+            )
+            return
 
         # Show preview dialog
         dialog = ImportPreviewDialog(self, parsed, filepath)
@@ -3301,9 +3454,10 @@ class MainWindow(Adw.ApplicationWindow):
             if self._current_entry_id == entry_id:
                 self._show_detail(entry_id)
 
-    def _on_move_to_category_action(self, action, param):
-        entry_id, category = param.unpack()
-        self._move_entry_to_category(entry_id, category)
+    def _move_entry_to_category_idle(self, entry_id, category):
+        if self.vault is not None:  # locked between the drop and this callback
+            self._move_entry_to_category(entry_id, category)
+        return False
 
     def _attach_entry_context_menu(self, entry_row):
         """Attach a right-click context menu with 'Move to...' to an EntryRow."""
@@ -3400,7 +3554,7 @@ class FieldRow(Gtk.ListBoxRow):
         # Drag handle
         handle = Gtk.Image(icon_name="list-drag-handle-symbolic")
         handle.add_css_class("dim-label")
-        handle.set_tooltip_text("Drag to reorder")
+        handle.set_tooltip_text("Drag to reorder, or Ctrl+Up / Ctrl+Down")
         box.append(handle)
 
         self.label_entry = Gtk.Entry(placeholder_text="Label", text=label, hexpand=True)
@@ -3420,8 +3574,9 @@ class FieldRow(Gtk.ListBoxRow):
 
         # Password generator (ROLO-0004): only offered on sensitive fields, since generating a
         # strong secret only makes sense for passwords/keys.
-        self.gen_btn = Gtk.MenuButton(icon_name="view-refresh-symbolic",
-                                      tooltip_text="Generate a strong password")
+        self.gen_btn = a11y_label(Gtk.MenuButton(icon_name="view-refresh-symbolic",
+                                                 tooltip_text="Generate a strong password"),
+                                  "Generate a strong password")
         self.gen_btn.add_css_class("flat")
         self.gen_btn.set_popover(self._build_generator_popover())
         self.gen_btn.set_visible(sensitive)
@@ -3461,13 +3616,15 @@ class FieldRow(Gtk.ListBoxRow):
                 self.sens_check.set_active(True)
         self.label_entry.connect("changed", on_label_changed)
 
-        remove_btn = Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Remove field")
+        remove_btn = a11y_label(
+            Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Remove field"), "Remove field")
         remove_btn.add_css_class("flat")
         remove_btn.add_css_class("error")
         remove_btn.connect("clicked", lambda b: self.dialog._remove_field_row(self))
         box.append(remove_btn)
 
         self.set_child(box)
+        attach_reorder_keys(self, self.dialog._reorder_field, self.label_entry.grab_focus)
 
         # --- Drag source (on the handle) ---
         drag_src = Gtk.DragSource()
@@ -3606,6 +3763,7 @@ class AddEditDialog(Adw.Dialog):
         self.name_entry = Adw.EntryRow(title="System / service name")
         if entry:
             self.name_entry.set_text(entry["name"])
+        self.name_entry.connect("changed", lambda e: e.remove_css_class("error"))
         name_group.add(self.name_entry)
         vbox.append(name_group)
 
@@ -3744,14 +3902,11 @@ class AddEditDialog(Adw.Dialog):
         self.fields_listbox.remove(row)
 
     def _reorder_field(self, dragged_row, target_row):
-        """Move dragged_row to the position of target_row."""
-        # Collect current order
-        rows = self._get_field_rows()
-        if dragged_row not in rows or target_row not in rows:
+        """Move dragged_row to the position of target_row (see move_item)."""
+        current = self._get_field_rows()
+        if dragged_row not in current or target_row not in current:
             return
-        rows.remove(dragged_row)
-        target_idx = rows.index(target_row)
-        rows.insert(target_idx, dragged_row)
+        rows = move_item(current, dragged_row, target_row)
 
         # Rebuild listbox in new order
         for r in list(self._get_field_rows()):
@@ -3774,6 +3929,10 @@ class AddEditDialog(Adw.Dialog):
     def _on_save(self, btn):
         name = self.name_entry.get_text().strip()
         if not name:
+            # INV-6 forbids a nameless entry; say so rather than leave Save looking dead
+            # (ROLO-0070). The highlight clears as soon as the name is edited.
+            self.name_entry.add_css_class("error")
+            self.name_entry.grab_focus()
             return
 
         fields = []
@@ -3858,6 +4017,10 @@ class ImportPreviewDialog(Adw.Dialog):
         info = Gtk.Label(label=f"Found {len(parsed)} entries in file.", xalign=0)
         info.add_css_class("heading")
         vbox.append(info)
+        self.status = Gtk.Label(xalign=0)
+        self.status.add_css_class("error")
+        self.status.set_visible(False)
+        vbox.append(self.status)
 
         # Select all / none
         ctrl_box = Gtk.Box(spacing=8)
@@ -3918,6 +4081,8 @@ class ImportPreviewDialog(Adw.Dialog):
     def _on_import(self, btn):
         selected = [self.parsed[i] for check, i in self.checks if check.get_active()]
         if not selected:
+            self.status.set_text("Tick at least one entry to import.")  # ROLO-0070
+            self.status.set_visible(True)
             return
         pos = self.cat_row.get_selected()
         category = self.categories[pos - 1] if pos >= 1 else ""
@@ -3966,6 +4131,10 @@ class ChangePasswordDialog(Adw.Dialog):
 
         self.confirm_pw = Adw.PasswordEntryRow(title="Confirm new password")
         new_list.append(self.confirm_pw)
+
+        # Enter submits, as it does in the unlock and restore dialogs (ROLO-0070).
+        for row in (self.current_pw, self.new_pw, self.confirm_pw):
+            row.connect("entry-activated", self._on_save)
 
         vbox.append(new_list)
 
@@ -4066,8 +4235,15 @@ class RestorePasswordDialog(Adw.Dialog):
             GLib.idle_add(self._unlock_ok, vault, salt, pw, key)
         except InvalidToken:
             GLib.idle_add(self._unlock_fail, "Wrong password for this backup.")
-        except Exception as e:
+        except ValueError as e:
+            # Our own messages ("Not a valid vault file", "truncated or corrupt") carry no path.
             GLib.idle_add(self._unlock_fail, str(e))
+        except OSError:
+            # An OSError's text carries the full path of the file, and this dialog is not the
+            # place to print it (ROLO-0072).
+            GLib.idle_add(self._unlock_fail, "Could not read that backup file.")
+        except Exception:  # noqa: BLE001 - anything else would leave the dialog on "Decrypting..."
+            GLib.idle_add(self._unlock_fail, "Could not restore that backup file.")
 
     def _unlock_ok(self, vault, salt, pw, key):
         # The KDF runs on a background thread and Cancel/Esc only closes this dialog -- it does
@@ -4108,7 +4284,7 @@ class CategoryRow(Gtk.ListBoxRow):
         # Drag handle
         handle = Gtk.Image(icon_name="list-drag-handle-symbolic")
         handle.add_css_class("dim-label")
-        handle.set_tooltip_text("Drag to reorder")
+        handle.set_tooltip_text("Drag to reorder, or Ctrl+Up / Ctrl+Down")
         box.append(handle)
 
         # Category name label
@@ -4117,24 +4293,29 @@ class CategoryRow(Gtk.ListBoxRow):
         box.append(self.name_label)
 
         # Count badge
-        count_lbl = Gtk.Label(label=str(count))
+        count_lbl = a11y_label(Gtk.Label(label=str(count)), f"{count} {entries_noun(count)}")
         count_lbl.add_css_class("category-count")
         box.append(count_lbl)
 
         # Rename button
-        rename_btn = Gtk.Button(icon_name="document-edit-symbolic", tooltip_text="Rename")
+        rename_btn = a11y_label(Gtk.Button(icon_name="document-edit-symbolic", tooltip_text="Rename"),
+                                f"Rename category {name}")
         rename_btn.add_css_class("flat")
         rename_btn.connect("clicked", lambda b: self.dialog._rename_category(self))
         box.append(rename_btn)
 
         # Delete button
-        del_btn = Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Delete")
+        del_btn = a11y_label(Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Delete"),
+                             f"Delete category {name}")
         del_btn.add_css_class("flat")
         del_btn.add_css_class("error")
         del_btn.connect("clicked", lambda b: self.dialog._delete_category(self))
         box.append(del_btn)
 
         self.set_child(box)
+        # _reorder_category rebuilds the list, so this row is gone by the time focus returns.
+        attach_reorder_keys(self, self.dialog._reorder_category,
+                            lambda: self.dialog._focus_category(name))
 
         # Drag source on handle
         drag_src = Gtk.DragSource()
@@ -4200,6 +4381,12 @@ class ManageCategoriesDialog(Adw.Dialog):
         add_box.append(add_btn)
         vbox.append(add_box)
 
+        # ROLO-0070: why an add or a rename did nothing, instead of silence.
+        self.status = Gtk.Label(xalign=0, wrap=True)
+        self.status.add_css_class("error")
+        self.status.set_visible(False)
+        vbox.append(self.status)
+
         # Category list
         self.cat_listbox = Gtk.ListBox()
         self.cat_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -4219,15 +4406,29 @@ class ManageCategoriesDialog(Adw.Dialog):
             row = CategoryRow(self, cat_name, count)
             self.cat_listbox.append(row)
 
+    def _focus_category(self, name):
+        for row in self.cat_listbox:
+            if isinstance(row, CategoryRow) and row.cat_name == name:
+                row.grab_focus()
+                return
+
+    def _show_status(self, msg):
+        self.status.set_text(msg)
+        self.status.set_visible(bool(msg))
+
     def _add_category(self):
         name = self.new_cat_entry.get_text().strip()
         if not name:
+            self._show_status("Type a name for the new category.")
             return
-        if add_category(self.main_win.vault, name):
-            self.main_win._save()
-            self.new_cat_entry.set_text("")
-            self._rebuild_list()
-            self.main_win._refresh_list()
+        if not add_category(self.main_win.vault, name):
+            self._show_status(f"A category named “{name}” already exists.")
+            return
+        self._show_status("")
+        self.main_win._save()
+        self.new_cat_entry.set_text("")
+        self._rebuild_list()
+        self.main_win._refresh_list()
 
     def _rename_category(self, row):
         dialog = Adw.AlertDialog(heading="Rename category", body=f'Enter a new name for "{row.cat_name}":')
@@ -4245,7 +4446,14 @@ class ManageCategoriesDialog(Adw.Dialog):
         def on_response(d, response):
             if response == "rename":
                 new_name = entry.get_text().strip()
-                if new_name and new_name != row.cat_name and new_name not in self.main_win.vault["categories"]:
+                if not new_name:
+                    self._show_status("A category name cannot be empty.")
+                elif new_name != row.cat_name and new_name in self.main_win.vault["categories"]:
+                    self._show_status(
+                        f"A category named “{new_name}” already exists. Categories cannot be "
+                        "merged by renaming — move the entries, then delete the empty one.")
+                elif new_name != row.cat_name:
+                    self._show_status("")
                     old_name = row.cat_name
                     rename_category(self.main_win.vault, old_name, new_name)
                     # Update collapsed set
@@ -4288,16 +4496,7 @@ class ManageCategoriesDialog(Adw.Dialog):
         cats = self.main_win.vault["categories"]
         if dragged_row.cat_name not in cats or target_row.cat_name not in cats:
             return  # stale row reference (matches _reorder_field's guard)
-        old_idx = cats.index(dragged_row.cat_name)
-        target_idx = cats.index(target_row.cat_name)
-        cats.pop(old_idx)
-        new_idx = cats.index(target_row.cat_name)
-        # Dropping onto a row BELOW the dragged one inserts after it. Computing the index after
-        # the pop and always inserting before the target made the last slot unreachable by drag,
-        # and there is no other way to reorder categories.
-        if old_idx < target_idx:
-            new_idx += 1
-        cats.insert(new_idx, dragged_row.cat_name)
+        cats[:] = move_item(cats, dragged_row.cat_name, target_row.cat_name)
         self.main_win._save()
         self._rebuild_list()
         self.main_win._refresh_list()
@@ -4788,10 +4987,16 @@ class RolodexApp(Adw.Application):
         Adw.Application.do_startup(self)
         # INV-15: remove update temps orphaned by a download whose process did not outlive it.
         sweep_stale_update_temps()
+        display = Gdk.Display.get_default()
+        if display is None:
+            # No display to style. Passing None on raised a TypeError that said nothing about
+            # the cause (ROLO-0073); GTK itself reports the missing display when a window opens.
+            print("Rolodex: no display available", file=sys.stderr)
+            return
         css_provider = Gtk.CssProvider()
         css_provider.load_from_string(CUSTOM_CSS)
         Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(),
+            display,
             css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
@@ -4815,7 +5020,33 @@ class RolodexApp(Adw.Application):
         win.present()
 
 
+# ROLO-0049: the oldest toolkit this code runs on, each set by an API it calls.
+# libadwaita 1.5: Adw.Dialog, Adw.AlertDialog, force_close, get_visible_dialog.
+# GTK 4.12: Gtk.CssProvider.load_from_string.
+MIN_ADW = (1, 5)
+MIN_GTK = (4, 12)
+
+
+def toolkit_too_old() -> str | None:
+    """A message naming what is too old, or None. Below these the app died with an
+    AttributeError at the first missing call -- before any window, with nothing saying why."""
+    adw = (Adw.get_major_version(), Adw.get_minor_version())
+    gtk = (Gtk.get_major_version(), Gtk.get_minor_version())
+    problems = []
+    if gtk < MIN_GTK:
+        problems.append(f"GTK {'.'.join(map(str, MIN_GTK))} (found {gtk[0]}.{gtk[1]})")
+    if adw < MIN_ADW:
+        problems.append(f"libadwaita {'.'.join(map(str, MIN_ADW))} (found {adw[0]}.{adw[1]})")
+    if not problems:
+        return None
+    return "Rolodex needs " + " and ".join(problems) + " or newer."
+
+
 def main():
+    too_old = toolkit_too_old()
+    if too_old:
+        print(too_old, file=sys.stderr)
+        sys.exit(1)
     if "--selftest" in sys.argv[1:]:
         # Packaging smoke test. Reaching this line means every module-level import — including
         # `from gi.repository import Adw, Gdk, Gio, GLib, Gtk` (which loads the GTK/libadwaita

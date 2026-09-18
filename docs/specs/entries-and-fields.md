@@ -26,8 +26,9 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
 - **INV-5** On save, a field is kept only if its label OR value is non-empty; an empty label
   on a kept field becomes "Unlabeled".
 - **INV-6** Saving with an empty entry name is a no-op (the dialog does not commit).
-- **INV-7** Fields can be reordered by dragging the handle; the saved order matches the final
-  visual order.
+- **INV-7** Fields can be reordered by dragging the handle, or with Ctrl+Up / Ctrl+Down on the
+  focused row; the saved order matches the final visual order. Both routes use `move_item`: a
+  move down lands after the target, a move up before it (ROLO-0053).
 - **INV-8** The category selector appears only when at least one category exists. It defaults
   to "(None)" for a new entry and pre-selects the entry's current category when editing; an
   entry whose category is not in the current list (orphaned, or reset to `""` by deletion) falls

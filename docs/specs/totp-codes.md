@@ -87,6 +87,11 @@ code derived from it, and the live "Code" row in the detail pane. Pure layer:
 - **INV-22** The timer is cancelled before every detail rebuild, and on window close — which is
   the path a lock takes. Leaving it running leaks a timer across entries and keeps deriving
   codes from a vault that has been closed.
+- **INV-23** `totp_code` raises `ValueError` for an algorithm outside SHA-1/256/512, digits
+  outside 6-8, a period outside 1-300 seconds, or a negative timestamp (ROLO-0068).
+- **INV-24** Once per unlock, off the main thread, `clock_synchronized()` asks `timedatectl`
+  whether the system clock is network-synchronised. Only an explicit "no" adds a warning
+  subtitle to every Code row; an unknown answer adds nothing (ROLO-0068).
 
 ## Notes
 

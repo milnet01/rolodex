@@ -630,7 +630,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: fix.
   Source: in-session-2026-08-27.
 
-- 📋 [ROLO-0046] **Run the clipboard helpers off the GTK main thread.**
+- ✅ [ROLO-0046] **Run the clipboard helpers off the GTK main thread.**
   copy_to_clipboard and read_clipboard both use subprocess.run(..., timeout=5) and are called
   from a button click and from a GLib timeout. A hung wl-paste freezes the UI for 5 s, or 10 s
   across _clear_clipboard_if_unchanged's read-then-write.
@@ -639,6 +639,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   reason. Either move both through a short-lived thread with GLib.idle_add, or drop the
   external tools for the async Gdk.Clipboard API -- which would also remove the per-platform
   tool list the macOS/Windows fix had to extend.
+  Resolved 2026-09-18: one ThreadPoolExecutor(max_workers=1) per window
+  runs copy and wipe in order; clear_clipboard_if_unchanged moved to the
+  pure layer. Xvfb: a 2 s helper returns control in 3 ms.
+  clipboard-auto-clear.md INV-15.
   **Layman:** Copying a password shells out to a helper program with a five-second limit, and it does that on the thread that draws the window — so if the helper hangs, the app freezes.
   Kind: fix.
   Source: review-code 2026-08-31 lane 6.
@@ -686,7 +690,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 3, 6, 7.
   Lanes: data-model.
 
-- 📋 [ROLO-0049] **Declare the GTK and libadwaita minimum versions the code already requires.**
+- ✅ [ROLO-0049] **Declare the GTK and libadwaita minimum versions the code already requires.**
   Two hard floors are used with no minimum stated in README.md, requirements.txt, the
   packaging scripts or the workflows:
 
@@ -698,6 +702,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Verify both floors against the real API history before writing them down -- the lanes read
   them from usage, not from a compatibility table.
+  Resolved 2026-09-18: floors read from the installed GIRs - libadwaita
+  1.5 (Dialog, AlertDialog, force_close, get_visible_dialog), GTK 4.12
+  (load_from_string). toolkit_too_old() exits with a message; README
+  states both.
   **Layman:** The app needs fairly recent versions of its UI libraries but never says so, so on an older Linux it fails at startup with a confusing error.
   Kind: doc.
   Source: review-code 2026-08-31 lanes 8 and 9.
@@ -1009,7 +1017,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 3 (verified; unstated in either spec).
   Lanes: import-export.
 
-- 🚧 [ROLO-0068] **TOTP robustness: unvalidated direct-call arguments, and no clock-skew signal.**
+- ✅ [ROLO-0068] **TOTP robustness: unvalidated direct-call arguments, and no clock-skew signal.**
   Two items from the same lane.
 
   VALIDATION: totp_code's digits, period and algorithm are validated in _parse_otpauth_uri and
@@ -1026,6 +1034,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Progress 2026-09-18: totp_code validates its arguments;
   clock_synchronized() reads timedatectl. The detail-pane hint and its
   spec invariant are still to do.
+  Resolved 2026-09-18: clock_synchronized() once per unlock off the main
+  thread; an explicit 'no' adds a subtitle to Code rows. totp-codes.md
+  INV-23, INV-24.
   **Layman:** If your computer's clock drifts, your 2FA codes are silently wrong and the app gives no hint why.
   Kind: fix.
   Source: review-code 2026-08-31 lane 2 (verified, not fixed in the audit pass).
@@ -1287,8 +1298,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: doc.
   Source: user-request-2026-07-17.
 
-- 📋 [ROLO-0034] **Track and cancel the clipboard auto-clear timer on lock/close.**
+- ✅ [ROLO-0034] **Track and cancel the clipboard auto-clear timer on lock/close.**
   The clipboard auto-clear GLib.timeout (ROLO-0003) is fire-and-forget: its source id is never stored, so it isn't cancelled when the vault locks or the window closes. Harmless today (the callback clears the clipboard safely regardless), but fragile if the callback ever grows to touch window state. Track the source id alongside the TOTP/search timers and cancel it in the same lock/close paths. Surfaced by the 2026-07-17 debt sweep (source-audit lane).
+  Resolved 2026-09-18: the timer id was already tracked and cancelled on
+  lock; close-request now applies the lock's clear too. INV-14.
   **Layman:** Tidy up a background timer so it can't fire after the window it belongs to is gone.
   Kind: refactor.
   Source: debt-sweep-2026-07-17.
@@ -1320,7 +1333,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: doc.
   Source: in-session-2026-08-27.
 
-- 📋 [ROLO-0053] **Make field and category reordering reachable from the keyboard.**
+- ✅ [ROLO-0053] **Make field and category reordering reachable from the keyboard.**
   The drag handle is a Gtk.Image, which is not focusable, and no accelerator or move action
   exists. entries-and-fields.md INV-7 and categories.md INV-13 both promise reordering as a
   feature; for a keyboard-only or motor-impaired user the feature does not exist.
@@ -1329,6 +1342,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   is the cheap version. Several icon-only buttons across the app also carry tooltip_text but no
   accessible name, and the category count badge is a bare numeral -- worth doing in the same
   pass.
+  Resolved 2026-09-18: attach_reorder_keys gives Ctrl+Up/Down to
+  FieldRow and CategoryRow; move_item fixed field drag-down-by-one,
+  which was a no-op; a11y_label names every icon-only button and the
+  count badge.
   **Layman:** You can only reorder fields and categories by dragging them with a mouse, so anyone using just a keyboard cannot do it at all.
   Kind: accessibility.
   Source: review-code 2026-08-31 lane 8.
@@ -1400,7 +1417,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 3 (verified; NOT a security defect).
   Lanes: data-model.
 
-- 📋 [ROLO-0070] **GUI robustness: silent no-ops, a rebuild inside a drop handler, and unbounded preview rows.**
+- ✅ [ROLO-0070] **GUI robustness: silent no-ops, a rebuild inside a drop handler, and unbounded preview rows.**
   Six small verified findings, grouped because they are one pass over the dialog layer.
 
   - Silent no-ops with no feedback: AddEditDialog._on_save returns on an empty name (blessed by
@@ -1421,6 +1438,11 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
     RestorePasswordDialog and UnlockDialog, which both do.
   - ImportPreviewDialog builds one Adw.ActionRow per parsed entry synchronously with no cap, so a
     large import file freezes the UI in the constructor.
+  Resolved 2026-09-18: all six parts. Visible feedback for the four
+  no-ops; drop move deferred via GLib.idle_add; create runs its KDF on a
+  thread; migrate_vault dedupes categories; Enter submits
+  ChangePasswordDialog; imports over MAX_IMPORT_ENTRIES (2000) refused
+  (a 2000-row preview builds in 0.57 s on Xvfb).
   **Layman:** Several actions do nothing at all when they fail, with no message — and a couple of screens can misbehave in unusual cases.
   Kind: fix.
   Source: review-code 2026-08-31 lanes 5, 8, 9 (all verified, none fixed in the audit pass).
@@ -1446,7 +1468,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 3 and 8 (verified, not fixed in the audit pass).
   Lanes: data-model, gui.
 
-- 📋 [ROLO-0072] **Error text puts the full backup path on screen.**
+- ✅ [ROLO-0072] **Error text puts the full backup path on screen.**
   RestorePasswordDialog._try_unlock catches broadly and passes str(e) to _unlock_fail, so an
   OSError's message -- which carries the full path of the backup file -- is rendered in the
   dialog. Minor local disclosure, on a screen the user opened themselves.
@@ -1455,12 +1477,14 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   detail out of the UI. Pairs with the broader `except Exception` narrowing the audit pass began
   but did not finish -- python.md § Spellings asks for named exceptions and several call sites
   still catch Exception.
+  Resolved 2026-09-18: OSError maps to 'Could not read that backup
+  file.'; a catch-all shows a fixed message.
   **Layman:** If a backup file cannot be read, the message shows exactly where it lives on your disk.
   Kind: security.
   Source: review-code 2026-08-31 lane 9 (verified, not fixed in the audit pass).
   Lanes: gui.
 
-- 📋 [ROLO-0073] **GTK deprecations and an unguarded default display.**
+- ✅ [ROLO-0073] **GTK deprecations and an unguarded default display.**
   Two items in do_startup:
 
   - Gtk.StyleContext.add_provider_for_display has been deprecated since GTK 4.10. The project
@@ -1472,6 +1496,11 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Related to ROLO-0049, which covers declaring the GTK 4.12 floor that load_from_string needs;
   switching to load_from_data would remove that floor and could be done in the same pass.
+  Resolved 2026-09-18: Gdk.Display.get_default() None is guarded. The
+  deprecation half was false: the GTK 4.22 GIR marks
+  gtk_style_context_add_provider_for_display as NOT deprecated. It marks
+  load_from_data deprecated since 4.12, so ROLO-0049's suggested switch
+  was not taken.
   **Layman:** The startup code uses an older way of loading styles that newer versions warn about, and assumes a screen is always available.
   Kind: chore.
   Source: review-code 2026-08-31 lane 9 (verified, not fixed in the audit pass).
@@ -1526,7 +1555,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 10 (recorded as a coverage note, not a defect).
   Lanes: packaging.
 
-- 📋 [ROLO-0077] **A registered move-to-category action that nothing can fire.**
+- ✅ [ROLO-0077] **A registered move-to-category action that nothing can fire.**
   MainWindow registers a `move-to-category` window action with a (ss) parameter wired to
   _on_move_to_category_action. A project-wide search (tests excluded) finds no menu model, no
   set_action_name, no accelerator and no activate_action that fires it -- the shipped right-click
@@ -1538,6 +1567,8 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Either route the menu through the action or remove the registration; leaving both is the trap,
   because the next person to touch that menu will reasonably assume the action is the live path.
+  Resolved 2026-09-18: the unreachable move-to-category action and its
+  handler are removed; the right-click menu's buttons are the live path.
   **Layman:** There is a leftover menu action wired up in the code that no part of the app can actually trigger.
   Kind: chore.
   Source: review-code 2026-08-31 lane 7 (verified; a maintenance trap, not a defect).

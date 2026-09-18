@@ -757,3 +757,49 @@ def test_ROLO0045_adopt_refuses_a_file_that_is_not_a_vault(tmp_path):
     with pytest.raises(ValueError, match="not a Rolodex vault"):
         rolodex.adopt_vault_file(str(junk), str(live))
     assert live.read_bytes() == b"keep me"
+
+
+# --- ROLO-0053: one reordering rule for drag and keyboard ----------------------------------
+
+
+@pytest.mark.parametrize("item,target,expected", [
+    ("a", "b", ["b", "a", "c"]),   # one down: a swap, which used to be a no-op for fields
+    ("c", "b", ["a", "c", "b"]),   # one up
+    ("a", "c", ["b", "c", "a"]),   # to the end
+    ("c", "a", ["c", "a", "b"]),   # to the start
+    ("a", "a", ["a", "b", "c"]),
+    ("a", "zz", ["a", "b", "c"]),  # stale reference
+])
+def test_ROLO0053_move_item(item, target, expected):
+    assert rolodex.move_item(["a", "b", "c"], item, target) == expected
+
+
+# --- ROLO-0070: categories are unique and non-empty after load -----------------------------
+
+
+def test_ROLO0070_migrate_drops_blank_and_repeated_categories():
+    vault = {"entries": {}, "categories": ["Games", "", "Email", "Games", None, "Email"]}
+    rolodex.migrate_vault(vault)
+    assert vault["categories"] == ["Games", "Email"]
+
+
+# --- ROLO-0046: the clipboard wipe is a pure, thread-safe function -------------------------
+
+
+def test_ROLO0046_clear_clipboard_if_unchanged(monkeypatch):
+    writes = []
+    monkeypatch.setattr(rolodex, "copy_to_clipboard", lambda t: writes.append(t) or True)
+    for current, wiped in (("secret", True), ("secret", True), ("other", False), (None, True)):
+        writes.clear()
+        monkeypatch.setattr(rolodex, "read_clipboard", lambda _c=current: _c)
+        rolodex.clear_clipboard_if_unchanged("secret\n" if current == "secret" and wiped else "secret")
+        assert writes == ([""] if wiped else [])
+
+
+# --- ROLO-0049: the toolkit floor is checked, not assumed -----------------------------------
+
+
+def test_ROLO0049_toolkit_too_old_names_what_is_missing(monkeypatch):
+    assert rolodex.toolkit_too_old() is None  # the machine running the tests is new enough
+    monkeypatch.setattr(rolodex.Adw, "get_minor_version", lambda: 4)
+    assert "libadwaita 1.5" in rolodex.toolkit_too_old()

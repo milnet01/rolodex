@@ -53,7 +53,12 @@ Retroactive spec for category grouping (`add_category`, `rename_category`, `dele
 ### Management dialog
 
 - **INV-13** `ManageCategoriesDialog` lists categories with per-row rename and delete, an add
-  field, and drag-to-reorder; reordering rewrites `vault["categories"]` order and saves.
+  field, and reordering by drag or by Ctrl+Up / Ctrl+Down on the focused row (ROLO-0053);
+  reordering rewrites `vault["categories"]` order and saves. An add or a rename that cannot
+  proceed — an empty name, or one that already exists — says why in the dialog rather than
+  doing nothing (ROLO-0070).
+- **INV-14** `migrate_vault` drops empty and repeated names from `vault["categories"]`, keeping
+  the first of each in order, so a hand-edited list cannot draw a header twice (ROLO-0070).
 
 ## Notes
 

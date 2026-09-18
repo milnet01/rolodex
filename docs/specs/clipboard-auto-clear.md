@@ -52,6 +52,11 @@ Pure layer: `copy_to_clipboard`, `read_clipboard`. GUI layer: `_copy_value`,
 - **INV-13** The timer alone cannot cover this. It may still be pending, and under INV-2 there
   is no timer at all — so without an explicit clear at lock the secret would sit on the
   clipboard indefinitely.
+- **INV-14** Closing the window applies the same clear as a lock (ROLO-0034).
+- **INV-15** Every clipboard helper call — the copy, the timer's wipe, the lock's wipe — runs on
+  one per-window worker thread, never the GTK main thread, so a hung helper cannot freeze the
+  window. One worker, so a copy and the wipe after it run in order. Its thread is not a daemon:
+  a wipe queued as the app quits still runs before the process exits (ROLO-0046).
 
 ## Notes
 

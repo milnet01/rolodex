@@ -8,6 +8,15 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Reorder fields and categories from the keyboard** (ROLO-0053)
+  Ctrl+Up and Ctrl+Down move the focused field or category. Screen
+  readers now announce the icon-only buttons by name, and the category
+  count badge reads as "3 entries" instead of a bare number.
+
+- **Warning when your clock may make two-factor codes wrong** (ROLO-0068)
+  If your computer's clock is not synchronised, each two-factor code shows
+  a note saying the code may be rejected.
+
 - **Restore from a backup when your vault will not open** (ROLO-0045)
   If the vault file is damaged (not a wrong password), the unlock screen
   offers "Restore from Backup…" and "Start a New Vault…". The damaged
@@ -53,6 +62,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **Rolodex states the toolkit versions it needs** (ROLO-0049)
+  It needs GTK 4.12 or newer and libadwaita 1.5 or newer. On an older
+  system it now says so and exits, instead of failing with a technical
+  error. The README lists both.
+
 - **New master passwords must be at least 12 characters, up from 8** (ROLO-0079)
   Your existing vault is unaffected and still opens exactly as before —
   unlocking never checks the length. The new minimum applies when you
@@ -79,6 +93,23 @@ All notable changes to Rolodex are documented here. The format is based on
   All GitHub Actions are pinned to a specific commit rather than a moving tag, so a re-pointed tag cannot introduce new code into a release build. Checkout no longer leaves credentials in the workspace. The Linux and macOS build self-tests have the same timeout the Windows one already had, so a hang fails the build instead of blocking a runner for six hours. certifi is now named in the build scripts' prerequisites and asserted by the local CI gate, since the release binaries are built with it. A missing typelib now fails the Windows build immediately rather than producing a binary that fails mysteriously at runtime.
 
 ### Fixed
+
+- **Copying a password can no longer freeze the window** (ROLO-0046)
+  Clipboard helpers now run in the background. A helper that hangs no
+  longer locks up the app for several seconds.
+
+- **Closing the window now clears a copied secret from the clipboard** (ROLO-0034)
+  Locking already did this; closing now does too.
+
+- **Actions that did nothing now say why** (ROLO-0070)
+  Saving an entry with no name highlights the name. Importing with nothing
+  ticked, and adding or renaming a category to a name that already
+  exists, show a message. Creating a vault no longer freezes the window.
+  Enter now works in the Change Password dialog. An import file with more
+  than 2000 entries is refused with a message instead of freezing.
+
+- **Dragging a field down by one place now works** (ROLO-0053)
+  It used to land back where it started.
 
 - **Two copies of Rolodex can no longer overwrite each other's changes** (ROLO-0044)
   While one copy has the vault unlocked, another copy refuses to unlock
@@ -191,6 +222,8 @@ All notable changes to Rolodex are documented here. The format is based on
   If a download completed after you locked or closed Rolodex, it went ahead and replaced the program and restarted it — potentially while you were typing your master password into the lock screen. It now discards the download instead. Leftover part-downloaded files, which nothing previously removed, are also cleaned up at startup.
 
 ### Security
+
+- **Backup errors no longer show the file's full location on screen** (ROLO-0072)
 
 - **The updater only connects to GitHub, and a download has a time limit** (ROLO-0058)
   A download link pointing anywhere but GitHub is refused, including
