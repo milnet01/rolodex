@@ -1,6 +1,10 @@
 # NEVER publish real credential data
 contacts.vault
 *.vault
+# The vault's lock sidecar (ROLO-0044) and an unreadable vault set aside by the unlock
+# screen (ROLO-0045). The second holds ciphertext; neither belongs in a commit.
+*.vault.lock
+*.vault.unreadable-*
 Backups/
 .rolodex.conf
 

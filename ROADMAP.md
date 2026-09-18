@@ -221,7 +221,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 1, 5, 9 (independently).
   Lanes: crypto, gui.
 
-- 📋 [ROLO-0044] **Guard against two Rolodex instances writing the vault last-writer-wins.**
+- ✅ [ROLO-0044] **Guard against two Rolodex instances writing the vault last-writer-wins.**
   _save() writes the whole vault with no lock file, no mtime check and no generation counter.
   The single-instance guard added to do_activate() closes the common route to this, but it is
   not a guarantee: it relies on D-Bus registration, and it does nothing about a second
@@ -234,12 +234,17 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Needs a design decision rather than an edit, which is why it is queued: flock on the vault,
   a .lock sidecar, or stat-before-replace with a refuse-or-merge prompt. The atomic-write work
   from 1.3.1 does not address this and was never meant to.
+  Resolved 2026-09-18 (user decision: lock + change check): VaultLock on
+  a <vault>.lock sidecar held while unlocked; MainWindow._write_vault
+  compares vault_fingerprint before every write and a save offers Reload
+  or Overwrite; create refuses an existing file. Driven end to end on
+  Xvfb. vault spec INV-11, 18, 19; master-password INV-7c.
   **Layman:** If two copies of Rolodex ever have the vault open at once, whichever saves last wipes out the other's changes with no warning.
   Kind: fix.
   Source: review-code 2026-08-31 lane 5.
   Lanes: crypto, gui.
 
-- 📋 [ROLO-0045] **Offer restore-from-backup when the vault will not open.**
+- ✅ [ROLO-0045] **Offer restore-from-backup when the vault will not open.**
   do_activate decides create-or-unlock on os.path.exists alone, so a truncated or corrupt
   vault reads as "existing" and the app enters unlock mode. load_vault then raises, the
   unlock dialog shows the error text, and the user is stuck: there is no create path and no
@@ -251,6 +256,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   says so instead of reporting "Wrong password." -- but it does not give the user anywhere to
   go. Offer "Restore from backup..." and "Start a new vault" in the unlock dialog on a
   format/magic error, as distinct from an InvalidToken (wrong password).
+  Resolved 2026-09-18: a ValueError load reveals Restore from Backup and
+  Start a New Vault; set_aside_vault renames and never deletes;
+  adopt_vault_file checks the header. master-password INV-7a.
   **Layman:** If your vault file gets corrupted, the app just says it cannot open it and there is no way in. Your backups are right there but nothing offers them to you.
   Kind: feature.
   Source: review-code 2026-08-31 lane 9.
@@ -384,6 +392,21 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: doc-fix.
   Source: review-contract 2026-09-02 loop 1 on dependency-management-standards.md (4b sweep collateral).
   Lanes: docs, security.
+
+- ✅ [ROLO-0085] **Locking with a dialog open left the entry window on screen.**
+  With an AdwDialog presented, Gtk.Window.close() closes the dialog and not the
+  window (measured on libadwaita 1.9). MainWindow._lock ends in self.close(), so an
+  idle lock during an edit hid the dialog, nulled self.vault, and presented the
+  unlock screen over a still-visible main window. With ROLO-0044's lock it would
+  also never have released the vault lock, so the next unlock was refused.
+
+  Resolved 2026-09-18: _lock force-closes every visible dialog first (a loop over
+  get_visible_dialog, verified synchronous on Xvfb) and releases the vault lock
+  explicitly before presenting the unlock screen.
+  **Layman:** If auto-lock fired while an editor was open, only the editor closed and your entry list stayed visible behind the unlock screen.
+  Kind: fix.
+  Source: in-session-2026-09-18 (found driving ROLO-0044 on Xvfb).
+  Lanes: gui.
 
 ## Medium priority
 
@@ -1160,7 +1183,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-09-02 (ROLO-0061).
   Lanes: docs.
 
-- 📋 [ROLO-0083] **master-password.md states adopt-then-save, where the code and the vault spec both require save-then-adopt.**
+- ✅ [ROLO-0083] **master-password.md states adopt-then-save, where the code and the vault spec both require save-then-adopt.**
   docs/specs/master-password.md INV-11 reads "On success the session password is
   replaced, a **new random salt** is generated, and the vault is re-encrypted and
   saved with the new password + salt" -- adopt, then save.
@@ -1184,6 +1207,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   review-contract run that found it had vault-format-and-crypto.md as its subject.
   Reordering INV-11 changes what a conformer builds, so the edit owes its own
   rule-14 gate.
+  Resolved 2026-09-18: master-password.md INV-11 now states
+  write-then-adopt. Rule 14: the code already does this, so the edit
+  records what was built and does not re-arm the gate.
   **Layman:** A design document describes the password-change steps in the wrong order, which could lead someone to rebuild it in a way that loses your new password if the save fails.
   Kind: doc-fix.
   Source: review-contract 2026-09-02 loop 1 on vault-format-and-crypto.md (out-of-scope finding, one lane).
@@ -1517,7 +1543,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 7 (verified; a maintenance trap, not a defect).
   Lanes: gui.
 
-- 📋 [ROLO-0078] **Two behaviour changes 1.3.1 introduced that no document records.**
+- ✅ [ROLO-0078] **Two behaviour changes 1.3.1 introduced that no document records.**
   The 1.3.1 move from os.open to mkstemp + os.replace changed two behaviours, neither recorded
   in CHANGELOG.md, vault-format-and-crypto.md or DESIGN.md:
 
@@ -1538,6 +1564,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   directory. README.md:49 and CHANGELOG.md:132 document the paths, so this is a missing
   affordance rather than a doc divergence -- offer "import an existing vault" on first frozen
   start with no vault.
+  Resolved 2026-09-18 (user decision: follow the link):
+  write_private_file resolves the real path; directory write permission
+  documented in vault spec INV-16 and CHANGELOG; 'Use an Existing Vault
+  File…' on the create screen covers the source-to-frozen move.
   **Layman:** Making saves safer quietly changed how the app behaves for people whose vault is a shortcut, or in a folder they cannot write to.
   Kind: fix.
   Source: review-code 2026-08-31 lane 1 (verified; undocumented consequences of a shipped change).

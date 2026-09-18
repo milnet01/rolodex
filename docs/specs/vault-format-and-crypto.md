@@ -71,7 +71,8 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
 ### Creation & migration
 
 - **INV-11** `create_vault` generates a fresh 16-byte `os.urandom` salt and writes an empty
-  v2 vault `{"version": 2, "categories": [], "entries": {}}`.
+  v2 vault `{"version": 2, "categories": [], "entries": {}}`. It raises `FileExistsError`,
+  writing nothing, when a file already exists at the path (ROLO-0044).
 - **INV-12** `migrate_vault` refuses before it migrates. A vault that is not a dict, or whose
   `entries` is not a dict, raises `ValueError("Vault contents are not a valid vault")`. A vault
   whose `version` is an int greater than 2 raises a `ValueError` naming that version and saying
@@ -110,12 +111,29 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
   neither of those is an `Exception` subclass. A power cut or `SIGKILL` runs no handler and can
   strand a `.rolodex-*.tmp` holding the complete ciphertext; it is `0600` (INV-9) so it is not
   world-readable, but nothing removes it later. Regression-tested in `tests/test_vault.py`.
+  A destination that is a symlink is written **through**: the temp is staged beside the file
+  the link resolves to, and the link survives (ROLO-0078). The write needs permission to
+  create a file in that directory, not only to write the vault file itself.
+
+### Concurrent writers
+
+- **INV-18** A session holds an exclusive, non-blocking advisory lock (`VaultLock`) on a
+  `<real vault path>.lock` sidecar from the moment it commits to unlocking or creating until
+  its window closes or locks. A second session asking for the same lock gets `VaultBusyError`,
+  and the unlock screen shows its message instead of unlocking. The sidecar is never deleted.
+  A lock file that cannot be created (a read-only directory) does not block unlocking.
+- **INV-19** Every write from an open session goes through `MainWindow._write_vault`, which
+  compares `vault_fingerprint` — `(inode, size, mtime_ns)` of the real file — with the value
+  recorded at unlock and after the session's own last write. On a mismatch it raises
+  `VaultChangedError` and writes nothing. A save then asks whether to reload from disk or
+  overwrite; the password change and the restore abort with a message. This is what covers a
+  vault on a network or synced folder, where INV-18's lock does not reach (ROLO-0044).
 
 ## Notes
 
 - There is no password recovery by design (see `SECURITY.md`); the password is never stored.
 - Changing the master password rotates the salt (`os.urandom(16)`) and re-encrypts immediately.
-  Its handler writes through `save_vault_with_key` directly rather than through `_save`, so the
+  Its handler writes through `_write_vault` directly rather than through `_save`, so the
   write is ordered before the new credentials are adopted and a failed write leaves the session
   on the old pair — see `master-password.md`.
 - Future KDF upgrade (Argon2id) is roadmap ROLO-0005, and INV-5 governs the mechanism: a new

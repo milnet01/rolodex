@@ -658,3 +658,102 @@ def test_ROLO0035_delete_entry_and_list_entries():
     assert [eid for eid, _ in rolodex.list_entries(vault)] == [a, b]
     rolodex.delete_entry(vault, a)
     assert [eid for eid, _ in rolodex.list_entries(vault)] == [b]
+
+
+# --- ROLO-0044: one unlocked copy per vault, and no silent overwrite ------------------------
+
+
+def test_ROLO0044_a_second_lock_on_the_same_vault_is_refused_until_released(tmp_path):
+    path = str(tmp_path / "v.vault")
+    first, second = rolodex.VaultLock(path), rolodex.VaultLock(path)
+    first.acquire()
+    with pytest.raises(rolodex.VaultBusyError):
+        second.acquire()
+    first.release()
+    second.acquire()
+    assert second.held
+    second.release()
+
+
+def test_ROLO0044_two_symlinks_to_one_vault_share_one_lock(tmp_path):
+    real = tmp_path / "v.vault"
+    real.write_bytes(b"x")
+    link = tmp_path / "link.vault"
+    link.symlink_to(real)
+    a, b = rolodex.VaultLock(str(real)), rolodex.VaultLock(str(link))
+    a.acquire()
+    with pytest.raises(rolodex.VaultBusyError):
+        b.acquire()
+    a.release()
+
+
+def test_ROLO0044_fingerprint_changes_when_something_else_writes(tmp_path):
+    path = str(tmp_path / "v.vault")
+    assert rolodex.vault_fingerprint(path) is None
+    rolodex.create_vault(PW, path)
+    before = rolodex.vault_fingerprint(path)
+    rolodex.write_private_file(path, b"VLT1" + b"\0" * 16 + b"other writer")
+    assert rolodex.vault_fingerprint(path) != before
+
+
+def test_ROLO0044_create_refuses_to_replace_a_vault_that_appeared(tmp_path):
+    path = tmp_path / "v.vault"
+    path.write_bytes(b"someone else's vault")
+    with pytest.raises(FileExistsError):
+        rolodex.create_vault(PW, str(path))
+    assert path.read_bytes() == b"someone else's vault"
+
+
+# --- ROLO-0078: a symlinked vault is written through, not replaced -------------------------
+
+
+def test_ROLO0078_saving_through_a_symlink_keeps_the_link(tmp_path):
+    real_dir = tmp_path / "synced"
+    real_dir.mkdir()
+    real = real_dir / "contacts.vault"
+    link = tmp_path / "contacts.vault"
+    vault, salt = rolodex.create_vault(PW, str(real))
+    link.symlink_to(real)
+    rolodex.add_entry(vault, "A", [])
+    rolodex.save_vault(vault, PW, salt, str(link))
+    assert link.is_symlink(), "the save replaced the symlink with a regular file"
+    loaded, _ = rolodex.load_vault(PW, str(real))
+    assert [e["name"] for e in loaded["entries"].values()] == ["A"]
+    assert [p.name for p in real_dir.iterdir()] == ["contacts.vault"], "temp left behind"
+
+
+# --- ROLO-0045: setting an unreadable vault aside, adopting a backup -----------------------
+
+
+def test_ROLO0045_set_aside_renames_and_never_deletes(tmp_path):
+    path = tmp_path / "v.vault"
+    path.write_bytes(b"corrupt")
+    aside = rolodex.set_aside_vault(str(path))
+    assert not path.exists()
+    assert os.path.basename(aside).startswith("v.vault.unreadable-")
+    assert open(aside, "rb").read() == b"corrupt"
+    assert rolodex.set_aside_vault(str(path)) is None
+
+
+def test_ROLO0045_adopt_installs_a_backup_and_keeps_the_old_vault(tmp_path):
+    backup = str(tmp_path / "backup.vault")
+    vault, salt = rolodex.create_vault(PW, backup)
+    rolodex.add_entry(vault, "From backup", [])
+    rolodex.save_vault(vault, PW, salt, backup)
+    live = tmp_path / "contacts.vault"
+    live.write_bytes(b"corrupt")
+    aside = rolodex.adopt_vault_file(backup, str(live))
+    assert open(aside, "rb").read() == b"corrupt"
+    loaded, _ = rolodex.load_vault(PW, str(live))
+    assert [e["name"] for e in loaded["entries"].values()] == ["From backup"]
+    assert (os.stat(live).st_mode & 0o777) == 0o600
+
+
+def test_ROLO0045_adopt_refuses_a_file_that_is_not_a_vault(tmp_path):
+    junk = tmp_path / "notes.txt"
+    junk.write_text("hello")
+    live = tmp_path / "contacts.vault"
+    live.write_bytes(b"keep me")
+    with pytest.raises(ValueError, match="not a Rolodex vault"):
+        rolodex.adopt_vault_file(str(junk), str(live))
+    assert live.read_bytes() == b"keep me"

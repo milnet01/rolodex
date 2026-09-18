@@ -8,6 +8,17 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Restore from a backup when your vault will not open** (ROLO-0045)
+  If the vault file is damaged (not a wrong password), the unlock screen
+  offers "Restore from Backup…" and "Start a New Vault…". The damaged
+  file is never deleted: it is kept beside the original with
+  ".unreadable-" and the date added.
+
+- **Use an existing vault file when setting up** (ROLO-0078)
+  The create-a-vault screen has "Use an Existing Vault File…". This helps
+  if you move from running Rolodex from source to the downloadable app,
+  which keeps its vault in a different folder.
+
 - **Choose a category for imported entries** (ROLO-0067)
   The import preview has an "Add to category" picker. Every imported entry
   is filed there. It defaults to "No category", as before.
@@ -68,6 +79,24 @@ All notable changes to Rolodex are documented here. The format is based on
   All GitHub Actions are pinned to a specific commit rather than a moving tag, so a re-pointed tag cannot introduce new code into a release build. Checkout no longer leaves credentials in the workspace. The Linux and macOS build self-tests have the same timeout the Windows one already had, so a hang fails the build instead of blocking a runner for six hours. certifi is now named in the build scripts' prerequisites and asserted by the local CI gate, since the release binaries are built with it. A missing typelib now fails the Windows build immediately rather than producing a binary that fails mysteriously at runtime.
 
 ### Fixed
+
+- **Two copies of Rolodex can no longer overwrite each other's changes** (ROLO-0044)
+  While one copy has the vault unlocked, another copy refuses to unlock
+  it. If the file is changed by anything else (a sync tool, say), your
+  next save asks whether to reload it or overwrite it, instead of
+  silently replacing it. Creating a vault no longer replaces one that
+  appeared in the meantime.
+
+- **A vault kept as a symlink stays a symlink** (ROLO-0078)
+  Since 1.3.1, saving replaced the link with a regular file. It now
+  writes to the file the link points at. Note that saving needs
+  permission to create files in the vault's folder; a read-only folder
+  holding a writable vault cannot be saved to.
+
+- **Auto-lock with a dialog open now actually hides your entries** (ROLO-0085)
+  If auto-lock fired while an editor or another dialog was open, only
+  the dialog closed. The main window stayed on screen behind the unlock
+  screen. Locking now closes every dialog and the window.
 
 - **Clicking "Check for updates" repeatedly no longer starts several checks** (ROLO-0051)
   Only one check, offer or download runs at a time, and the menu item

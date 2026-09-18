@@ -110,6 +110,11 @@ def write_private_file(path: str, data: bytes) -> None:
     user's only copy of their credentials. mkstemp creates the temp 0600, and os.replace
     carries that mode onto the destination.
     """
+    # A symlinked destination is written THROUGH, to the file it points at (ROLO-0078). 1.3.1's
+    # move to os.replace had started replacing the link itself with a regular file, silently
+    # detaching a vault kept as a link into a synced folder. The temp is staged beside the real
+    # file, so the replace stays same-filesystem.
+    path = os.path.realpath(path)
     directory = os.path.dirname(path) or "."
     fd, tmp = tempfile.mkstemp(dir=directory, prefix=".rolodex-", suffix=".tmp")
     try:
@@ -128,6 +133,78 @@ def write_private_file(path: str, data: bytes) -> None:
         except OSError:
             pass
         raise
+
+
+class VaultBusyError(Exception):
+    """Another Rolodex process holds this vault unlocked (ROLO-0044)."""
+
+
+class VaultChangedError(Exception):
+    """The vault on disk changed since this session read or last wrote it (ROLO-0044)."""
+
+
+def vault_fingerprint(path: str):
+    """What the session last saw of the vault file: (inode, size, mtime_ns), or None if absent.
+
+    Compared before every write. A different value means something else -- a second copy of
+    Rolodex, a sync client, a restore by hand -- wrote the file, and saving the whole in-memory
+    vault over it would silently destroy that write (ROLO-0044). os.stat follows a symlink, so
+    this fingerprints the real file (ROLO-0078).
+    """
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    return (st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+class VaultLock:
+    """An exclusive advisory lock on a vault, held for as long as the vault is unlocked.
+
+    The lock is taken on a `<vault>.lock` sidecar, never on the vault itself: os.replace swaps
+    the vault's inode on every save, so a lock on the vault file would stop covering it after
+    the first write. The sidecar is never deleted -- unlinking a lock file is how two processes
+    come to lock two different files. The lock follows the real path, so two symlinks to one
+    vault share one lock. A lock does not reach across a network or synced folder; that case is
+    what vault_fingerprint's check on every save is for (ROLO-0044).
+    """
+
+    def __init__(self, vault_path: str):
+        self.path = os.path.realpath(vault_path) + ".lock"
+        self._fd = None
+
+    def acquire(self) -> None:
+        """Take the lock or raise VaultBusyError. Safe to call when already held."""
+        if self._fd is not None:
+            return
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            _lock_fd(fd)
+        except OSError:
+            os.close(fd)
+            raise VaultBusyError("This vault is already open in another Rolodex window.") from None
+        self._fd = fd
+
+    def release(self) -> None:
+        if self._fd is not None:
+            os.close(self._fd)  # closing the descriptor drops the lock
+            self._fd = None
+
+    @property
+    def held(self) -> bool:
+        return self._fd is not None
+
+
+def _lock_fd(fd: int) -> None:
+    """Non-blocking exclusive lock on *fd*; raises OSError when another process holds it."""
+    try:
+        import fcntl
+    except ImportError:  # Windows
+        import msvcrt
+
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        return
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def save_vault_with_key(vault_data: dict, key: bytes, salt: bytes, path: str) -> None:
@@ -181,7 +258,14 @@ def load_vault(password: str, path: str) -> tuple[dict, bytes]:
 
 
 def create_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]:
-    """Create an empty vault, returning its derived key alongside (see load_vault_with_key)."""
+    """Create an empty vault, returning its derived key alongside (see load_vault_with_key).
+
+    Refuses when a vault already exists. Whether to create was decided when the unlock screen
+    opened, and the write is an unconditional os.replace, so a vault that appeared in between
+    -- restored by hand, synced down -- was destroyed (ROLO-0044).
+    """
+    if os.path.exists(path):
+        raise FileExistsError("A vault already exists here. Restart Rolodex to unlock it.")
     salt = os.urandom(16)
     key = derive_key(password, salt)
     vault_data = {"version": 2, "categories": [], "entries": {}}
@@ -192,6 +276,38 @@ def create_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]
 def create_vault(password: str, path: str) -> tuple[dict, bytes]:
     vault_data, salt, _key = create_vault_with_key(password, path)
     return vault_data, salt
+
+
+def set_aside_vault(path: str) -> str | None:
+    """Rename an unreadable vault out of the way, returning its new path (None if absent).
+
+    Never deletes: a vault that will not open may still be recoverable by hand, and it may be
+    the user's only copy. The new name sits beside the old one, timestamped (ROLO-0045).
+    """
+    if not os.path.exists(path):
+        return None
+    real = os.path.realpath(path)
+    aside = f"{real}.unreadable-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    os.replace(real, aside)
+    return aside
+
+
+def adopt_vault_file(source: str, path: str) -> str | None:
+    """Make the vault file at *source* -- a backup, or an existing vault -- the vault at *path*.
+
+    Checks only the header (MAGIC and a full salt); the password is checked by the normal
+    unlock that follows, so this never needs it. Any vault already at *path* is set aside
+    first, and its new path is returned (ROLO-0045, ROLO-0078).
+    """
+    with open(source, "rb") as fp:
+        data = fp.read(MAX_IMPORT_BYTES * 10 + 1)
+    if len(data) > MAX_IMPORT_BYTES * 10:
+        raise ValueError("That file is too large to be a Rolodex vault.")
+    if data[:4] != MAGIC or len(data) < 4 + 16 + 1:
+        raise ValueError("That file is not a Rolodex vault.")
+    aside = set_aside_vault(path)
+    write_private_file(path, data)
+    return aside
 
 
 def migrate_vault(vault: dict) -> dict:
@@ -1457,11 +1573,14 @@ def make_dialog_scaffold(dialog, title, *, width=None, height=None,
 class UnlockDialog(Gtk.Window):
     """Initial password dialog - unlock existing vault or create new one."""
 
-    def __init__(self, app, vault_path, is_new):
+    def __init__(self, app, vault_path, is_new, notice=""):
         super().__init__(title="Rolodex", application=app)
         self.app = app
         self.vault_path = vault_path
         self.is_new = is_new
+        # ROLO-0044: taken when the user commits to unlocking or creating, handed to MainWindow
+        # on success, released on every failure path.
+        self.lock = VaultLock(vault_path)
         self.set_default_size(380, -1)
         self.set_resizable(False)
 
@@ -1491,6 +1610,11 @@ class UnlockDialog(Gtk.Window):
             sub.set_wrap(True)
             sub.add_css_class("dim-label")
             vbox.append(sub)
+
+        if notice:
+            note = Gtk.Label(label=notice, xalign=0)
+            note.set_wrap(True)
+            vbox.append(note)
 
         # Password field(s) using Adw.PasswordEntryRow
         pw_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
@@ -1525,6 +1649,25 @@ class UnlockDialog(Gtk.Window):
         self.btn.connect("clicked", self._on_activate)
         vbox.append(self.btn)
 
+        # ROLO-0045: routes out of a vault that will not open. Hidden until a load fails for a
+        # reason other than the password -- a wrong password must never offer to replace the
+        # vault. In create mode the restore button doubles as "use an existing vault", which is
+        # how a user moving from a source run to the packaged build finds their vault
+        # (ROLO-0078).
+        self.recover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        restore_btn = Gtk.Button(
+            label="Use an Existing Vault File…" if is_new else "Restore from Backup…")
+        restore_btn.add_css_class("flat")
+        restore_btn.connect("clicked", self._on_restore_backup)
+        self.recover_box.append(restore_btn)
+        if not is_new:
+            new_btn = Gtk.Button(label="Start a New Vault…")
+            new_btn.add_css_class("flat")
+            new_btn.connect("clicked", self._on_start_new)
+            self.recover_box.append(new_btn)
+        self.recover_box.set_visible(is_new)
+        vbox.append(self.recover_box)
+
         clamp.set_child(vbox)
         outer.append(clamp)
         self.set_child(outer)
@@ -1539,11 +1682,27 @@ class UnlockDialog(Gtk.Window):
         self.status.set_text(msg)
         self.status.set_visible(True)
 
+    def _take_lock(self) -> bool:
+        """Take the vault lock (ROLO-0044). False, with the reason shown, if another copy of
+        Rolodex has this vault open. A lock file that cannot be created at all -- a read-only
+        directory -- does not block unlocking: the lock guards writes, and the change check in
+        MainWindow._write_vault still runs."""
+        try:
+            self.lock.acquire()
+        except VaultBusyError as exc:
+            self._show_error(str(exc))
+            return False
+        except OSError:
+            pass
+        return True
+
     def _on_activate(self, *_args):
         pw = self.pw_entry.get_text()
         if not pw:
             self._show_error("Please enter a password.")
             return
+        if not self.btn.get_sensitive():
+            return  # an unlock is already running
 
         if self.is_new:
             if len(pw) < MIN_PASSWORD_LENGTH:
@@ -1553,15 +1712,20 @@ class UnlockDialog(Gtk.Window):
             if pw != pw2:
                 self._show_error("Passwords do not match.")
                 return
+            if not self._take_lock():
+                return
             try:
                 vault, salt, key = create_vault_with_key(pw, self.vault_path)
             except Exception as e:
+                self.lock.release()
                 self._show_error(str(e))
                 return
-            self.app.open_main(vault, salt, pw, self.vault_path, key)
+            self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
             self._wipe_password_entries()
             self.close()
         else:
+            if not self._take_lock():
+                return
             self.btn.set_sensitive(False)
             self.btn.set_label("Unlocking...")
             # Run decryption in a thread so the UI doesn't freeze
@@ -1574,6 +1738,10 @@ class UnlockDialog(Gtk.Window):
             GLib.idle_add(self._unlock_ok, vault, salt, pw, key)
         except InvalidToken:
             GLib.idle_add(self._unlock_fail, "Wrong password.")
+        except ValueError as e:
+            # Bad magic, a truncated salt, or ciphertext that decrypted to something that is not
+            # a vault: the FILE is the problem, not the password (ROLO-0045).
+            GLib.idle_add(self._unlock_fail, str(e), True)
         except Exception as e:
             GLib.idle_add(self._unlock_fail, str(e))
 
@@ -1585,7 +1753,7 @@ class UnlockDialog(Gtk.Window):
         # decrypted in memory and nothing on screen explaining why.
         try:
             migrate_vault(vault)
-            self.app.open_main(vault, salt, pw, self.vault_path, key)
+            self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
         except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
             self._unlock_fail(f"The vault opened but could not be loaded: {exc}")
             return
@@ -1601,11 +1769,98 @@ class UnlockDialog(Gtk.Window):
         if self.is_new:
             self.pw_confirm.set_text("")
 
-    def _unlock_fail(self, msg):
+    def _unlock_fail(self, msg, unreadable=False):
+        self.lock.release()
         self.btn.set_sensitive(True)
         self.btn.set_label("Unlock")
         self._show_error(msg)
+        if unreadable:
+            self.recover_box.set_visible(True)
         self.pw_entry.grab_focus()
+        return False
+
+    # --- ROLO-0045: getting out of a vault that will not open ---------------------------
+
+    def _reopen(self, is_new, notice):
+        """Replace this screen with a fresh one in the given mode."""
+        self.lock.release()
+        UnlockDialog(self.app, self.vault_path, is_new, notice).present()
+        self.close()
+
+    def _on_restore_backup(self, *_args):
+        chooser = Gtk.FileDialog()
+        chooser.set_title("Choose a Rolodex vault or backup")
+        vault_filter = Gtk.FileFilter()
+        vault_filter.set_name("Rolodex vaults")
+        vault_filter.add_pattern("*.vault")
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name("All files")
+        all_filter.add_pattern("*")
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(vault_filter)
+        filters.append(all_filter)
+        chooser.set_filters(filters)
+        backups = os.path.join(os.path.dirname(os.path.abspath(self.vault_path)), "Backups")
+        start = backups if os.path.isdir(backups) else GLib.get_home_dir()
+        if start:
+            chooser.set_initial_folder(Gio.File.new_for_path(start))
+        chooser.open(self, None, self._on_restore_backup_chosen)
+
+    def _on_restore_backup_chosen(self, chooser, result):
+        try:
+            gfile = chooser.open_finish(result)
+        except GLib.Error:
+            return
+        source = gfile.get_path()
+        if not source:
+            return
+        self._adopt(source)
+
+    def _adopt(self, source):
+        """Install *source* as the vault, then switch to unlocking it."""
+        if not self._take_lock():
+            return
+        try:
+            aside = adopt_vault_file(source, self.vault_path)
+        except (OSError, ValueError) as exc:
+            self.lock.release()
+            self._show_error(str(exc))
+            return
+        notice = "Vault file installed. Enter its master password to unlock it."
+        if aside:
+            notice += f" The unreadable vault was kept as {os.path.basename(aside)}."
+        self._reopen(False, notice)
+
+    def _on_start_new(self, *_args):
+        dialog = Adw.AlertDialog(
+            heading="Start a New Vault?",
+            body=(
+                "The vault that will not open is kept, renamed beside the original with "
+                "“.unreadable-” and the date added, so it can still be recovered. A new, "
+                "empty vault is then created with a new master password."
+            ),
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("new", "Start New Vault")
+        dialog.set_response_appearance("new", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_start_new_response)
+        dialog.present(self)
+
+    def _on_start_new_response(self, _dialog, response):
+        if response != "new":
+            return
+        if not self._take_lock():
+            return
+        try:
+            aside = set_aside_vault(self.vault_path)
+        except OSError as exc:
+            self.lock.release()
+            self._show_error(f"Could not move the unreadable vault aside: {exc}")
+            return
+        notice = f"The unreadable vault was kept as {os.path.basename(aside)}." if aside else ""
+        self._reopen(True, notice)
 
 
 # --------------------------------------------------------------------------
@@ -1722,9 +1977,15 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
 
 
 class MainWindow(Adw.ApplicationWindow):
-    def __init__(self, app, vault, salt, password, vault_path, key=None):
+    def __init__(self, app, vault, salt, password, vault_path, key=None, lock=None):
         super().__init__(application=app, title="Rolodex")
         self.app_ref = app
+        # ROLO-0044: the lock the unlock screen took, held until this window closes, and what
+        # this session last saw of the vault file. _write_vault compares against the
+        # fingerprint before every write, so a vault something else rewrote is never
+        # silently overwritten.
+        self._vault_lock = lock
+        self._disk_fingerprint = vault_fingerprint(vault_path)
         self.vault = vault
         self.salt = salt
         self.password = password
@@ -1962,19 +2223,68 @@ class MainWindow(Adw.ApplicationWindow):
         and carried on, so the UI reported success while the in-memory vault silently diverged
         from disk -- and _lock's "nothing unsaved to lose" comment relied on that being
         impossible. Callers that must roll back on failure (the password change, the restore)
-        call save_vault directly instead, so they can order the write before the assignment.
+        call _write_vault directly instead, so they can order the write before the assignment.
         """
         try:
-            save_vault_with_key(self.vault, self._key, self.salt, self.vault_path)
+            self._write_vault(self.vault, self._key, self.salt)
             return True
+        except VaultChangedError:
+            self._confirm_overwrite_changed_vault()
+            return False
         except OSError as exc:
             self._show_message("Could Not Save", f"The vault was not written to disk: {exc}")
             return False
+
+    def _write_vault(self, vault, key, salt):
+        """The one place this window writes the vault file (ROLO-0044).
+
+        Raises VaultChangedError, writing nothing, when the file on disk is not the one this
+        session last read or wrote. Every write path -- a save, the password change, a restore --
+        comes through here, so none of them can overwrite a change made elsewhere.
+        """
+        if vault_fingerprint(self.vault_path) != self._disk_fingerprint:
+            raise VaultChangedError(self.vault_path)
+        save_vault_with_key(vault, key, salt, self.vault_path)
+        self._disk_fingerprint = vault_fingerprint(self.vault_path)
+
+    def _confirm_overwrite_changed_vault(self):
+        """Something else rewrote the vault since this session read it. Let the user choose
+        which copy survives; the default keeps the file on disk."""
+        dialog = Adw.AlertDialog(
+            heading="Vault Changed Elsewhere",
+            body=(
+                "The vault file was changed by something else since you unlocked it — another "
+                "copy of Rolodex, a sync tool, or a file copied over it. Your latest change was "
+                "NOT saved.\n\n"
+                "Reload locks Rolodex so you can unlock the version on disk; your unsaved change "
+                "is discarded. Overwrite replaces the version on disk with everything open here, "
+                "which discards the other change instead."
+            ),
+        )
+        dialog.add_response("reload", "Reload From Disk")
+        dialog.add_response("overwrite", "Overwrite")
+        dialog.set_response_appearance("overwrite", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("reload")
+        dialog.set_close_response("reload")
+        dialog.connect("response", self._on_changed_vault_response)
+        dialog.present(self)
+
+    def _on_changed_vault_response(self, _dialog, response):
+        if self.vault is None:
+            return  # locked while the dialog was open
+        if response == "overwrite":
+            self._disk_fingerprint = vault_fingerprint(self.vault_path)
+            if self._save():
+                self._toast("Saved over the changed vault")
+        else:
+            self._lock()
 
     def _on_close_request(self, *_args):
         self._cancel_search_debounce()
         self._cancel_totp_tick()  # covers _lock too, which routes through close()
         self._cancel_pending_update()
+        if self._vault_lock is not None:
+            self._vault_lock.release()  # covers _lock too, which routes through close()
         save_config({
             "window_width": self.get_width(),
             "window_height": self.get_height(),
@@ -2620,6 +2930,12 @@ class MainWindow(Adw.ApplicationWindow):
         self._cancel_search_debounce()
         self._cancel_pending_update()
         self._clear_clipboard_on_lock()
+        # With an AdwDialog open, Gtk.Window.close() closes the DIALOG and leaves the window up
+        # (measured on libadwaita 1.9). So an idle lock that fired while an editor was open left
+        # the entry list on screen behind the unlock dialog, and never released the vault lock.
+        # force_close skips an editor's unsaved-changes prompt, which is right for a lock.
+        while (dialog := self.get_visible_dialog()) is not None:
+            dialog.force_close()
         # Drop the rendered entry as well: detail_box holds the last-viewed values as label text
         # and one copy closure per field, so clearing self.vault alone leaves them reachable.
         clear_container(self.detail_box)
@@ -2632,6 +2948,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.salt = None
         self.password = None
         self._key = None
+        if self._vault_lock is not None:
+            self._vault_lock.release()  # before the unlock screen can try to take it again
         app, path = self.app_ref, self.vault_path
         self.close()
         UnlockDialog(app, path, is_new=False).present()
@@ -2855,8 +3173,10 @@ class MainWindow(Adw.ApplicationWindow):
         # contacts.vault still held the original, and the next edit's save would then overwrite
         # the original with a restore the user had been told did not happen.
         try:
-            save_vault_with_key(vault, key, salt, self.vault_path)
-        except OSError as exc:
+            self._write_vault(vault, key, salt)
+        except (OSError, VaultChangedError) as exc:
+            if isinstance(exc, VaultChangedError):
+                exc = "the vault file was changed elsewhere since you unlocked it"
             self._show_message(
                 "Restore Failed",
                 f"The backup could not be written to the vault, so nothing changed: {exc}",
@@ -2949,8 +3269,10 @@ class MainWindow(Adw.ApplicationWindow):
         new_salt = os.urandom(16)
         new_key = derive_key(new_pw, new_salt)
         try:
-            save_vault_with_key(self.vault, new_key, new_salt, self.vault_path)
-        except OSError as exc:
+            self._write_vault(self.vault, new_key, new_salt)
+        except (OSError, VaultChangedError) as exc:
+            if isinstance(exc, VaultChangedError):
+                exc = "the vault file was changed elsewhere since you unlocked it"
             self._show_message(
                 "Password Not Changed",
                 f"The vault could not be written, so your master password is unchanged: {exc}",
@@ -4488,8 +4810,8 @@ class RolodexApp(Adw.Application):
         win = UnlockDialog(self, self.vault_path, is_new)
         win.present()
 
-    def open_main(self, vault, salt, password, vault_path, key=None):
-        win = MainWindow(self, vault, salt, password, vault_path, key)
+    def open_main(self, vault, salt, password, vault_path, key=None, lock=None):
+        win = MainWindow(self, vault, salt, password, vault_path, key, lock)
         win.present()
 
 

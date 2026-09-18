@@ -28,8 +28,9 @@ class FakeApp:
     def __init__(self):
         self.opened = None
 
-    def open_main(self, vault, salt, password, path, key):
+    def open_main(self, vault, salt, password, path, key, lock=None):
         self.opened = (vault, salt, password, path, key)
+        self.lock = lock
 
 
 class FakeMainWindow:
@@ -192,3 +193,91 @@ def test_ROLO0067_preview_passes_the_chosen_category():
     dlg.cat_row.set_selected(2)
     dlg._on_import(None)
     assert win.imported[1] == "Games"
+
+
+# --- UnlockDialog: vault lock and recovery routes (ROLO-0044, ROLO-0045) -------------------
+
+
+def test_ROLO0044_second_unlock_screen_is_refused_while_the_vault_is_open(app, tmp_path, monkeypatch):
+    path = str(tmp_path / "v.vault")
+    rolodex.create_vault(PW, path)
+    holder = rolodex.VaultLock(path)
+    holder.acquire()
+    started = []
+    import threading
+    monkeypatch.setattr(threading, "Thread", lambda **k: started.append(k) or pytest.fail("ran"))
+    dlg = rolodex.UnlockDialog(app, path, is_new=False)
+    dlg.pw_entry.set_text(PW)
+    dlg._on_activate()
+    assert "already open" in dlg.status.get_text()
+    assert started == []
+    holder.release()
+
+
+def _run_try_unlock(dlg, pw, monkeypatch):
+    calls = []
+    monkeypatch.setattr(rolodex.GLib, "idle_add", lambda fn, *a: calls.append((fn, a)))
+    dlg._try_unlock(pw)
+    fn, args = calls[0]
+    fn(*args)
+
+
+def test_ROLO0045_an_unreadable_vault_offers_restore_and_new(app, tmp_path, monkeypatch):
+    path = tmp_path / "v.vault"
+    path.write_bytes(b"not a vault at all")
+    dlg = rolodex.UnlockDialog(app, str(path), is_new=False)
+    assert not dlg.recover_box.get_visible()
+    _run_try_unlock(dlg, PW, monkeypatch)
+    assert dlg.recover_box.get_visible()
+    assert not dlg.lock.held
+
+
+def test_ROLO0045_a_wrong_password_offers_nothing(app, tmp_path, monkeypatch):
+    path = str(tmp_path / "v.vault")
+    rolodex.create_vault(PW, path)
+    dlg = rolodex.UnlockDialog(app, path, is_new=False)
+    _run_try_unlock(dlg, "wrong password!!", monkeypatch)
+    assert dlg.status.get_text() == "Wrong password."
+    assert not dlg.recover_box.get_visible()
+
+
+# --- MainWindow._write_vault: the change check (ROLO-0044) ---------------------------------
+
+
+class _WriterWin:
+    def __init__(self, path):
+        self.vault_path = path
+        self._disk_fingerprint = rolodex.vault_fingerprint(path)
+
+
+def test_ROLO0044_write_vault_refuses_when_the_file_changed_underneath(tmp_path):
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+    win = _WriterWin(path)
+    rolodex.MainWindow._write_vault(win, vault, key, salt)  # our own write: fine
+    rolodex.MainWindow._write_vault(win, vault, key, salt)  # and again
+    other = rolodex.load_vault_with_key(PW, path)
+    rolodex.add_entry(other[0], "Written elsewhere", [])
+    rolodex.save_vault_with_key(other[0], other[2], other[1], path)
+    with pytest.raises(rolodex.VaultChangedError):
+        rolodex.MainWindow._write_vault(win, vault, key, salt)
+    loaded, _ = rolodex.load_vault(PW, path)
+    assert [e["name"] for e in loaded["entries"].values()] == ["Written elsewhere"]
+
+
+def test_ROLO0044_save_asks_instead_of_overwriting(tmp_path):
+    asked = []
+
+    class Win(_WriterWin):
+        vault = {"version": 2, "categories": [], "entries": {}}
+        _key = b""
+        salt = b""
+
+        def _write_vault(self, *a):
+            raise rolodex.VaultChangedError()
+
+        def _confirm_overwrite_changed_vault(self):
+            asked.append(True)
+
+    assert rolodex.MainWindow._save(Win(str(tmp_path / "v"))) is False
+    assert asked == [True]

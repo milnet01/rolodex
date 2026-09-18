@@ -22,6 +22,17 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
   ASCII dots) and is disabled while it runs, so the 600k-iteration KDF never freezes the UI.
 - **INV-7** A wrong password (`InvalidToken`) shows "Wrong password.", re-enables the button,
   and refocuses the password field. Other errors show their message.
+- **INV-7a** A load that fails with `ValueError` — bad magic, a truncated salt, contents that are
+  not a vault — also reveals "Restore from Backup…" and "Start a New Vault…". A wrong password
+  never reveals them. Restore installs a chosen vault file after checking its header; Start
+  creates a new vault. Both first rename the unreadable file to `<vault>.unreadable-<time>`
+  beside it, and neither deletes it (ROLO-0045).
+- **INV-7b** In create mode the same restore button reads "Use an Existing Vault File…", so a
+  user whose vault lives elsewhere — a source checkout, before a move to the packaged build —
+  can adopt it instead of creating an empty one (ROLO-0078).
+- **INV-7c** Unlocking and creating each take the vault lock of `vault-format-and-crypto.md`
+  INV-18 first. When another session holds it, the dialog shows "This vault is already open in
+  another Rolodex window." and does not unlock (ROLO-0044).
 - **INV-8** On success the vault is migrated (`migrate_vault`) before use and the main window
   opens.
 
@@ -32,10 +43,11 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
   password shows "Incorrect current password." and aborts.
 - **INV-10** The new password must be ≥ `MIN_PASSWORD_LENGTH` characters and match its
   confirmation; violations show an inline error and abort.
-- **INV-11** On success the session password is replaced, a **new random salt** is generated,
-  and the vault is re-encrypted and saved with the new password + salt. The old salt/password no
-  longer decrypt `contacts.vault`, but any backup made *before* the change still opens with the
-  old password.
+- **INV-11** On success a **new random salt** is generated and the vault is re-encrypted and
+  written with the new password + salt **first**. The session password, salt and key are
+  adopted only once that write has landed; a failed write leaves the session on the old pair
+  and shows "Password Not Changed". The old salt/password no longer decrypt `contacts.vault`,
+  but any backup made *before* the change still opens with the old password.
 
 ## Notes
 
