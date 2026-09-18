@@ -665,24 +665,41 @@ def delete_entry(vault: dict, entry_id: str) -> None:
     del vault["entries"][entry_id]
 
 
-def search_entries(vault: dict, query: str) -> list[tuple[str, dict]]:
-    query_lower = query.lower()
+def _entry_search_texts(entry: dict) -> list[str]:
+    """Every searchable string of an entry, lower-cased: name, category, each field's label
+    and value (sensitive ones included, search.md INV-3), and notes."""
+    texts = [entry["name"], entry.get("category", "")]
+    for field in entry["fields"]:
+        texts.append(field.get("label", ""))
+        texts.append(field.get("value", ""))
+    texts.append(entry.get("notes", ""))
+    return [t.lower() for t in texts if t]
+
+
+def entry_category(vault: dict, entry: dict) -> str:
+    """The category an entry is shown under: its own, or "" when it has none or names a
+    category the vault no longer lists -- the rule entries_by_category applies."""
+    cat = entry.get("category", "")
+    return cat if cat in vault["categories"] else ""
+
+
+def search_entries(vault: dict, query: str,
+                   category: str | None = None) -> list[tuple[str, dict]]:
+    """Entries matching *query*, sorted by name (search.md).
+
+    The query is split into words, and an entry matches when EVERY word appears somewhere in
+    it -- not necessarily in the same field, and in any order -- so "gmail work" finds an entry
+    named "Work Gmail" (ROLO-0009). A one-word query behaves exactly as the old substring
+    search did. *category* narrows the result to one category ("" = uncategorised); None
+    applies no category filter.
+    """
+    words = query.lower().split()
     results = []
     for eid, entry in vault["entries"].items():
-        if query_lower in entry["name"].lower():
-            results.append((eid, entry))
+        if category is not None and entry_category(vault, entry) != category:
             continue
-        if entry.get("category") and query_lower in entry["category"].lower():
-            results.append((eid, entry))
-            continue
-        matched = False
-        for field in entry["fields"]:
-            if (query_lower in field.get("label", "").lower()
-                    or query_lower in field.get("value", "").lower()):
-                results.append((eid, entry))
-                matched = True
-                break
-        if not matched and entry.get("notes") and query_lower in entry["notes"].lower():
+        texts = _entry_search_texts(entry)
+        if all(any(w in t for t in texts) for w in words):
             results.append((eid, entry))
     return sorted(results, key=lambda x: x[1]["name"].lower())
 
@@ -2245,6 +2262,19 @@ class MainWindow(Adw.ApplicationWindow):
         self.search_entry.connect("stop-search", lambda e: e.set_text(""))
         left_box.append(self.search_entry)
 
+        # Category filter (ROLO-0009). Shown only while the vault has categories; its options
+        # are rebuilt by _sync_category_filter whenever the category list changes.
+        self._category_filter = None  # None = all, "" = uncategorised, else a category name
+        self._filter_options: list[str | None] = [None]
+        self._syncing_filter = False
+        self.category_filter = Gtk.DropDown.new_from_strings(["All categories"])
+        self.category_filter.set_margin_start(8)
+        self.category_filter.set_margin_end(8)
+        self.category_filter.set_margin_bottom(4)
+        a11y_label(self.category_filter, "Show category")
+        self.category_filter.connect("notify::selected", self._on_category_filter_changed)
+        left_box.append(self.category_filter)
+
         # Count label
         self.count_label = Gtk.Label(xalign=0)
         self.count_label.add_css_class("count-label")
@@ -2436,9 +2466,36 @@ class MainWindow(Adw.ApplicationWindow):
     # Sidebar list
     # ------------------------------------------------------------------
 
+    def _sync_category_filter(self, categories):
+        """Rebuild the filter's options to match the vault's categories, keeping the current
+        choice where it still exists and falling back to "All categories" where it does not."""
+        options: list[str | None] = [None, *categories, ""]
+        self.category_filter.set_visible(bool(categories))
+        if self._category_filter not in options:
+            self._category_filter = None
+        if options != self._filter_options:
+            self._syncing_filter = True
+            labels = ["All categories", *categories, "Uncategorised"]
+            self.category_filter.set_model(Gtk.StringList.new(labels))
+            self._filter_options = options
+            self._syncing_filter = False
+        self._syncing_filter = True
+        self.category_filter.set_selected(options.index(self._category_filter))
+        self._syncing_filter = False
+
+    def _on_category_filter_changed(self, dropdown, _pspec):
+        if self._syncing_filter or self.vault is None:
+            return
+        pos = dropdown.get_selected()
+        if 0 <= pos < len(self._filter_options):
+            self._category_filter = self._filter_options[pos]
+            self._refresh_list()
+
     def _refresh_list(self, select_id=None):
         query = self.search_entry.get_text().strip()
         categories = self.vault.get("categories", [])
+        self._sync_category_filter(categories)
+        cat_filter = self._category_filter if categories else None
 
         # Clear list. gtk_list_box_remove emits ::row-selected(NULL) for the selected row, so
         # _on_row_selected would otherwise wipe _current_entry_id on every rebuild -- before the
@@ -2449,9 +2506,9 @@ class MainWindow(Adw.ApplicationWindow):
         select_row = None
         total = len(self.vault["entries"])
 
-        if query:
-            # Search active: flat list, no grouping
-            entries = search_entries(self.vault, query)
+        if query or cat_filter is not None:
+            # Search or a category filter active: flat list, no grouping
+            entries = search_entries(self.vault, query, category=cat_filter)
             for eid, entry in entries:
                 row = EntryRow(eid, entry["name"])
                 self._attach_entry_context_menu(row)

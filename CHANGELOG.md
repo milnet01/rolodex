@@ -6,6 +6,13 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Show one category at a time, and search by several words** (ROLO-0009)
+  A drop-down above the list shows all entries, one category, or the
+  uncategorised ones. Search now finds entries containing every word you
+  type, in any order and in any field, so "gmail work" finds "Work Gmail".
+
 ## [1.4.0] - 2026-09-18
 
 ### Added

@@ -506,9 +506,15 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-07-04.
   Resolved (2026-07-17): pure-logic password_strength(secret)->0-4 (length + character-class variety; short or single-class is always weak) and audit_passwords(vault)->findings (worst-first, each with strength label + reuse flag; reuse = same secret value in >1 sensitive field). Non-sensitive and empty fields are excluded. A read-only PasswordHealthDialog (built on the new ROLO-0019 make_dialog_scaffold) shows a summary line + a boxed list with Weak/Fair/Good/Strong and Reused chips (Adwaita .error/.warning/.success classes, no new CSS). Opened via a new "Password health..." menu item / win.health action. All analysis in-process. Verified: 4 new unit tests (24/24 pytest), ruff clean, selftest OK, and a headless smoke test (5/5) building the dialog against a mixed weak/reused/strong vault.
 
-- 📋 [ROLO-0009] **Filter the sidebar by category and improve search matching.**
+- ✅ [ROLO-0009] **Filter the sidebar by category and improve search matching.**
   Why: with many entries the flat search and full grouped view are the only options today.
   Scope: a category filter control above the list, and optional fuzzy/substring-token matching in search_entries. Keep search_entries pure and covered by the ROLO-0001 tests.
+  Resolved 2026-09-18: search_entries(vault, query, category=None)
+  matches when every whitespace-separated word appears in some field (a
+  one-word query is the old substring search); a Gtk.DropDown above the
+  list filters by category, hidden without categories and falling back
+  when the chosen one is deleted. search.md INV-1, 2, 5, 5a, 6 amended
+  as built. Screenshot-checked on Xvfb.
   **Layman:** A quick way to show just one category, plus more forgiving search.
   Kind: enhancement.
   Source: in-session-2026-07-04.

@@ -102,7 +102,10 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
 
 - Keep the pure logic layer GTK-free so it stays trivially testable/reasoned-about.
 - **To exercise the GUI headlessly, start `Xvfb` yourself — `xvfb-run` is not installed here.**
-  `Xvfb :99 -screen 0 1280x1024x24 &` then `DISPLAY=:99 python3 …`. Do NOT reach for
+  `Xvfb :99 -screen 0 1280x1024x24 &` then
+  `env -u WAYLAND_DISPLAY GDK_BACKEND=x11 DISPLAY=:99 python3 …`. Setting `DISPLAY` alone is
+  not enough on a Wayland desktop: GTK prefers the session's Wayland socket, so the "headless"
+  windows open on the user's real screen, and a stopped Xvfb goes unnoticed. Do NOT reach for
   `GDK_BACKEND=broadway`: `Gtk.init_check()` returns **True** under it and window construction
   then raises `RuntimeError: Gtk couldn't be initialized`, so the probe says the display works
   and every later step fails for a reason that looks like a product defect. A whole

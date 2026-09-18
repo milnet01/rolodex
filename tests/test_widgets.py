@@ -450,3 +450,43 @@ def test_ROLO0026_main_window_reopens_the_remembered_entry(app, tmp_path, monkey
     rolodex.save_config({rolodex.LAST_ENTRY_KEY: "gone"})
     win2 = rolodex.MainWindow(app, vault, salt, PW, path, key)
     assert win2._current_entry_id is None
+
+
+# --- ROLO-0009: the sidebar category filter -----------------------------------------------
+
+
+def _window_with(app, tmp_path, monkeypatch, categories):
+    monkeypatch.setattr(rolodex, "CONFIG_FILE", str(tmp_path / "conf"))
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+    vault["categories"] = list(categories)
+    rolodex.add_entry(vault, "Steam", [], category="Games" if categories else "")
+    rolodex.add_entry(vault, "Wi-Fi", [])
+    return rolodex.MainWindow(app, vault, salt, PW, path, key)
+
+
+def _listed(win):
+    return [r.entry_id for r in win.listbox if isinstance(r, rolodex.EntryRow)]
+
+
+def test_ROLO0009_filter_shows_one_category_and_hides_without_categories(app, tmp_path,
+                                                                          monkeypatch):
+    win = _window_with(app, tmp_path, monkeypatch, ["Games"])
+    assert win.category_filter.get_visible()
+    win.category_filter.set_selected(1)  # "Games"
+    names = [win.vault["entries"][e]["name"] for e in _listed(win)]
+    assert names == ["Steam"]
+    assert win.count_label.get_text() == "1 of 2 entries"
+    win.category_filter.set_selected(2)  # "Uncategorised"
+    assert [win.vault["entries"][e]["name"] for e in _listed(win)] == ["Wi-Fi"]
+    # Deleting the filtered category falls back to all entries.
+    win.category_filter.set_selected(1)
+    rolodex.delete_category(win.vault, "Games")
+    win._refresh_list()
+    assert not win.category_filter.get_visible()
+    assert len(_listed(win)) == 2
+
+    other = tmp_path / "plain"
+    other.mkdir()
+    plain = _window_with(app, other, monkeypatch, [])
+    assert not plain.category_filter.get_visible()

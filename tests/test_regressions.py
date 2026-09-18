@@ -846,3 +846,38 @@ def test_ROLO0029_sample_import_file_parses_as_documented():
     sensitive = {f["label"]: f["sensitive"] for f in github["fields"] + email["fields"]}
     assert sensitive == {"Username": False, "Password": True, "Website": False,
                          "Address": False, "2FA": True}
+
+
+# --- ROLO-0009: word matching and the category filter --------------------------------------
+
+
+def _search_vault():
+    vault = {"version": 2, "categories": ["Email", "Games"], "entries": {}}
+    rolodex.add_entry(vault, "Work Gmail", [{"label": "User", "value": "me@work.example",
+                                             "sensitive": False}], category="Email")
+    rolodex.add_entry(vault, "Steam", [], notes="gaming account", category="Games")
+    rolodex.add_entry(vault, "Bank", [], category="Gone")  # orphaned category reference
+    rolodex.add_entry(vault, "Wi-Fi", [])
+    return vault
+
+
+def _names(results):
+    return [e["name"] for _eid, e in results]
+
+
+def test_ROLO0009_every_word_must_match_in_any_field_and_order():
+    vault = _search_vault()
+    assert _names(rolodex.search_entries(vault, "gmail work")) == ["Work Gmail"]
+    assert _names(rolodex.search_entries(vault, "work example")) == ["Work Gmail"]  # name + value
+    assert _names(rolodex.search_entries(vault, "gmail steam")) == []
+    # A single word is the old substring search.
+    assert _names(rolodex.search_entries(vault, "stea")) == ["Steam"]
+
+
+def test_ROLO0009_category_filter_including_uncategorised_and_orphans():
+    vault = _search_vault()
+    assert _names(rolodex.search_entries(vault, "", category="Games")) == ["Steam"]
+    assert _names(rolodex.search_entries(vault, "", category="")) == ["Bank", "Wi-Fi"]
+    assert _names(rolodex.search_entries(vault, "", category=None)) == [
+        "Bank", "Steam", "Wi-Fi", "Work Gmail"]
+    assert _names(rolodex.search_entries(vault, "gmail", category="Games")) == []
