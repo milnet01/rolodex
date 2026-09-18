@@ -451,7 +451,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-09-18 (Build binaries run 35342986603).
   Lanes: packaging.
 
-- 🚧 [ROLO-0088] **The released Linux binary bundles no GTK 4 typelibs and fails outside Debian-family systems.**
+- ✅ [ROLO-0088] **The released Linux binary bundles no GTK 4 typelibs and fails outside Debian-family systems.**
   Found verifying the published v1.4.0: `rolodex-linux-x86_64 --selftest` on openSUSE
   raises `ValueError: Namespace Gtk not available`. The v1.3.1 binary fails the same
   way, so this is not a 1.4.0 regression. The archive lists 13 typelibs (Adw, GLib, Gio,
@@ -462,6 +462,13 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   system typelibs fill the gap. Suspected root cause: PyInstaller's gi hook for
   gi.repository.Gtk collects GTK 3.0 unless hooksconfig names 4.0. The self-test
   also needs to assert the typelibs come from the bundle, or CI will pass the next one.
+  Resolved 2026-09-18: root cause confirmed — PyInstaller's
+  gi.repository.Gtk hook defaults to GTK 3.0. rolodex.spec pins Gtk/Gdk
+  4.0 via hooksconfig; the frozen --selftest fails unless Gtk-4.0,
+  Gdk-4.0, Gsk-4.0 and Adw-1 are in the bundle. A binary built in
+  ubuntu:24.04 passes --selftest and opens its window on openSUSE. Ships
+  in 1.5.0; the macOS binary had the same default and is covered by the
+  same fix.
   **Layman:** The Linux download only starts on Ubuntu-like systems; on others, such as openSUSE, it crashes immediately.
   Kind: fix.
   Source: in-session-2026-09-18 (post-release check of v1.4.0).
