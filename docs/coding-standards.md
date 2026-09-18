@@ -37,8 +37,9 @@ stop and move it across the boundary.
   `self._refresh_list()` (and/or `_show_detail()`) when the visible list or detail changes.
   A few save-only paths (password change, backup) don't refresh. There is no autosave and no
   dirty-flag — persistence is explicit.
-- Any code path that writes a file containing vault data must create it with mode `0600`
-  (`os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)`). Never rely on the umask.
+- Any code path that writes a file containing vault data goes through `write_private_file()`,
+  which creates it `0600` and replaces it atomically (`security-standards.md` non-negotiable 2).
+  Never rely on the umask.
 - If you change the on-disk shape, **bump `version` and extend `migrate_vault()`** rather than
   assuming new fields exist on old vaults. `migrate_vault()` must remain idempotent.
 
