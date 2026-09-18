@@ -9,7 +9,7 @@ When a change touches these areas, update the docs in the *same* commit:
 | Change | Update |
 |--------|--------|
 | Any user-visible behaviour | `README.md` + `CHANGELOG.md` + the affected invariant (INV) in `docs/specs/*.md` |
-| On-disk vault format / schema | `docs/specs/vault-format-and-crypto.md` (canonical contract), `CLAUDE.md` (canonical data-model shape), `README.md` (format one-liner), `SECURITY.md`, `docs/file-naming.md` (the schema key list), `docs/specs/entries-and-fields.md`, `migrate_vault()`. Touch `DESIGN.md` only for model-level *design* changes — it deliberately does not carry the literal field list |
+| On-disk vault format / schema | `docs/specs/vault-format-and-crypto.md` (canonical contract), `CLAUDE.md` (canonical data-model shape), `README.md` (its link to the vault spec), `SECURITY.md`, `docs/file-naming.md` (the schema key list), `docs/specs/entries-and-fields.md`, `migrate_vault()`. `DESIGN.md` § On-disk format for a byte-layout change. For a schema change, touch `DESIGN.md` only for model-level *design* changes — it deliberately does not carry the literal field list |
 | Crypto, permissions, or threat surface | `SECURITY.md`, `docs/security-standards.md`, `docs/coding-standards.md`, `docs/specs/vault-format-and-crypto.md`, `README.md`, `CLAUDE.md`, `DESIGN.md` — the KDF/`0600` facts are intentionally repeated per audience, so they move together |
 | New convention or rule for contributors | the relevant `docs/*.md` standard |
 | A shipped release | `CHANGELOG.md` (move *Unreleased* → version) |
@@ -60,7 +60,8 @@ treated as a bug.
 - Public pure-logic functions get a one-line docstring when the name isn't self-explanatory
   (e.g. `migrate_vault`, `entries_by_category`, `field_category`).
 - Section banners mark the major regions of the file: three lines, a rule of `-` characters,
-  `# <Region name>`, and the rule again. The pure-logic ⁄ GUI boundary uses `=` rules, and its
-  name line must stay exactly `# GTK4 / Adwaita GUI` — `tests/test_regressions.py` finds the
+  `# <Region name>`, and the rule again. The two top-level layers, `# GTK4 / Adwaita GUI` and
+  `# Application`, use `=` rules instead. The GUI boundary's name line must stay exactly
+  `# GTK4 / Adwaita GUI` — `tests/test_regressions.py` finds the
   boundary by that line. Keep them.
 - Inline comments explain non-obvious *why*, per the coding standard — not narration.

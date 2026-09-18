@@ -48,9 +48,9 @@ stop and move it across the boundary.
 - The initial **decrypt** paths (unlock, restore) run the KDF on a `threading.Thread` and
   marshal results back with `GLib.idle_add`, so the 600k-iteration derive doesn't freeze the
   UI. Preserve that for any new password-*checking* (decrypt) flow.
-- Be aware of the current gap: `_save()` re-derives the key to encrypt and runs **synchronously**
-  on the UI thread, so password-change and every edit briefly block the loop. Don't add new
-  synchronous KDF calls on hot paths; moving saves off-thread is tracked as future work.
+- Never derive the key on a save path. `_save()` writes with the key derived at unlock
+  (`save_vault_with_key`); only the password change and a restore, which rotate the salt,
+  derive again (ROLO-0043).
 
 ## Error handling
 
