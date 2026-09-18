@@ -42,8 +42,9 @@ What keeps it from eroding the goal:
   the setting.
 - **It sends nothing about you.** A fixed `User-Agent` to the GitHub releases API. No account,
   no identifier, no query string, and nothing derived from the vault. It needs neither the
-  vault nor the master password — only `.rolodex.conf` and the app's own version — so nothing
-  in it depends on being unlocked, though it is reached from the main window.
+  vault nor the master password — only `.rolodex.conf` and the app's own version. It runs only
+  after you unlock, because it is started from the main window; the lock screen makes no
+  network request.
 - **It cannot install unsigned code.** Every download is verified against an Ed25519 public key
   built into the binary. A download that does not verify is discarded and nothing is installed.
   This is the part that matters: an updater that installs unverified code is a remote-code

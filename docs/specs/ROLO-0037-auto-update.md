@@ -110,9 +110,10 @@ in the interim rather than failing open (INV-11).
 **D5 — Preferences live in `.rolodex.conf`, not the vault.** That file is already plaintext JSON
 holding non-secret preferences (`idle_lock_seconds`, `clipboard_clear_seconds`). Two keys join
 it: `check_for_updates` (bool, default `false`) and `skipped_update_version` (string). They must
-be readable without the vault, because the check runs at startup while the app is locked
-(INV-4); putting them in the vault would make the update check depend on the user having
-unlocked, which is the wrong coupling.
+be readable without the vault (INV-4): the check needs no vault data, and keeping its
+preferences outside the vault keeps it that way. The check is **scheduled** only once a window
+is unlocked, deliberately — the app makes no network request at the lock screen, so a user who
+leaves Rolodex locked is not told about a release until they unlock (ROLO-0057).
 
 **`load_config()` / `save_config()` take no argument today and read a module-level
 `CONFIG_FILE`.** Either give them an optional path parameter or have the tests monkeypatch
@@ -121,8 +122,9 @@ so it cannot be left unnoticed until the tests are written.
 
 **There is no preferences UI in Rolodex today**, so this feature must also add the surface that
 sets `check_for_updates`. Without it the only way to opt in is hand-editing JSON, which is not an
-opt-in a user can find. A menu entry beside the existing app-menu actions is enough; it is
-disabled with a tooltip when `is_update_supported()` is `False` (INV-2).
+opt-in a user can find. A menu entry beside the existing app-menu actions is enough. Where
+`is_update_supported()` is `False` (INV-2), choosing it opens a dialog explaining that in-app
+updates need the packaged build; a `Gio.Menu` item cannot carry a tooltip in GTK 4.
 
 **D6 — Network code is confined and lazily imported.** finbreak confines network access to one
 module and greps for `import urllib` everywhere else. Rolodex is a single file, so that shape is
@@ -186,7 +188,7 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   *Test:* `tests/test_update.py` — the injected fetcher captures the URL and headers; assert the
   header set exactly and that the URL is the bare `/releases/latest` endpoint.
 - **INV-4** The check requires no vault: it reads `.rolodex.conf`, `__version__` and the network
-  alone, and runs correctly while the app is locked.
+  alone. It is scheduled from `MainWindow`, so it runs only after an unlock (D5).
   *Test:* `tests/test_update.py` — run the check with a config path whose sibling vault file does
   not exist; assert an `UpdateInfo` is still produced.
 - **INV-5** An update is offered only for a release that is **all** of: a well-formed version

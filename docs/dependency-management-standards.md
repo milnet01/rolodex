@@ -17,8 +17,9 @@ This covers everything Rolodex depends on:
   the frozen binaries' TLS trust depends on. A released binary gets a current one by
   construction, because `build.yml` installs it with `--upgrade`; the check below reads the
   LOCAL copy, which is what a local `packaging/*-build.sh` bundles.
-- **GTK 4 / libadwaita** — system-provided; keep current via the distro. Note the minimum
-  versions the code relies on (GTK 4, libadwaita 1).
+- **GTK 4 / libadwaita** — system-provided; keep current via the distro. The code requires
+  GTK 4.12 and libadwaita 1.5 or newer, and `toolkit_too_old()` refuses to start below them
+  (ROLO-0049).
 - **Dev/CI tooling** — linters, test runners, GitHub Actions, and runner images. GitHub Actions
   are pinned to a commit SHA carrying a trailing `# vX.Y.Z` comment, deliberately, for
   supply-chain integrity. That is **not** a forced-older pin and owes no ledger row: the

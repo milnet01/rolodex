@@ -93,11 +93,15 @@ Before merging anything that touches crypto, file I/O, import/export, or clipboa
 
 ## Dependencies & supply chain
 
-- `cryptography` is the one security-critical dependency, and it follows
+- Two dependencies are security-critical: `cryptography`, which does the vault's encryption
+  and verifies update signatures, and `certifi`, the CA bundle that the frozen binaries' TLS
+  trust — and so the update check — depends on. Both follow
   `dependency-management-standards.md` like any other: **latest stable by default**, with a
   forced-older pin allowed only through that standard's process (inline reason plus a ledger
   entry). Sitting on an older release because it is "current enough" breaches that standard.
-  When bumping, skim its changelog for anything affecting Fernet/PBKDF2.
+  `certifi` is a bundled build-time dependency, not a `requirements.txt` entry, so a freshness
+  sweep that reads only `requirements.txt` misses it. When bumping `cryptography`, skim its
+  changelog for anything affecting Fernet/PBKDF2.
 - `requirements.txt` sets a floor of `>=44.0.0` because older releases carry known CVEs, and
   **that floor overrides the forced-older-pin exception** — a pin below it is never permitted,
   ledger entry or not. A break fixable only by going below the floor is a release blocker.

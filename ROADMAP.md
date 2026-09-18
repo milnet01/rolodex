@@ -788,7 +788,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 3, 4, 8 (tool gap).
   Lanes: tooling.
 
-- 📋 [ROLO-0057] **Run review-contract over the four spec claims this audit falsified.**
+- ✅ [ROLO-0057] **Run review-contract over the four spec claims this audit falsified.**
   Four document-side findings, each verified against source, none fixable without deciding
   which side is authoritative. Grouped because they want one review-contract pass, not four.
 
@@ -820,6 +820,14 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   hand", and two lanes independently found its teardown clause had no implementing code at all.
   Whatever that hand-verification exercised, it was not this. The clause is implemented as of
   this audit; the spec should say how it is now checked.
+  Resolved 2026-09-18. (1) entries-and-fields.md INV-9 now describes the
+  view-only peek; the stale ROLO-0004 note is corrected. (2) ROLO-0037
+  D5 describes the explanatory dialog; a Gio.Menu item cannot carry a
+  tooltip. (3) User decision: the check runs after unlock. D5, INV-4,
+  DESIGN.md and SECURITY.md now say so. (4) vault INV-16 had already
+  been narrowed by ROLO-0060. INV-15's test surface was updated in batch
+  2. No review-contract run: each edit records what was built, which
+  CLAUDE.md rule 14 exempts from the gate.
   **Layman:** Four places in the design documents now describe behaviour the code does not have. Each needs a decision about which side is wrong.
   Kind: doc-fix.
   Source: review-code 2026-08-31 lanes 2, 4, 8, 9.
