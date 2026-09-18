@@ -1338,9 +1338,12 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: accessibility.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0029] **Provide a documented sample import file and format reference.**
+- ✅ [ROLO-0029] **Provide a documented sample import file and format reference.**
   Why: the text-import format (blank-line-separated blocks, 'Label: value' lines) is only described in the import spec; new users have nothing to copy.
   Scope: add examples/sample-import.txt plus a short format section in the README, kept in sync with parse_text_file (spec: docs/specs/import-export-backup.md).
+  Resolved 2026-09-18: examples/sample-import.txt and README § Importing
+  a list. test_ROLO0029_sample_import_file_parses_as_documented keeps
+  the sample and the parser in step.
   **Layman:** A ready-made example file showing exactly how to format data for import.
   Kind: doc.
   Source: in-session-2026-07-04.

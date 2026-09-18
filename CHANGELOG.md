@@ -8,6 +8,10 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **A sample import file and a description of the import format** (ROLO-0029)
+  `examples/sample-import.txt` is a ready-made example, and the README's
+  "Importing a list" section explains the format.
+
 - **Release downloads carry build provenance** (ROLO-0076)
   Each binary comes with a signed record of the workflow run and commit
   that built it. Check one with

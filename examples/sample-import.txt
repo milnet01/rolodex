@@ -1,0 +1,14 @@
+GitHub
+Username: octocat
+Password: correct-horse-battery-staple
+Website: https://github.com
+Recovery codes are in the safe.
+
+Home Wi-Fi
+Network: MyHouse-5G
+Password: a-long-wifi-passphrase
+
+Email:
+Address: me@example.com
+Password: another secret with spaces
+2FA: JBSWY3DPEHPK3PXPJBSWY3DP

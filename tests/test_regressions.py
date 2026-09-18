@@ -832,3 +832,17 @@ def test_ROLO0052_pure_layer_functions_are_annotated():
         if unannotated or node.returns is None:
             missing.append(f"{node.name} (line {node.lineno})")
     assert missing == [], f"unannotated pure-layer functions: {missing}"
+
+
+# --- ROLO-0029: the shipped sample import file parses as the README describes ---------------
+
+
+def test_ROLO0029_sample_import_file_parses_as_documented():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parsed = rolodex.parse_text_file(os.path.join(root, "examples", "sample-import.txt"))
+    assert [e["name"] for e in parsed] == ["GitHub", "Home Wi-Fi", "Email"]
+    github, _wifi, email = parsed
+    assert github["notes"] == "Recovery codes are in the safe."
+    sensitive = {f["label"]: f["sensitive"] for f in github["fields"] + email["fields"]}
+    assert sensitive == {"Username": False, "Password": True, "Website": False,
+                         "Address": False, "2FA": True}

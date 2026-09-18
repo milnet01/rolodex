@@ -104,6 +104,23 @@ sed -i "s|/path/to/rolodex|$PWD|g" rolodex.desktop   # point it at this copy
 cp rolodex.desktop ~/.local/share/applications/
 ```
 
+## Importing a list
+
+**Import** (in the app menu) reads a plain text file. [`examples/sample-import.txt`](examples/sample-import.txt)
+is a ready-made example to copy. The format:
+
+- Entries are separated by a blank line.
+- An entry's first line is its name. A trailing colon is dropped, so `Email:` becomes `Email`.
+- Every other line of the form `Label: value` becomes a field. The label stops at the first
+  colon, and at least one space must follow it.
+- Any other line becomes part of the entry's notes.
+- Fields whose label mentions a password, PIN, key, secret, token or authenticator are hidden
+  automatically, and so is a two-factor seed.
+
+Before anything is saved, a preview lists every entry. Entries whose name you already have start
+unticked, and you can file the whole import under one category. The limits are 10 MB and 2000
+entries per file.
+
 ## Where your things are kept
 
 | File | What it is |
