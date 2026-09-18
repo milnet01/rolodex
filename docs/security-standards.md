@@ -50,9 +50,11 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
    Raising it is a **format change, not a constant change.** The header carries no iteration
    count, so an existing vault re-read at a higher count fails as `InvalidToken` — which the
    unlock dialog reports as "Wrong password.", the worst available error for an app with no
-   recovery path. A raise therefore needs a **new magic**, so `load_vault` can tell the two
-   apart: `VLT1` implies 600,000 — the old header has no field to read it from — and the new
-   format records its count so later raises can. That is the mechanism
+   recovery path. A raise therefore needs a **new magic** that every reader of the header
+   understands — `load_vault_with_key` on unlock and on Restore, and `adopt_vault_file` when a
+   backup or an existing vault is adopted at the unlock screen. `VLT1` implies 600,000, because
+   the old header has no field to read it from; the new format records its count so later raises
+   can. That is the mechanism
    `vault-format-and-crypto.md` INV-5 states for ROLO-0005. Bumping the constant alone is the
    breakage, not the migration.
 
@@ -64,7 +66,8 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
 
 ## Review checklist for security-relevant changes
 
-Before merging anything that touches crypto, file I/O, import/export, or clipboard:
+Before merging anything that touches crypto, file I/O, import/export, the clipboard,
+subprocesses, or the network and update code:
 
 - [ ] No new code path writes a secret to disk in plaintext (outside the gated export).
 - [ ] Every new or overwritten secret-bearing write routes through `write_private_file()` —
@@ -72,16 +75,18 @@ Before merging anything that touches crypto, file I/O, import/export, or clipboa
       because the file is readable until it runs. A signing key is the one exception:
       `O_CREAT | O_EXCL`, per non-negotiable 3.
 - [ ] The master password is not logged, cached, or persisted.
-- [ ] KDF iterations and salt handling are unchanged — or a raise ships as a format change, new
-      magic and `migrate_vault` branch together, per non-negotiable 4. "Strengthened" is not a
-      passing state on its own, and "did the on-disk format change?" is the wrong question: the
-      byte layout is identical after a raise, so asking only that merges a bump that locks every
-      existing vault out.
+- [ ] KDF iterations and salt handling are unchanged — or a raise ships as a format change: a
+      new magic recording the count, understood by every header reader, per non-negotiable 4.
+      "Strengthened" is not a passing state on its own, and "did the on-disk format change?" is
+      the wrong question: the byte layout is identical after a raise, so asking only that merges
+      a bump that locks every existing vault out.
 - [ ] Imported/parsed input can't cause a crash that leaks state; parse errors surface as a
       dialog, not an unhandled traceback.
-- [ ] Subprocess calls pass their arguments as a list and never through a shell — no
-      `shell=True` anywhere, not only in the clipboard helpers. Secret data goes in over stdin,
-      never as an argument, and anything whose output is awaited carries a timeout.
+- [ ] Subprocess calls pass their arguments as a list, and `shell=True` is never used. The one
+      explicit shell is the updater's relaunch (`_relaunch_command`, `/bin/sh -c`): its only
+      interpolated values are this process's id and the `shlex.quote`d path of the app's own
+      binary. Add no other `sh -c`, and never put user or secret data in one. Secret data goes in
+      over stdin, never as an argument, and anything whose output is awaited carries a timeout.
 - [ ] No absolute personal paths are introduced (see file-naming standard).
 
 ## Input handling
@@ -97,8 +102,8 @@ Before merging anything that touches crypto, file I/O, import/export, or clipboa
   and verifies update signatures, and `certifi`, the CA bundle that the frozen binaries' TLS
   trust — and so the update check — depends on. Both follow
   `dependency-management-standards.md` like any other: **latest stable by default**, with a
-  forced-older pin allowed only through that standard's process (inline reason plus a ledger
-  entry). Sitting on an older release because it is "current enough" breaches that standard.
+  forced-older pin allowed only through that standard's pin process, every step of it. Sitting
+  on an older release because it is "current enough" breaches that standard.
   `certifi` is a bundled build-time dependency, not a `requirements.txt` entry, so a freshness
   sweep that reads only `requirements.txt` misses it. When bumping `cryptography`, skim its
   changelog for anything affecting Fernet/PBKDF2.

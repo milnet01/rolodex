@@ -14,7 +14,7 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
 
 - **INV-1** A vault file is exactly `MAGIC (4 bytes, b"VLT1")` + `salt (16 bytes)` +
   `Fernet token (remaining bytes)`, in that order.
-- **INV-2** `load_vault` reads the first 4 bytes and raises `ValueError("Not a valid vault
+- **INV-2** `load_vault_with_key` reads the first 4 bytes and raises `ValueError("Not a valid vault
   file")` if they are not a magic it recognises — today `b"VLT1"` alone. A successor format joins
   that set rather than replacing the check, so INV-5's new magic does not make this invariant
   reject the files it mandates. It then requires exactly
