@@ -32,7 +32,10 @@ mkdir -p out
 mv dist/rolodex "out/$ASSET"
 
 # A hard timeout turns a GTK-load hang into a build failure rather than a blocked runner.
-out=$(timeout 120 "out/$ASSET" --selftest) \
+# Not `timeout`: that is GNU coreutils, which macOS does not ship, so the call itself failed and
+# every macOS build reported "binary failed to run". perl's alarm is on every macOS runner, and
+# SIGALRM ends the exec'd binary with a non-zero status.
+out=$(perl -e 'alarm shift; exec @ARGV or die "exec: $!"' 120 "out/$ASSET" --selftest) \
     || { echo "::error::binary failed to run (non-zero exit or timeout)"; exit 1; }
 echo "$out"
 echo "$out" | grep -q "selftest: OK" || { echo "::error::binary failed to load GTK"; exit 1; }

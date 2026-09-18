@@ -429,6 +429,21 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-09-18 (gh run 35341065208).
   Lanes: tooling.
 
+- 🚧 [ROLO-0087] **The macOS build fails: its self-test calls GNU timeout, which macOS does not ship.**
+  The 2026-08-31 audit sweep (5db68d2) wrapped the macOS self-test in
+  `timeout 120`. macOS has no GNU coreutils, so the call fails with "timeout:
+  command not found" and the step reports "binary failed to run". Every macOS
+  build since then has failed; nothing noticed because Build binaries runs only
+  on a tag or by hand. Linux and Windows (MSYS2 ships coreutils) are unaffected.
+
+  Progress 2026-09-18: packaging/macos-build.sh uses perl's alarm instead, which
+  every macOS runner has. Tested locally: a hang exits 142, a pass exits 0.
+  Awaiting a green macOS job on the real runner before this is shipped.
+  **Layman:** The Mac download could not be built since the last audit, so the next release would have shipped without it.
+  Kind: fix.
+  Source: in-session-2026-09-18 (Build binaries run 35342986603).
+  Lanes: packaging.
+
 ## Medium priority
 
 - 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
