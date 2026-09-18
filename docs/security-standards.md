@@ -82,11 +82,13 @@ subprocesses, or the network and update code:
       a bump that locks every existing vault out.
 - [ ] Imported/parsed input can't cause a crash that leaks state; parse errors surface as a
       dialog, not an unhandled traceback.
-- [ ] Subprocess calls pass their arguments as a list, and `shell=True` is never used. The one
-      explicit shell is the updater's relaunch (`_relaunch_command`, `/bin/sh -c`): its only
-      interpolated values are this process's id and the `shlex.quote`d path of the app's own
-      binary. Add no other `sh -c`, and never put user or secret data in one. Secret data goes in
-      over stdin, never as an argument, and anything whose output is awaited carries a timeout.
+- [ ] Subprocess calls pass their arguments as a list, and `shell=True` is never used. A shell
+      handed a command string (`sh -c`, `bash -c`, `powershell -Command`, `cmd /c`) never
+      carries user or secret data. Two exist, and neither interpolates any: the updater's
+      relaunch (`_relaunch_command`: this process's id and the `shlex.quote`d path of the app's
+      own binary) and the Windows clipboard read (`powershell.exe -Command Get-Clipboard`, a
+      fixed string). Secret data goes in over stdin, never as an argument, and anything whose
+      output is awaited carries a timeout.
 - [ ] No absolute personal paths are introduced (see file-naming standard).
 
 ## Input handling
