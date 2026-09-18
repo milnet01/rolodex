@@ -5114,6 +5114,8 @@ class RolodexApp(Adw.Application):
 # libadwaita 1.5: Adw.Dialog, Adw.AlertDialog, force_close, get_visible_dialog.
 # GTK 4.12: Gtk.CssProvider.load_from_string.
 MIN_ADW = (1, 5)
+# ROLO-0088: typelibs a frozen build must carry itself (checked by --selftest).
+BUNDLED_TYPELIBS = ("Gtk-4.0.typelib", "Gdk-4.0.typelib", "Gsk-4.0.typelib", "Adw-1.typelib")
 MIN_GTK = (4, 12)
 
 
@@ -5143,6 +5145,17 @@ def main():
         # typelibs + shared libraries) and `cryptography` — succeeded, so the bundled runtime is
         # intact on this OS. CI runs the built binary with --selftest to fail any build whose
         # GTK stack didn't bundle correctly. Exits without starting the GUI (no display needed).
+        # A frozen build must carry its OWN GTK 4 typelibs. The import above can succeed on
+        # the build machine by finding the host's, which is how binaries that bundled GTK 3.0
+        # and no GTK 4 passed this test on the Ubuntu runner and crashed on openSUSE
+        # (ROLO-0088). Checking the bundle is what makes this test mean "portable".
+        if getattr(sys, "frozen", False):
+            bundled = os.path.join(getattr(sys, "_MEIPASS", ""), "gi_typelibs")
+            missing = [t for t in BUNDLED_TYPELIBS
+                       if not os.path.exists(os.path.join(bundled, t))]
+            if missing:
+                print(f"rolodex selftest: FAIL — not bundled: {', '.join(missing)}")
+                sys.exit(1)
         print("rolodex selftest: OK (GTK/Adw/cryptography loaded)")
         return
     app = RolodexApp()

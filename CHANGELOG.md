@@ -13,6 +13,14 @@ All notable changes to Rolodex are documented here. The format is based on
   uncategorised ones. Search now finds entries containing every word you
   type, in any order and in any field, so "gmail work" finds "Work Gmail".
 
+### Fixed
+
+- **The Linux download starts on every distribution, not just Ubuntu-like ones** (ROLO-0088)
+  The downloadable Linux binary was missing part of the GTK 4 toolkit and
+  only worked where the system happened to supply it; elsewhere, such as
+  openSUSE, it closed at once with "Namespace Gtk not available". It now
+  carries everything it needs, and its built-in self-test checks that it does.
+
 ## [1.4.0] - 2026-09-18
 
 ### Added

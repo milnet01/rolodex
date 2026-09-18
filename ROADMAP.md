@@ -451,6 +451,22 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-09-18 (Build binaries run 35342986603).
   Lanes: packaging.
 
+- 🚧 [ROLO-0088] **The released Linux binary bundles no GTK 4 typelibs and fails outside Debian-family systems.**
+  Found verifying the published v1.4.0: `rolodex-linux-x86_64 --selftest` on openSUSE
+  raises `ValueError: Namespace Gtk not available`. The v1.3.1 binary fails the same
+  way, so this is not a 1.4.0 regression. The archive lists 13 typelibs (Adw, GLib, Gio,
+  Pango...) and no Gtk-4.0, Gdk-4.0 or Gsk-4.0; a local openSUSE build bundles 16 and
+  works.
+
+  Why CI stays green: build.yml's Linux job self-tests on the Ubuntu runner, whose
+  system typelibs fill the gap. Suspected root cause: PyInstaller's gi hook for
+  gi.repository.Gtk collects GTK 3.0 unless hooksconfig names 4.0. The self-test
+  also needs to assert the typelibs come from the bundle, or CI will pass the next one.
+  **Layman:** The Linux download only starts on Ubuntu-like systems; on others, such as openSUSE, it crashes immediately.
+  Kind: fix.
+  Source: in-session-2026-09-18 (post-release check of v1.4.0).
+  Lanes: packaging.
+
 ## Medium priority
 
 - 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**

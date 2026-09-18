@@ -57,6 +57,11 @@ a = Analysis(
         "gi.repository.GLib",
     ],
     hookspath=[],
+    # PyInstaller's gi.repository.Gtk hook collects GTK 3.0 unless told otherwise, so every
+    # binary shipped through 1.4.0 bundled Gtk-3.0/Gdk-3.0 typelibs and no GTK 4 at all. It ran
+    # only where the host's own GTK 4 typelibs sat where the bundled libgirepository looks --
+    # the build distro -- and failed with "Namespace Gtk not available" elsewhere (ROLO-0088).
+    hooksconfig={"gi": {"module-versions": {"Gtk": "4.0", "Gdk": "4.0"}}},
     runtime_hooks=[],
     excludes=["tkinter"],
     noarchive=False,
