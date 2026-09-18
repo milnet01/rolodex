@@ -1375,6 +1375,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 - 📋 [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
   Why: all UI text is hardcoded English; internationalization widens reach and is expected of a desktop app.
   Scope: wrap user-facing strings in gettext _(), add a translation template (.pot) and a build step, and document the workflow. Touches every UI string — do it as one deliberate pass.
+  Re-requested by the user 2026-09-18: "add other language support to
+  the app." Confirms this item is wanted, not a nice-to-have left for
+  its own sake. Which languages are wanted first is still to be settled
+  with the user.
   **Layman:** Prepare the app so it can be translated into other languages.
   Kind: accessibility.
   Source: in-session-2026-07-04.
