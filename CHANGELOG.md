@@ -108,6 +108,10 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Fixed
 
+- **The macOS download builds again** (ROLO-0087)
+  A build-script change after 1.3.1 used a tool macOS does not have, so
+  the Mac binary could not be built. Releases include it again.
+
 - **Release pages show what changed** (ROLO-0039)
   A release's notes are now its section of this changelog. 1.3.1 was
   published with a blank page.
