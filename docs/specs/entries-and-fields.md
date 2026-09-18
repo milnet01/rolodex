@@ -11,7 +11,9 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
 ### Entry model
 
 - **INV-1** An entry is keyed by a `uuid4` string and has: `name`, `category`, `fields`,
-  `notes`, `created`, `modified`. Timestamps are ISO-8601 strings.
+  `notes`, `created`, `modified`. Timestamps are ISO-8601 strings. `now_iso()` writes them
+  with a UTC offset; vaults from before ROLO-0048 hold offset-less values, which are left
+  unchanged, so every reader accepts both forms.
 - **INV-2** `add_entry` sets `created` and `modified` to the same current time. Any mutation
   via `update_entry` or a category move updates `modified` only.
 - **INV-3** A field is `{"label": str, "value": str, "sensitive": bool}` (canonical data-model

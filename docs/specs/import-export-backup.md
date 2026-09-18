@@ -20,17 +20,28 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 - **INV-5** Both parse failure and an empty parse surface via the same `_show_message` dialog —
   parse failure with title "Import Error" (the exception text), an empty parse with title
   "Import" and body "No entries found in file." Neither modifies the vault.
+- **INV-5a** A file larger than `MAX_IMPORT_BYTES` (10 MB) is refused before it is read in
+  full. `parse_text_file` raises `ValueError`, which INV-5's "Import Error" dialog shows
+  (ROLO-0050).
 
 ## Import preview & commit
 
 - **INV-6** `ImportPreviewDialog` lists every parsed entry with its field count, a `+notes`
-  marker, and a `(duplicate)` marker when an entry with the same name (case-insensitive)
-  already exists. Duplicates are unchecked by default; non-duplicates checked.
-- **INV-7** "Select All" / "Select None" toggle every checkbox; only checked entries import.
-- **INV-8** `import_entries` skips entries whose name (case-insensitive) already exists when
-  `skip_duplicates` is true, counting imported vs skipped. Entries are added via `add_entry`
-  (fresh UUID + timestamps) inside `import_entries`; `import_entries` itself does not persist —
-  the caller `_finish_import` saves the vault afterwards.
+  marker, and a duplicate marker. `duplicate_flags` decides the marker: a name matching a vault
+  entry **or an earlier entry in the same file**, under `name_key` (case-insensitive,
+  whitespace-trimmed). Duplicates are unchecked by default; non-duplicates checked.
+- **INV-7** "Select All" / "Select None" toggle every checkbox. Exactly the checked entries
+  import, **a checked duplicate included** — it lands as a second entry with the same name
+  (ROLO-0047).
+- **INV-7a** The preview carries an "Add to category" picker listing "No category" and the
+  vault's categories. Every imported entry is filed under the choice; the default is
+  uncategorised (ROLO-0067).
+- **INV-8** `import_entries(vault, parsed, skip_duplicates=True, category="")` skips entries
+  `duplicate_flags` marks when `skip_duplicates` is true, and returns `(imported, skipped)`. The
+  preview's commit path, `_finish_import`, passes `skip_duplicates=False`, because the preview
+  has already applied the user's choice. An unknown `category` raises `ValueError`. Entries are
+  added via `add_entry` (fresh UUID + timestamps) inside `import_entries`; `import_entries`
+  itself does not persist — `_finish_import` saves the vault afterwards.
 
 ## Encrypted backup
 
@@ -59,12 +70,13 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
   overwrite, without needing its own `chmod`. Before
   1.3.1 it used `os.open(..., 0o600)` directly and an overwrite kept the existing file's
   permissions; see `vault-format-and-crypto.md` INV-9.
+- **INV-15a** The staged temp lives in the directory the user picked, not a private one. That is
+  accepted: the export itself lands in that directory, and a same-directory temp is what makes
+  the write atomic. A SIGKILL or power cut can leave that temp behind as a `.rolodex-*.tmp`
+  dotfile holding the plaintext (ROLO-0064).
 - **INV-16** The default export filename is `rolodex_export_<YYYYMMDD>_<HHMMSS>.txt`.
 
 ## Notes
 
 - Backup/restore round-trips ciphertext; export is a deliberate one-way plaintext escape hatch.
-- Interaction gotcha: the preview lets you tick a name marked "(duplicate)", but `_finish_import`
-  calls `import_entries` with `skip_duplicates=True`, so a manually re-checked duplicate is still
-  skipped. This surprises users — a candidate fix, not yet scheduled.
 - CSV import/export is roadmap ROLO-0012.

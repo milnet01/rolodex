@@ -616,7 +616,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 6.
   Lanes: gui.
 
-- 📋 [ROLO-0047] **Settle whether a re-ticked duplicate should import, and make preview and commit agree.**
+- ✅ [ROLO-0047] **Settle whether a re-ticked duplicate should import, and make preview and commit agree.**
   Two lanes found the same disagreement from opposite ends. import_entries dedups against the
   vault AND within the import file; ImportPreviewDialog computes its duplicate set from the
   vault only, so two identically-named entries in one file both render unmarked and
@@ -631,12 +631,16 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   skip_duplicates behaviour. The spec needs deciding before the code moves, so this is a
   review-contract item first. The preview is the user's consent surface for a bulk write into
   an encrypted vault; whichever way it is settled, it must not show one thing and do another.
+  Resolved 2026-09-18 (user decision: a tick means import):
+  duplicate_flags drives the preview marker and covers in-file
+  duplicates; _finish_import passes skip_duplicates=False. Spec
+  INV-6/7/8 amended as built.
   **Layman:** The import preview lets you tick a duplicate entry, then throws it away anyway. Either the tick should work or it should not be offered.
   Kind: doc-fix.
   Source: review-code 2026-08-31 lanes 3 and 8.
   Lanes: import-export.
 
-- 📋 [ROLO-0048] **Store entry timestamps with a timezone.**
+- ✅ [ROLO-0048] **Store entry timestamps with a timezone.**
   add_entry and update_entry write datetime.now().isoformat() -- naive local time. Across a
   timezone change or a DST fall-back, `modified` can precede `created`, and the detail pane
   renders the value with no offset marker.
@@ -646,6 +650,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   but it is queued rather than done inline because existing vaults hold naive values: readers
   must tolerate both forms, and whether to rewrite old timestamps on migration is a decision,
   not an edit.
+  Resolved 2026-09-18 (user decision: leave old values): now_iso()
+  writes the offset; old naive values stay; entries-and-fields.md INV-1
+  amended.
   **Layman:** Saved-at times have no timezone, so a vault carried to another country — or across a clock change — shows edits in the wrong order.
   Kind: fix.
   Source: review-code 2026-08-31 lanes 3, 6, 7.
@@ -668,13 +675,15 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 8 and 9.
   Lanes: packaging.
 
-- 📋 [ROLO-0050] **Bound the size of a chosen import file.**
+- ✅ [ROLO-0050] **Bound the size of a chosen import file.**
   parse_text_file reads the whole user-chosen file into memory and re.splits the entire string.
   A mis-picked multi-GB file is an OOM rather than a message. The regex itself is not
   ReDoS-prone -- [^:]+? cannot overlap the literal colon, so backtracking is linear.
 
   Queued rather than fixed because the ceiling is a number somebody has to choose, and it
   should be stated in import-export-backup.md rather than only in the code.
+  Resolved 2026-09-18: MAX_IMPORT_BYTES = 10 MB, checked on fstat and on
+  the read. Spec INV-5a.
   **Layman:** Picking a huge file by mistake in the import dialog will make the app run out of memory and die, with no message.
   Kind: security.
   Source: review-code 2026-08-31 lanes 3 and 7.
@@ -890,7 +899,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 6 (verified, not fixed in the audit pass).
   Lanes: updater, gui.
 
-- 📋 [ROLO-0064] **The plaintext export stages its temp in the directory the user picked.**
+- ✅ [ROLO-0064] **The plaintext export stages its temp in the directory the user picked.**
   write_private_file stages `.rolodex-*.tmp` in the DESTINATION directory, which is correct and
   necessary for the vault (INV-10 requires a same-filesystem os.replace) but is a different
   trade for the plaintext export, whose destination is wherever the user pointed the file
@@ -903,12 +912,15 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Two defensible answers and the choice is the work: document it in
   import-export-backup.md as accepted, or accept a non-atomic 0600 os.open for the export alone,
   where atomicity buys much less than it does for the vault.
+  Resolved 2026-09-18 (user decision: accept and document):
+  import-export-backup.md INV-15a records the same-directory temp and
+  its residue on SIGKILL or power cut. No code change.
   **Layman:** Exporting your passwords briefly writes a hidden copy into whatever folder you chose — which might be a shared or cloud-synced one.
   Kind: security.
   Source: review-code 2026-08-31 lane 7 (verified, not fixed in the audit pass).
   Lanes: import-export.
 
-- 📋 [ROLO-0065] **Two diverged implementations of “same name, case-insensitively”.**
+- ✅ [ROLO-0065] **Two diverged implementations of “same name, case-insensitively”.**
   import_entries compares `e["name"].lower()`; find_entry_by_name compares
   `name.strip().lower()`. ROADMAP ROLO-0023 explicitly directed the second to "reuse the same
   case-insensitive comparison used by import_entries", and it added .strip() instead.
@@ -916,6 +928,8 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Unreachable through normal paths today because both writers strip before storing, so it bites
   only a hand-edited, legacy or restored vault holding an untrimmed name -- which is exactly the
   population ROLO-0060 and the migrate_vault guard are about. Fix: one helper, both callers.
+  Resolved 2026-09-18: name_key() is the one rule; find_entry_by_name,
+  duplicate_flags and import_entries all use it.
   **Layman:** Two places in the code decide whether two entries have the same name, and they disagree about spaces.
   Kind: fix.
   Source: review-code 2026-08-31 lane 3 (verified, not fixed in the audit pass).
@@ -946,7 +960,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lane 3 (verified; a contract question, not a defect).
   Lanes: data-model.
 
-- 📋 [ROLO-0067] **Imported entries always land uncategorised, and nothing says whether that is intended.**
+- ✅ [ROLO-0067] **Imported entries always land uncategorised, and nothing says whether that is intended.**
   import_entries calls add_entry with name, fields and notes and never passes a category, so
   every imported entry gets "". Neither import-export-backup.md nor categories.md says whether
   that is the intended behaviour or an omission.
@@ -954,12 +968,15 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Small on its own; filed because it is a promise nobody made either way, and the import preview
   (ROLO-0047) is being revisited anyway -- offering a target category there would be the natural
   place if the answer is that it should be settable.
+  Resolved 2026-09-18 (user decision: add a picker): 'Add to category'
+  ComboRow on the import preview; import_entries(category=). Spec
+  INV-7a.
   **Layman:** Importing from a text file drops every entry into no category at all.
   Kind: fix.
   Source: review-code 2026-08-31 lane 3 (verified; unstated in either spec).
   Lanes: import-export.
 
-- 📋 [ROLO-0068] **TOTP robustness: unvalidated direct-call arguments, and no clock-skew signal.**
+- 🚧 [ROLO-0068] **TOTP robustness: unvalidated direct-call arguments, and no clock-skew signal.**
   Two items from the same lane.
 
   VALIDATION: totp_code's digits, period and algorithm are validated in _parse_otpauth_uri and
@@ -973,6 +990,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   "the site rejected my code" with nothing pointing at the real cause. The fix is UI-side -- a
   hint in the detail pane when the system clock looks unsynchronised -- and wants stating in the
   missing TOTP spec first.
+  Progress 2026-09-18: totp_code validates its arguments;
+  clock_synchronized() reads timedatectl. The detail-pane hint and its
+  spec invariant are still to do.
   **Layman:** If your computer's clock drifts, your 2FA codes are silently wrong and the app gives no hint why.
   Kind: fix.
   Source: review-code 2026-08-31 lane 2 (verified, not fixed in the audit pass).
@@ -1233,8 +1253,10 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: refactor.
   Source: debt-sweep-2026-07-17.
 
-- 📋 [ROLO-0035] **Fill remaining info-level pure-logic test gaps (derive_key KAT, delete_entry, list_entries).**
+- ✅ [ROLO-0035] **Fill remaining info-level pure-logic test gaps (derive_key KAT, delete_entry, list_entries).**
   The 2026-07-17 debt sweep added tests for field_category, load_vault magic-byte reject, is_sensitive_label, import_entries, parse_text_file edge rules, update_entry/rename_category timestamp behaviour, tampered-ciphertext, create_vault, and atomic write_private_file (suite 36 -> 49). Remaining info-level gaps deferred: a derive_key known-answer test on a fixed salt/password (locks the exact PBKDF2 contract), and trivial delete_entry / list_entries coverage.
+  Resolved 2026-09-18: derive_key checked against hashlib's independent
+  PBKDF2; delete_entry and list_entries covered.
   **Layman:** A few more small safety-net tests for the least-risky helper functions.
   Kind: test.
   Source: debt-sweep-2026-07-17.
@@ -1318,7 +1340,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: check-code 2026-08-31 (zizmor superfluous-actions).
   Lanes: packaging.
 
-- 📋 [ROLO-0069] **Password generation over-weights the smaller character classes.**
+- ✅ [ROLO-0069] **Password generation over-weights the smaller character classes.**
   generate_password guarantees one character per enabled class and fills the rest from the
   combined pool. That construction over-represents the smaller classes: at the default 20
   characters over an 85-character pool, expected digits are about 2.9 against 2.35 under uniform
@@ -1331,6 +1353,8 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   The related fixed-order truncation bug at small lengths WAS fixed in the audit pass; this is
   the remaining statistical half.
+  Resolved 2026-09-18: rejection sampling from the combined pool;
+  digit-share test locks it.
   **Layman:** Generated passwords contain slightly more digits and symbols than pure chance would give, which costs a little randomness.
   Kind: fix.
   Source: review-code 2026-08-31 lane 3 (verified; NOT a security defect).
@@ -1362,7 +1386,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: review-code 2026-08-31 lanes 5, 8, 9 (all verified, none fixed in the audit pass).
   Lanes: gui.
 
-- 📋 [ROLO-0071] **A legacy or hand-edited vault can raise KeyError instead of degrading.**
+- ✅ [ROLO-0071] **A legacy or hand-edited vault can raise KeyError instead of degrading.**
   Direct dict indexing sits beside defensive .get() calls in the same functions, so the code is
   inconsistent about whether a malformed field is survivable:
 
@@ -1375,6 +1399,8 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   it does not validate individual FIELDS, so this population is still reachable. One finding was
   dismissed during the audit as unreachable-in-practice; the AddEditDialog case is the one that
   makes it worth doing anyway, since it presents as a dead button rather than an error.
+  Resolved 2026-09-18: migrate_vault fills missing entry and field keys
+  at load, so every reader is safe; search and the audit also use .get.
   **Layman:** An old or hand-edited vault file can make an entry refuse to open, rather than showing what it can.
   Kind: fix.
   Source: review-code 2026-08-31 lanes 3 and 8 (verified, not fixed in the audit pass).

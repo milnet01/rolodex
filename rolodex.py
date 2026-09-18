@@ -79,6 +79,11 @@ DEFAULT_IDLE_LOCK_SECONDS = 300  # ROLO-0002: auto-lock after this much inactivi
 # than on every character (each rebuild re-scans every entry).
 SEARCH_DEBOUNCE_MS = 150
 
+# ROLO-0050: the largest text file the importer will read. Far above any real credential
+# export, and far below what would exhaust memory.
+MAX_IMPORT_BYTES = 10 * 1024 * 1024
+_IMPORT_TOO_LARGE = "That file is too large to import (the limit is 10 MB)."
+
 # ---------------------------------------------------------------------------
 # Encryption layer
 # ---------------------------------------------------------------------------
@@ -208,8 +213,24 @@ def migrate_vault(vault: dict) -> dict:
     if "categories" not in vault:
         vault["categories"] = []
     for entry in vault["entries"].values():
+        if not isinstance(entry, dict):
+            raise ValueError("Vault contents are not a valid vault")
         if "category" not in entry:
             entry["category"] = ""
+        # A legacy or hand-edited vault can lack a key that the editor, search and the password
+        # audit index directly, which surfaced as a dead Edit button rather than an error
+        # (ROLO-0071). Filling the gaps here -- once, at load -- is what lets every reader stay
+        # simple. Nothing present is overwritten, so this stays idempotent.
+        entry.setdefault("name", "")
+        entry.setdefault("notes", "")
+        fields = entry.get("fields")
+        if not isinstance(fields, list):
+            fields = []
+        entry["fields"] = [f for f in fields if isinstance(f, dict)]
+        for f in entry["fields"]:
+            f.setdefault("label", "")
+            f.setdefault("value", "")
+            f.setdefault("sensitive", is_sensitive_label(str(f["label"])))
     vault["version"] = 2
     return vault
 
@@ -279,7 +300,21 @@ def _decode_base32(s: str) -> bytes | None:
 
 def totp_code(secret: bytes, timestamp: float, digits: int = 6,
               period: int = 30, algorithm: str = "sha1") -> str:
-    """Compute the RFC 6238 TOTP code for a raw (base32-decoded) secret at a unix time."""
+    """Compute the RFC 6238 TOTP code for a raw (base32-decoded) secret at a unix time.
+
+    Raises ValueError on arguments no real configuration produces. Both callers pass a config
+    already validated by _parse_otpauth_uri, but this is a public function, and the raw
+    failures -- KeyError, ZeroDivisionError, struct.error for a clock before 1970 -- say
+    nothing about the cause (ROLO-0068).
+    """
+    if algorithm not in _TOTP_HASHES:
+        raise ValueError(f"unsupported TOTP algorithm {algorithm!r}")
+    if digits not in (6, 7, 8):
+        raise ValueError("TOTP digits must be 6, 7 or 8")
+    if not 1 <= period <= 300:
+        raise ValueError("TOTP period must be 1-300 seconds")
+    if timestamp < 0:
+        raise ValueError("TOTP needs a clock set after 1970")
     counter = int(timestamp) // period
     mac = hmac.new(secret, struct.pack(">Q", counter), _TOTP_HASHES[algorithm]).digest()
     offset = mac[-1] & 0x0F
@@ -290,6 +325,28 @@ def totp_code(secret: bytes, timestamp: float, digits: int = 6,
 def totp_remaining(timestamp: float, period: int = 30) -> int:
     """Seconds left in the current code's window (equals period exactly on a boundary)."""
     return period - int(timestamp) % period
+
+
+def clock_synchronized() -> bool | None:
+    """Whether the system clock is network-synchronised: True, False, or None for unknown.
+
+    RFC 6238 §6 needs prover and validator to agree on time, and a drifted clock makes every
+    code wrong in a way that looks like "the site rejected my code" (ROLO-0068). Only an
+    explicit "no" is False. A platform without timedatectl, or any failure, is None, and the
+    UI shows nothing for None -- a hint that fires on uncertainty would be a false alarm.
+    Runs a subprocess, so callers keep it off the GTK main thread.
+    """
+    if not shutil.which("timedatectl"):
+        return None
+    try:
+        proc = subprocess.run(["timedatectl", "show", "-p", "NTPSynchronized", "--value"],
+                              capture_output=True, text=True, timeout=5, check=False)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    answer = proc.stdout.strip()
+    if proc.returncode != 0 or answer not in ("yes", "no"):
+        return None
+    return answer == "yes"
 
 
 def _parse_otpauth_uri(uri: str) -> dict | None:
@@ -422,7 +479,7 @@ def audit_passwords(vault: dict) -> list[dict]:
             findings.append({
                 "entry_id": eid,
                 "entry_name": entry["name"],
-                "label": f["label"],
+                "label": f.get("label", ""),
                 "strength": score,
                 "strength_label": STRENGTH_LABELS[score],
                 "reused": reuse_count > 1,
@@ -433,9 +490,19 @@ def audit_passwords(vault: dict) -> list[dict]:
     return findings
 
 
+def now_iso() -> str:
+    """The current time as an ISO-8601 string WITH its UTC offset (ROLO-0048).
+
+    Naive local time let `modified` precede `created` across a DST fall-back or a timezone
+    change. Vaults written before this hold naive values and are deliberately left as they
+    are -- which zone they were recorded in is unknowable -- so every reader must accept both.
+    """
+    return datetime.now().astimezone().isoformat()
+
+
 def add_entry(vault: dict, name: str, fields: list[dict], notes: str = "", category: str = "") -> str:
     entry_id = str(uuid.uuid4())
-    now = datetime.now().isoformat()
+    now = now_iso()
     vault["entries"][entry_id] = {
         "name": name,
         "category": category,
@@ -457,7 +524,7 @@ def update_entry(vault, entry_id, name=None, fields=None, notes=None, category=N
         entry["notes"] = notes
     if category is not None:
         entry["category"] = category
-    entry["modified"] = datetime.now().isoformat()
+    entry["modified"] = now_iso()
 
 
 def delete_entry(vault: dict, entry_id: str) -> None:
@@ -476,7 +543,8 @@ def search_entries(vault: dict, query: str) -> list[tuple[str, dict]]:
             continue
         matched = False
         for field in entry["fields"]:
-            if query_lower in field["label"].lower() or query_lower in field["value"].lower():
+            if (query_lower in field.get("label", "").lower()
+                    or query_lower in field.get("value", "").lower()):
                 results.append((eid, entry))
                 matched = True
                 break
@@ -489,15 +557,24 @@ def list_entries(vault: dict) -> list[tuple[str, dict]]:
     return sorted(vault["entries"].items(), key=lambda x: x[1]["name"].lower())
 
 
+def name_key(name: str) -> str:
+    """The one definition of "same entry name": case-insensitive, whitespace-trimmed.
+
+    The editor's duplicate warning and the import dedup used to spell this separately, and
+    one of them forgot the strip (ROLO-0065).
+    """
+    return name.strip().lower()
+
+
 def find_entry_by_name(vault: dict, name: str, exclude_id: str | None = None) -> str | None:
-    """Return the id of an existing entry whose name matches `name` (case-insensitive,
-    whitespace-trimmed), or None. `exclude_id` skips one entry so editing an entry doesn't
-    flag itself as its own duplicate. Used to warn on duplicate names (ROLO-0023)."""
-    target = name.strip().lower()
+    """Return the id of an existing entry whose name matches `name` under name_key(), or
+    None. `exclude_id` skips one entry so editing an entry doesn't flag itself as its own
+    duplicate. Used to warn on duplicate names (ROLO-0023)."""
+    target = name_key(name)
     for eid, entry in vault["entries"].items():
         if eid == exclude_id:
             continue
-        if entry["name"].strip().lower() == target:
+        if name_key(entry["name"]) == target:
             return eid
     return None
 
@@ -561,8 +638,15 @@ def entries_by_category(vault: dict) -> dict[str, list[tuple[str, dict]]]:
 
 
 def parse_text_file(filepath: str) -> list[dict]:
+    # The whole file is read and re.split in memory, so a mis-picked multi-gigabyte file was an
+    # out-of-memory kill rather than a message (ROLO-0050). Checked on the size the open file
+    # reports, and enforced again on the read, so a file growing mid-read cannot slip past.
     with open(filepath, "r", encoding="utf-8") as fp:
-        content = fp.read()
+        if os.fstat(fp.fileno()).st_size > MAX_IMPORT_BYTES:
+            raise ValueError(_IMPORT_TOO_LARGE)
+        content = fp.read(MAX_IMPORT_BYTES + 1)
+        if len(content) > MAX_IMPORT_BYTES:
+            raise ValueError(_IMPORT_TOO_LARGE)
     blocks = re.split(r"\n\s*\n", content.strip())
     entries = []
     for block in blocks:
@@ -592,15 +676,39 @@ def parse_text_file(filepath: str) -> list[dict]:
     return entries
 
 
-def import_entries(vault, parsed, skip_duplicates=True):
-    existing_names = {e["name"].lower() for e in vault["entries"].values()}
-    imported = skipped = 0
+def duplicate_flags(vault: dict, parsed: list[dict]) -> list[bool]:
+    """For each parsed entry, whether it duplicates a vault entry OR an earlier one in the file.
+
+    The import preview draws from this, so what it marks as a duplicate is exactly what
+    import_entries(skip_duplicates=True) would skip (ROLO-0047). The preview used to check the
+    vault only, so two same-named entries in one file both rendered unmarked.
+    """
+    seen = {name_key(e["name"]) for e in vault["entries"].values()}
+    flags = []
     for entry_data in parsed:
-        if skip_duplicates and entry_data["name"].lower() in existing_names:
+        key = name_key(entry_data["name"])
+        flags.append(key in seen)
+        seen.add(key)
+    return flags
+
+
+def import_entries(vault, parsed, skip_duplicates=True, category=""):
+    """Add parsed entries to the vault, returning (imported, skipped).
+
+    skip_duplicates=False imports every entry given. The import preview passes that, because
+    it hands over only what the user ticked -- a duplicate they ticked deliberately must land,
+    not vanish behind a checkbox that did nothing (ROLO-0047). `category` files every imported
+    entry under one existing category; "" leaves them uncategorised (ROLO-0067).
+    """
+    if category and category not in vault["categories"]:
+        raise ValueError(f"No category named {category!r}")
+    flags = duplicate_flags(vault, parsed) if skip_duplicates else [False] * len(parsed)
+    imported = skipped = 0
+    for entry_data, is_dup in zip(parsed, flags):
+        if is_dup:
             skipped += 1
             continue
-        add_entry(vault, entry_data["name"], entry_data["fields"], entry_data["notes"])
-        existing_names.add(entry_data["name"].lower())
+        add_entry(vault, entry_data["name"], entry_data["fields"], entry_data["notes"], category)
         imported += 1
     return imported, skipped
 
@@ -620,8 +728,12 @@ def generate_password(
     """Return a cryptographically-random password from the selected character classes.
 
     Uses the `secrets` module (never `random`). Every selected class is guaranteed to appear
-    at least once when the length allows it, then the remainder is filled from the combined
-    pool and shuffled so the guaranteed characters aren't stuck at the front.
+    at least once when the length allows it.
+
+    The guarantee is met by rejection sampling: draw every character uniformly from the
+    combined pool and redraw the whole password while a class is missing. Seeding one character
+    per class and filling the rest over-represented the smaller classes (ROLO-0069). Rejection
+    keeps each accepted password uniform over the passwords that satisfy the guarantee.
     """
     pools = [
         PW_GEN_CLASSES[name]
@@ -634,16 +746,13 @@ def generate_password(
         raise ValueError("length must be at least 1")
 
     combined = "".join(pools)
-    # One char from each class first (up to length), then fill from the combined pool. The
-    # per-class draws are shuffled BEFORE the [:length] slice: truncating them in the fixed
-    # lower/upper/digits/symbols order meant generate_password(length=2) could only ever return
-    # a lowercase and an uppercase character, never a digit or symbol.
-    seeded = [secrets.choice(pool) for pool in pools]
-    secrets.SystemRandom().shuffle(seeded)
-    chars = seeded[:length]
-    chars += [secrets.choice(combined) for _ in range(length - len(chars))]
-    secrets.SystemRandom().shuffle(chars)
-    return "".join(chars)
+    # With fewer characters than classes the guarantee cannot hold, so require only as many
+    # distinct classes as there are characters -- any of them, never a fixed subset.
+    need = min(len(pools), length)
+    while True:
+        candidate = "".join(secrets.choice(combined) for _ in range(length))
+        if sum(any(c in pool for c in candidate) for pool in pools) >= need:
+            return candidate
 
 
 # ---------------------------------------------------------------------------
@@ -2531,16 +2640,18 @@ class MainWindow(Adw.ApplicationWindow):
         dialog = ImportPreviewDialog(self, parsed, filepath)
         dialog.present(self)
 
-    def _finish_import(self, parsed):
+    def _finish_import(self, parsed, category=""):
         if self.vault is None:
             return  # locked while the preview dialog was open
-        imported, skipped = import_entries(self.vault, parsed)
+        if category and category not in self.vault["categories"]:
+            category = ""  # deleted while the preview was open
+        # The preview hands over exactly the rows the user ticked, duplicates included, so
+        # nothing is skipped here: a ticked row that did not import was ROLO-0047.
+        imported, _skipped = import_entries(self.vault, parsed, skip_duplicates=False,
+                                            category=category)
         self._save()
         self._refresh_list()
-        msg = f"Imported {imported} {entries_noun(imported)}."
-        if skipped:
-            msg += f" Skipped {skipped} duplicates."
-        self._toast(msg)
+        self._toast(f"Imported {imported} {entries_noun(imported)}.")
 
     # ------------------------------------------------------------------
     # Backup (encrypted copy)
@@ -2754,7 +2865,7 @@ class MainWindow(Adw.ApplicationWindow):
         """Move an entry to a category ('' = Uncategorised). Saves vault."""
         if entry_id in self.vault["entries"]:
             self.vault["entries"][entry_id]["category"] = category
-            self.vault["entries"][entry_id]["modified"] = datetime.now().isoformat()
+            self.vault["entries"][entry_id]["modified"] = now_iso()
             self._save()
             self._refresh_list()
             if self._current_entry_id == entry_id:
@@ -3330,21 +3441,34 @@ class ImportPreviewDialog(Adw.Dialog):
         ctrl_box.append(sel_none)
         vbox.append(ctrl_box)
 
+        # ROLO-0067: one target category for the whole import, "No category" by default.
+        self.categories = list(main_win.vault["categories"])
+        cat_row = Adw.ComboRow(title="Add to category")
+        cat_row.set_model(Gtk.StringList.new(["No category", *self.categories]))
+        cat_group = Gtk.ListBox()
+        cat_group.set_selection_mode(Gtk.SelectionMode.NONE)
+        cat_group.add_css_class("boxed-list")
+        cat_group.append(cat_row)
+        self.cat_row = cat_row
+        vbox.append(cat_group)
+
         listbox = Gtk.ListBox()
         listbox.set_selection_mode(Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
 
-        existing_names = {e["name"].lower() for e in main_win.vault["entries"].values()}
+        # Same rule the importer would skip by, covering duplicates WITHIN the file too. A
+        # duplicate starts unticked; ticking it imports it as a second entry (ROLO-0047).
+        dup_flags = duplicate_flags(main_win.vault, parsed)
 
         for i, entry in enumerate(parsed):
-            is_dup = entry["name"].lower() in existing_names
+            is_dup = dup_flags[i]
             row = Adw.ActionRow()
             row.set_title(GLib.markup_escape_text(entry["name"]))
             field_count = len(entry["fields"])
             notes_flag = " +notes" if entry.get("notes") else ""
             subtitle = f"{field_count} fields{notes_flag}"
             if is_dup:
-                subtitle += "  (duplicate)"
+                subtitle += "  (duplicate name — tick to import it anyway)"
             row.set_subtitle(subtitle)
 
             check = Gtk.CheckButton(active=not is_dup)
@@ -3365,7 +3489,9 @@ class ImportPreviewDialog(Adw.Dialog):
         selected = [self.parsed[i] for check, i in self.checks if check.get_active()]
         if not selected:
             return
-        self.main_win._finish_import(selected)
+        pos = self.cat_row.get_selected()
+        category = self.categories[pos - 1] if pos >= 1 else ""
+        self.main_win._finish_import(selected, category)
         self.close()
 
 

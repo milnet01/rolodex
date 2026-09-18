@@ -496,3 +496,165 @@ def test_ROLO0079_min_password_length_is_a_floor_of_12():
     assert rolodex.MIN_PASSWORD_LENGTH >= 12, (
         f"MIN_PASSWORD_LENGTH is {rolodex.MIN_PASSWORD_LENGTH}; 12 is the floor (ROLO-0079)"
     )
+
+
+# --- ROLO-0065: one definition of "same entry name" ----------------------------------------
+
+
+def test_ROLO0065_import_and_editor_agree_on_untrimmed_names():
+    """An untrimmed name in a legacy vault must count as a duplicate for BOTH callers.
+
+    find_entry_by_name stripped; import_entries did not, so " GitHub " in the vault was a
+    duplicate to the editor's warning and a fresh name to the importer.
+    """
+    vault = {"version": 2, "categories": [], "entries": {}}
+    rolodex.add_entry(vault, " GitHub ", [])
+    assert rolodex.find_entry_by_name(vault, "github") is not None
+    assert rolodex.duplicate_flags(vault, [{"name": "github", "fields": [], "notes": ""}]) == [True]
+    imported, skipped = rolodex.import_entries(vault, [{"name": "github", "fields": [], "notes": ""}])
+    assert (imported, skipped) == (0, 1)
+
+
+# --- ROLO-0047 / ROLO-0067: the preview's ticks are what gets imported ---------------------
+
+
+def test_ROLO0047_duplicate_flags_catch_duplicates_within_the_file():
+    """The preview used to check the vault only, so two same-named file entries both showed
+    unmarked and one then vanished at commit."""
+    vault = {"version": 2, "categories": [], "entries": {}}
+    rolodex.add_entry(vault, "Bank", [])
+    parsed = [{"name": n, "fields": [], "notes": ""} for n in ("Mail", "bank", "MAIL", "Shop")]
+    assert rolodex.duplicate_flags(vault, parsed) == [False, True, True, False]
+
+
+def test_ROLO0047_a_ticked_duplicate_imports_when_skipping_is_off():
+    """The preview hands over only ticked rows with skip_duplicates=False; a duplicate the
+    user ticked deliberately must land rather than be silently discarded."""
+    vault = {"version": 2, "categories": [], "entries": {}}
+    rolodex.add_entry(vault, "Bank", [])
+    parsed = [{"name": "Bank", "fields": [], "notes": "second"}]
+    assert rolodex.import_entries(vault, parsed, skip_duplicates=False) == (1, 0)
+    assert sorted(e["notes"] for e in vault["entries"].values()) == ["", "second"]
+
+
+def test_ROLO0067_import_files_entries_under_the_chosen_category():
+    vault = {"version": 2, "categories": ["Games"], "entries": {}}
+    rolodex.import_entries(vault, [{"name": "Steam", "fields": [], "notes": ""}], category="Games")
+    assert [e["category"] for e in vault["entries"].values()] == ["Games"]
+    with pytest.raises(ValueError):
+        rolodex.import_entries(vault, [{"name": "X", "fields": [], "notes": ""}], category="Nope")
+
+
+# --- ROLO-0048: timestamps carry their offset ----------------------------------------------
+
+
+def test_ROLO0048_new_timestamps_carry_a_utc_offset():
+    from datetime import datetime
+
+    vault = {"version": 2, "categories": [], "entries": {}}
+    eid = rolodex.add_entry(vault, "A", [])
+    rolodex.update_entry(vault, eid, notes="x")
+    for key in ("created", "modified"):
+        parsed = datetime.fromisoformat(vault["entries"][eid][key])
+        assert parsed.utcoffset() is not None, f"{key} was written without a timezone"
+
+
+# --- ROLO-0050: the importer refuses an oversized file -------------------------------------
+
+
+def test_ROLO0050_oversized_import_file_is_a_message_not_an_oom(tmp_path, monkeypatch):
+    monkeypatch.setattr(rolodex, "MAX_IMPORT_BYTES", 64)
+    big = tmp_path / "big.txt"
+    big.write_text("Name\nPassword: " + "x" * 100 + "\n")
+    with pytest.raises(ValueError, match="too large"):
+        rolodex.parse_text_file(str(big))
+    small = tmp_path / "small.txt"
+    small.write_text("Name\nUser: me\n")
+    assert rolodex.parse_text_file(str(small))[0]["name"] == "Name"
+
+
+# --- ROLO-0068: totp_code refuses arguments no config produces -----------------------------
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"algorithm": "md5"}, {"digits": 9}, {"period": 0}, {"timestamp": -1},
+])
+def test_ROLO0068_totp_code_rejects_invalid_arguments_with_valueerror(kwargs):
+    args = {"secret": b"12345678901234567890", "timestamp": 59, **kwargs}
+    with pytest.raises(ValueError):
+        rolodex.totp_code(**args)
+
+
+def test_ROLO0068_clock_synchronized_reads_timedatectl(monkeypatch):
+    monkeypatch.setattr(rolodex.shutil, "which", lambda cmd: "/usr/bin/" + cmd)
+    for out, want in (("yes\n", True), ("no\n", False), ("garbage\n", None)):
+        monkeypatch.setattr(rolodex.subprocess, "run", lambda *a, _o=out, **k:
+                            subprocess.CompletedProcess(a, 0, stdout=_o, stderr=""))
+        assert rolodex.clock_synchronized() is want
+    monkeypatch.setattr(rolodex.shutil, "which", lambda cmd: None)
+    assert rolodex.clock_synchronized() is None
+
+
+# --- ROLO-0069: generated passwords are uniform over the guaranteed set --------------------
+
+
+def test_ROLO0069_digit_share_matches_uniform_sampling():
+    """Seeding one char per class over-weighted digits (~2.9 per 20 chars vs 2.35 uniform).
+
+    Rejection sampling from the combined pool gives E[digits] ~2.49 given at least one of
+    each class is present. 4000 samples put the seeded construction far outside the band.
+    """
+    n = 4000
+    total = sum(sum(c.isdigit() for c in rolodex.generate_password()) for _ in range(n))
+    mean = total / n
+    assert 2.35 < mean < 2.65, f"mean digits per password {mean:.2f}"
+
+
+def test_ROLO0069_every_class_still_guaranteed_and_short_lengths_work():
+    for _ in range(200):
+        pw = rolodex.generate_password(length=4)
+        assert any(c.islower() for c in pw) and any(c.isupper() for c in pw)
+        assert any(c.isdigit() for c in pw) and any(c in rolodex.PW_GEN_SYMBOLS for c in pw)
+    assert len(rolodex.generate_password(length=2)) == 2
+
+
+# --- ROLO-0071: a malformed legacy entry degrades instead of raising -----------------------
+
+
+def test_ROLO0071_migrate_fills_missing_entry_and_field_keys():
+    vault = {"entries": {"a": {"fields": [{"value": "hunter2"}, {"label": "User"}, "junk"]},
+                         "b": {"name": "B"}}}
+    rolodex.migrate_vault(vault)
+    a, b = vault["entries"]["a"], vault["entries"]["b"]
+    assert a["name"] == "" and a["notes"] == ""
+    assert a["fields"] == [{"value": "hunter2", "label": "", "sensitive": False},
+                           {"label": "User", "value": "", "sensitive": False}]
+    assert b["fields"] == []
+    # Every reader that used to index directly now works on the migrated vault.
+    assert rolodex.search_entries(vault, "user")
+    rolodex.audit_passwords(vault)
+    # Idempotent: a second pass changes nothing.
+    snapshot = json.dumps(vault, sort_keys=True)
+    rolodex.migrate_vault(vault)
+    assert json.dumps(vault, sort_keys=True) == snapshot
+
+
+# --- ROLO-0035: remaining pure-logic gaps --------------------------------------------------
+
+
+def test_ROLO0035_derive_key_matches_an_independent_pbkdf2():
+    """Locks the KDF contract -- SHA-256, 600k iterations, 32 bytes, urlsafe base64 -- against
+    hashlib's independent PBKDF2, so a change to any parameter fails here."""
+    salt = bytes(range(16))
+    expected = base64.urlsafe_b64encode(
+        __import__("hashlib").pbkdf2_hmac("sha256", PW.encode(), salt, 600_000, dklen=32))
+    assert rolodex.derive_key(PW, salt) == expected
+
+
+def test_ROLO0035_delete_entry_and_list_entries():
+    vault = {"version": 2, "categories": [], "entries": {}}
+    b = rolodex.add_entry(vault, "beta", [])
+    a = rolodex.add_entry(vault, "Alpha", [])
+    assert [eid for eid, _ in rolodex.list_entries(vault)] == [a, b]
+    rolodex.delete_entry(vault, a)
+    assert [eid for eid, _ in rolodex.list_entries(vault)] == [b]

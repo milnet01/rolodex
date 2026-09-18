@@ -8,6 +8,10 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Choose a category for imported entries** (ROLO-0067)
+  The import preview has an "Add to category" picker. Every imported entry
+  is filed there. It defaults to "No category", as before.
+
 - **Regression tests for every fix above that can be tested without a display**
   31 new tests covering the vault, config, import, clipboard, two-factor and updater fixes. Verified by mutation testing: reintroducing each defect makes the suite fail.
 
@@ -64,6 +68,34 @@ All notable changes to Rolodex are documented here. The format is based on
   All GitHub Actions are pinned to a specific commit rather than a moving tag, so a re-pointed tag cannot introduce new code into a release build. Checkout no longer leaves credentials in the workspace. The Linux and macOS build self-tests have the same timeout the Windows one already had, so a hang fails the build instead of blocking a runner for six hours. certifi is now named in the build scripts' prerequisites and asserted by the local CI gate, since the release binaries are built with it. A missing typelib now fails the Windows build immediately rather than producing a binary that fails mysteriously at runtime.
 
 ### Fixed
+
+- **Ticking a duplicate in the import preview now imports it** (ROLO-0047)
+  A duplicate starts unticked. Before, ticking it did nothing: it was
+  thrown away at import. It now lands as a second entry with the same
+  name. Two same-named entries within one file are now marked too.
+
+- **Duplicate-name checks agree on surrounding spaces** (ROLO-0065)
+  The editor's warning and the importer now use one rule, so " GitHub "
+  and "github" count as the same name in both.
+
+- **Saved-at times now record their timezone** (ROLO-0048)
+  New and edited entries store the UTC offset, so edits keep their order
+  across a clock change. Times already in your vault are left as they were.
+
+- **Importing a huge file shows a message instead of crashing** (ROLO-0050)
+  Files over 10 MB are refused with "That file is too large to import".
+
+- **Generated passwords no longer over-use digits and symbols** (ROLO-0069)
+  Every character is now drawn evenly. Each chosen character type is
+  still guaranteed to appear.
+
+- **A damaged or very old vault entry opens instead of failing** (ROLO-0071)
+  Missing names, labels or values are filled with blanks when the vault
+  loads. The Edit button, search and Password Health no longer fail on them.
+
+- **Two-factor code generation rejects impossible settings with a clear error** (ROLO-0068)
+  An unknown algorithm, a bad digit count or period, or a clock set before
+  1970 now raise a readable error.
 
 - **An interrupted save no longer leaves a stray copy of your vault behind** (ROLO-0060)
   Saving works by writing to a temporary file first and then swapping it into

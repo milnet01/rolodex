@@ -158,3 +158,37 @@ def test_ROLO0059_add_edit_dialog_wipes_field_values_when_closed_without_saving(
 
     assert win.added is None and win.edited is None, "an unsaved close must not commit"
     assert [r.value_entry.get_text() for r in dlg._get_field_rows()] == [""]
+
+
+# --- ImportPreviewDialog (ROLO-0047, ROLO-0067) -------------------------------------------
+
+
+class ImportRecorder(FakeMainWindow):
+    def __init__(self, vault):
+        super().__init__(vault)
+        self.imported = None
+
+    def _finish_import(self, parsed, category=""):
+        self.imported = (parsed, category)
+
+
+def test_ROLO0047_preview_marks_in_file_duplicates_and_a_ticked_one_is_handed_over():
+    vault = {"version": 2, "categories": ["Games"], "entries": {}}
+    rolodex.add_entry(vault, "Bank", [])
+    win = ImportRecorder(vault)
+    parsed = [{"name": n, "fields": [], "notes": ""} for n in ("Mail", "bank", "mail")]
+    dlg = rolodex.ImportPreviewDialog(win, parsed, "/x.txt")
+    assert [c.get_active() for c, _ in dlg.checks] == [True, False, False]
+    dlg.checks[1][0].set_active(True)  # the user ticks the duplicate on purpose
+    dlg._on_import(None)
+    assert [e["name"] for e in win.imported[0]] == ["Mail", "bank"]
+    assert win.imported[1] == ""
+
+
+def test_ROLO0067_preview_passes_the_chosen_category():
+    vault = {"version": 2, "categories": ["Email", "Games"], "entries": {}}
+    win = ImportRecorder(vault)
+    dlg = rolodex.ImportPreviewDialog(win, [{"name": "Steam", "fields": [], "notes": ""}], "/x")
+    dlg.cat_row.set_selected(2)
+    dlg._on_import(None)
+    assert win.imported[1] == "Games"
