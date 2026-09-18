@@ -10,10 +10,15 @@ When a change touches these areas, update the docs in the *same* commit:
 |--------|--------|
 | Any user-visible behaviour | `README.md` + `CHANGELOG.md` + the affected invariant (INV) in `docs/specs/*.md` |
 | On-disk vault format / schema | `docs/specs/vault-format-and-crypto.md` (canonical contract), `CLAUDE.md` (canonical data-model shape), `README.md` (its link to the vault spec), `SECURITY.md`, `docs/file-naming.md` (the schema key list), `docs/specs/entries-and-fields.md`, `migrate_vault()`. `DESIGN.md` § On-disk format for a byte-layout change. For a schema change, touch `DESIGN.md` only for model-level *design* changes — it deliberately does not carry the literal field list |
-| Crypto, permissions, or threat surface | `SECURITY.md`, `docs/security-standards.md`, `docs/coding-standards.md`, `docs/specs/vault-format-and-crypto.md`, `README.md`, `CLAUDE.md`, `DESIGN.md` — the KDF/`0600` facts are intentionally repeated per audience, so they move together |
+| Crypto, permissions, or threat surface | `SECURITY.md`, `docs/security-standards.md`, `docs/coding-standards.md`, `docs/specs/vault-format-and-crypto.md`, `README.md`, `CLAUDE.md`, `DESIGN.md`, and every other file the search below finds — the KDF/`0600` facts are intentionally repeated per audience, so they move together |
 | New convention or rule for contributors | the relevant `docs/*.md` standard |
 | A shipped release | `CHANGELOG.md` (move *Unreleased* → version) |
 | Completed or reprioritised roadmap item | the roadmap store, through `roadmap_log` — never `ROADMAP.md` by hand |
+
+The lists above name the main homes of each fact, not every copy. Before committing a
+crypto or permissions change, search for the fact itself and update every hit, e.g.
+`grep -rlE '0600|600,000|600k|ITERATIONS' --include=*.md .`; for a schema change, search for
+the key you changed.
 
 Documentation that lies is worse than none. A stale doc that contradicts the code should be
 treated as a bug.
@@ -36,7 +41,8 @@ treated as a bug.
   spans the file. Mirror any architectural change here.
 - **docs/specs/*.md** — per-feature behaviour specs, plus their index, `docs/specs/README.md`,
   which says which are retroactive and which are written before the code.
-- **docs/*.md** — the standards (this set). One concern per file, kebab-case names.
+- **docs/*.md** — the standards (this set). One concern per file, kebab-case names. The dated
+  `docs/review-*.md` files beside them are review records, not standards.
 
 ## Style
 
