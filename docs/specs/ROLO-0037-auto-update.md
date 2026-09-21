@@ -103,9 +103,11 @@ hold, which is the property signing exists to remove. Both `scripts/gen-signing-
 `build.yml` signing step consume the private key in the same encoding that script writes; it is
 never transcribed by hand.
 
-Until that key exists the public constant holds base64 of 32 zero bytes: the module imports
-cleanly, key loading succeeds, and no real signature can verify — so the feature **fails closed**
-in the interim rather than failing open (INV-11).
+Until that key existed the public constant held base64 of 32 zero bytes: the module imported
+cleanly, key loading succeeded, and no real signature could verify — so the feature **failed
+closed** in the interim rather than failing open. The real key landed on 2026-09-21
+(ROLO-0041), and INV-11 now asserts the reverse, so a revert to the placeholder cannot quietly
+restore that state.
 
 **D5 — Preferences live in `.rolodex.conf`, not the vault.** That file is already plaintext JSON
 holding non-secret preferences (`idle_lock_seconds`, `clipboard_clear_seconds`). Two keys join
@@ -240,14 +242,18 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   byte-for-byte intact.
   *Test:* `tests/test_update.py` — assert the temp's parent equals `target_path().parent`; inject
   a raise before `os.replace` and assert the target's bytes are unchanged.
-- **INV-11** With the placeholder all-zero public key in place, no signature verifies, so
-  "Update now" always fails closed with `UpdateVerificationError` and never installs.
-  *Test:* `tests/test_update.py` — assert the shipped constant decodes to 32 zero bytes, **and**
-  that a fixture signed with a throwaway key fails against it. The first half is the one that
-  works: a throwaway key's signature fails against *any* other key, so the second half alone stays
-  green whether the placeholder or a real production key is shipped, and would never detect that
-  the key had — or had not — been replaced. The test is meant to fail the day a real key lands, so
-  that INV-11 is retired in that same commit.
+- **INV-11** The shipped public key is a real 32-byte Ed25519 key, never the all-zero
+  placeholder. Reverting to the placeholder would make "Update now" fail closed for every
+  user — offering an update it can never install — so the constant is pinned against it.
+  *Test:* `tests/test_update.py` — assert the shipped constant decodes to 32 bytes that are not
+  all zero and that `release_public_key()` loads it, **and** that a fixture signed with a
+  throwaway key still fails against it. Only the first half can detect the placeholder: a
+  throwaway key's signature fails against *any* other key, so the second half alone stays green
+  whichever key is shipped.
+  *History:* until ROLO-0041 (2026-09-21) this invariant asserted the opposite — that the
+  constant WAS 32 zero bytes — precisely so it would fail the day a real key landed. It was
+  inverted rather than deleted in that commit, because the state it guarded against is still
+  reachable by a revert or a bad merge, and nothing else in the suite would notice.
 - **INV-12** `urllib.request` is imported inside the fetch functions and never at module scope, so
   `import rolodex` does not load it.
   *Test:* `tests/test_update.py` — source scan of `rolodex.py` asserts no module-scope
@@ -298,7 +304,7 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
 | Relaunch spawn fails after a successful swap | Process exits anyway; manual restart runs the new version | INV-14 |
 | Vault is locked during the check | Check runs normally — it never touches the vault | INV-4 |
 | App is closed mid-download | Prompt torn down; the completing download installs nothing | INV-15 |
-| Signing key not yet generated | Every install fails closed; the check still works | INV-11 |
+| Signing key reverted to the placeholder | Every install fails closed; the check still works — and INV-11 reddens | INV-11 |
 | Running on Windows | Refused before any offer — the platform is out of scope (S4) | INV-2 |
 | Forced check cannot reach the network | Reported as "couldn't check", never as "up to date" | INV-13 |
 
@@ -377,7 +383,7 @@ materially different mechanism, and it cannot be exercised from this machine at 
 | INV-8 | `tests/test_update.py` — throwaway key; payload and signature tampers each raise |
 | INV-9 | `tests/test_update.py` — cap abort, scheme refusal, redirect refusal |
 | INV-10 | `tests/test_update.py` — temp parent asserted; pre-replace raise leaves target intact |
-| INV-11 | `tests/test_update.py` — placeholder key rejects a validly-signed blob |
+| INV-11 | `tests/test_update.py` — shipped key is 32 non-zero bytes, loads, and rejects a foreign signature |
 | INV-12 | `tests/test_update.py` — source scan plus `sys.modules` check |
 | INV-13 | `tests/test_update.py` — raising fetcher yields `None`; verify failure propagates |
 | INV-14 | `tests/test_update.py` — ordering with `Popen` / `os._exit` monkeypatched |
@@ -394,10 +400,12 @@ materially different mechanism, and it cannot be exercised from this machine at 
   every one describes a test that does not exist yet — this spec precedes its implementation.
 - INV-15 has no automated coverage and is listed as such rather than being given a clause that
   would not run. The GTK layer is not under test in this project at all.
-- **The signing key does not exist yet.** Until someone runs the keygen script and adds the
-  private half as a repository secret, D4's fail-closed placeholder means the feature ships
-  visible but non-functional at the install step. INV-11 pins that, but the **end-to-end path is
-  unproven until a real signed release exists.**
+- **The end-to-end path is still unproven.** The signing key exists as of 2026-09-21
+  (ROLO-0041) and the public half is committed, so the install step is no longer non-functional
+  by construction. What no test can reach is the real path: a release whose `.sig` was produced
+  by `build.yml` from the repository secret, downloaded and installed by a shipped binary. That
+  needs **two real signed releases** — one to install from, one to install — and remains
+  unproven until they exist. The first release cut after this date is the first half of it.
 - **macOS is built for `arm64` only.** An Intel Mac gets no matching asset and so no offer, which
   INV-5 makes safe but silent.
 

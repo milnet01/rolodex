@@ -16,6 +16,17 @@ All notable changes to Rolodex are documented here. The format is based on
   there; the icon says the same thing in a form that survives greyscale,
   colourblindness and a screen reader, which colour alone cannot.
 
+### Security
+
+- **Releases are now signed, so in-app updates can actually install** (ROLO-0041)
+  The app has always checked the signature on a downloaded update before
+  installing it, but the key it checked against was a deliberate blank —
+  so no update could ever pass, and "Update now" was a button that could
+  only fail. The real signing key is now in place. Nothing changes for
+  anyone until the first signed release exists; from then on the app can
+  install an update and will still refuse one that was tampered with or
+  signed by anybody else.
+
 ## [1.5.0] - 2026-09-18
 
 ### Added

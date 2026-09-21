@@ -1102,13 +1102,19 @@ def save_config(data: dict, path: str | None = None) -> bool:
 # module-scope `urllib.parse` near the top is for TOTP otpauth:// parsing and is expected.
 # ---------------------------------------------------------------------------
 
-# The release-signing public key, base64 of 32 raw Ed25519 bytes (D3/D4).
+# The release-signing public key, base64 of 32 raw Ed25519 bytes (D3/D4). Real since
+# ROLO-0041 (2026-09-21); it superseded a 32-zero placeholder that made the feature fail
+# closed -- able to offer an update and never install one.
 #
-# THIS IS A PLACEHOLDER: 32 zero bytes. It loads cleanly and rejects every signature, so until
-# a real key is generated the feature FAILS CLOSED -- it can offer an update and can never
-# install one (INV-11). Generate the real pair with scripts/gen-signing-key.py, paste the
-# public half here, and keep the private half as a GitHub Actions secret and nowhere else.
-RELEASE_PUBLIC_KEY_B64 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+# The private half exists only as the GitHub Actions secret ROLODEX_SIGNING_KEY and in the
+# maintainer's own backup, never in this repository. Losing it is unrecoverable: every binary
+# already shipped trusts this key and nothing else, so it would refuse every update that
+# followed. Changing it has the same effect on installed builds, so it is not a routine
+# rotation -- generate a pair only with scripts/gen-signing-key.py.
+#
+# INV-11 asserts this is not the placeholder, so a revert or a bad merge cannot quietly put
+# the feature back to failing closed.
+RELEASE_PUBLIC_KEY_B64 = "h+yKUqu8jdoVicBBMHbIjcZxRmjsW2VCg+QgAQw7khM="
 
 GITHUB_OWNER = "milnet01"
 GITHUB_REPO = "rolodex"

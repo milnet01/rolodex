@@ -139,7 +139,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: chore.
   Source: in-session-2026-08-27.
 
-- 📋 [ROLO-0041] **Generate the release-signing key and retire the fail-closed placeholder.**
+- ✅ [ROLO-0041] **Generate the release-signing key and retire the fail-closed placeholder.**
   ROLO-0037 shipped with an all-zero placeholder public key. It loads and
   verifies nothing, so the updater offers updates and refuses to install any of
   them -- it fails closed rather than open, which is the right interim state but
@@ -164,6 +164,22 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Losing the private key later is unrecoverable: shipped binaries will refuse
   every update signed by any other key.
+  Resolved 2026-09-21. The user ran scripts/gen-signing-key.py and pasted
+  back the public half; the private half never entered this session. The
+  pasted key was verified against ./rolodex-signing.key by signing a random
+  message and verifying it, so a transcription slip could not ship.
+  INV-11 was INVERTED rather than retired. It asserted the constant WAS 32
+  zero bytes so it would fail the day a real key landed; it now asserts the
+  constant is 32 non-zero bytes that load as an Ed25519 point. The state it
+  guarded against is still reachable by a revert or a bad merge, and
+  nothing else in the suite would notice: a throwaway key's signature fails
+  against any key at all, placeholder or real. Proved by reverting the
+  constant and watching the test redden.
+  STILL OPEN, and it is the half nobody has done: the repository secret
+  ROLODEX_SIGNING_KEY. build.yml skips signing when it is unset and warns
+  "shipping unsigned", so a release cut before the secret is added produces
+  no .sig files and offers no update. The end-to-end path also needs two
+  real signed releases to prove — one to install from, one to install.
   **Layman:** One manual step by the maintainer turns the update feature from "can look" into "can install".
   Kind: security.
   Source: in-session-2026-08-27.
@@ -477,6 +493,30 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: fix.
   Source: in-session-2026-09-18 (post-release check of v1.4.0).
   Lanes: packaging.
+
+- 📋 [ROLO-0089] **Add ROLODEX_SIGNING_KEY as a repository secret so releases are actually signed.**
+  ROLO-0041 put the real public key in rolodex.py. The other half of that
+  job is not done: build.yml reads the private key from the repository
+  secret ROLODEX_SIGNING_KEY, and when it is unset the signing step
+  no-ops with "::warning::ROLODEX_SIGNING_KEY is not set - shipping
+  unsigned" and attaches no .sig files. A release cut in that state makes
+  no update offer at all, so the updater is still inert.
+
+  MAINTAINER ACTION, and it cannot be done from a session: the private
+  key must never enter this repository or a transcript. Settings ->
+  Secrets and variables -> Actions -> New repository secret, named
+  ROLODEX_SIGNING_KEY, holding the contents of the rolodex-signing.key
+  file generated on 2026-09-21. Then move that file somewhere backed up
+  and out of the working tree; .gitignore keeps it untracked, which is not
+  the same as keeping it safe.
+
+  Done when a release's assets carry a matching .sig each. The end-to-end
+  install path needs two signed releases to prove — one to install from,
+  one to install — so the first signed release only closes this item, not
+  the proof.
+  **Layman:** The signing key exists, but GitHub does not have its half yet, so releases still go out unsigned.
+  Kind: security.
+  Source: in-session-2026-09-21.
 
 ## Medium priority
 

@@ -341,16 +341,21 @@ def test_INV8_a_one_byte_tamper_raises_and_leaves_no_temp(frozen, tmp_path, sign
     assert leftovers == []
 
 
-def test_INV11_shipped_key_is_the_all_zero_placeholder(frozen, tmp_path):
-    """This is the half that works. A throwaway key's signature fails against ANY other key,
-    so asserting only 'it raises' stays green whether the placeholder or a real production key
-    is shipped — it would never detect that the key had, or had not, been replaced.
+def test_INV11_shipped_key_is_a_real_key_and_not_the_placeholder(frozen, tmp_path):
+    """The inverse of what INV-11 asserted before ROLO-0041.
 
-    This test is MEANT to fail the day a real signing key lands, so INV-11 is retired in the
-    same commit that makes the feature functional.
+    Until a real key existed this asserted the constant WAS 32 zero bytes, so it would fail
+    the day one landed. The key landed, so the claim worth pinning flipped: going back to the
+    placeholder would make the updater fail closed for every user — offering an update it can
+    never install — and nothing else in the suite would notice, because a signature from a
+    throwaway key fails against any key at all, placeholder or real.
     """
-    assert base64.b64decode(rolodex.RELEASE_PUBLIC_KEY_B64) == bytes(32)
+    raw = base64.b64decode(rolodex.RELEASE_PUBLIC_KEY_B64)
+    assert len(raw) == 32
+    assert raw != bytes(32)
+    rolodex.release_public_key()  # loads as an Ed25519 point, or raises
 
+    # It is still a key, so a signature made by anything else must not verify.
     key = Ed25519PrivateKey.generate()
     payload = b"anything"
     with pytest.raises(rolodex.UpdateVerificationError):

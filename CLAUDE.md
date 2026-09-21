@@ -143,11 +143,15 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
   `(sys.platform, platform.machine())`, not on platform alone: an Intel Mac must not be offered
   the arm64 binary. Windows is deliberately absent (deferred) — `os.replace` cannot swap a
   locked `.exe` and the relaunch needs `/bin/sh`.
-- **The release-signing public key in `rolodex.py` is an all-zero placeholder.** It loads and
-  verifies nothing, so the updater fails *closed* until someone runs
-  `scripts/gen-signing-key.py`. `test_INV11_shipped_key_is_the_all_zero_placeholder` is meant
-  to fail the day a real key is pasted in — retire INV-11 in that same commit. Never commit the
-  private half.
+- **The release-signing public key in `rolodex.py` is real as of ROLO-0041 (2026-09-21), and
+  is not a routine thing to change.** Every binary already shipped trusts this key and nothing
+  else, so replacing it makes those installs refuse every later update, and losing the private
+  half does the same with no recovery. The private half lives only as the GitHub Actions secret
+  `ROLODEX_SIGNING_KEY` and in the maintainer's backup — never commit it, and generate a pair
+  only with `scripts/gen-signing-key.py`.
+  `test_INV11_shipped_key_is_a_real_key_and_not_the_placeholder` pins the constant against a
+  revert to the old 32-zero placeholder, which would silently put the updater back to failing
+  closed: able to offer an update and never install one.
 - **Lint scope is `ruff check rolodex.py tests/`, never `ruff check .`** — a bare `.` also
   sweeps `build/`, `dist/`, `out/` and `build_pyi/` and reports findings CI never sees.
   The rule set is declared in `ruff.toml` (`E4, E7, E9, F`) precisely because `ci.yml`
