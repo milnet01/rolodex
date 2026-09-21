@@ -4,8 +4,8 @@
 
 **Roadmap:** ROLO-0037
 
-**Prior art:** finbreak `docs/specs/FIBR-0054.md` (the updater) and `FIBR-0131.md` (the Windows
-plug), at `/mnt/Games/Scripts/Linux/finbreak`. This spec is a port, not a copy — the differences
+**Prior art:** finbreak specs FIBR-0054 (the updater) and FIBR-0131 (the Windows plug), in that
+project at `/mnt/Games/Scripts/Linux/finbreak`. This spec is a port, not a copy — the differences
 are called out in § 4 and are mostly consequences of Rolodex shipping a PyInstaller one-file
 binary where finbreak ships an AppImage.
 
