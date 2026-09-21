@@ -1392,6 +1392,12 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   the app." Confirms this item is wanted, not a nice-to-have left for
   its own sake. Which languages are wanted first is still to be settled
   with the user.
+  Languages decided 2026-09-21 (user): the plumbing first, then
+  German, French and Spanish; then Chinese and Japanese; then the RTL
+  languages, Hebrew and Arabic. RTL is not just a catalogue — it needs the
+  layout mirrored (Gtk.Widget direction, start/end margins rather than
+  left/right, and the CSS border-left field cues become border-inline-start).
+  Treat RTL as its own unit of work, not as two more catalogues.
   **Layman:** Prepare the app so it can be translated into other languages.
   Kind: accessibility.
   Source: in-session-2026-07-04.
