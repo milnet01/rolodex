@@ -111,7 +111,8 @@ Design choices:
   referencing a deleted category is treated as uncategorised rather than erroring.
 - **Three orthogonal axes.** `entry["category"]` is the *user's* grouping;
   `field_category(label)` is a *cosmetic* classifier (credential/key/identity/url/date/other)
-  that only picks a border colour; and `sensitive` (mask or not) is a third, separate axis.
+  that picks a border colour and the row's type icon; and `sensitive` (mask or not) is a
+  third, separate axis.
   The first two both involve the word "category" but mean different things. Keeping all three
   independent avoids surprising coupling — e.g. a field can be an "identity" colour and still
   be masked.

@@ -6,6 +6,16 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Field types now show an icon, not just a colour** (ROLO-0016)
+  Each field in the detail view carries a small icon before its label — a
+  padlock for passwords, a cog for keys and tokens, a face for usernames
+  and email, a network symbol for web addresses, a clock for dates, a
+  document for anything else. The coloured bar down the left is still
+  there; the icon says the same thing in a form that survives greyscale,
+  colourblindness and a screen reader, which colour alone cannot.
+
 ## [1.5.0] - 2026-09-18
 
 ### Added

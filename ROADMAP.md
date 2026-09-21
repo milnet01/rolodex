@@ -549,11 +549,20 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 - 📋 [ROLO-0015] **User-selectable themes and accent colours.**
   Why: the UI is currently a single hardcoded dark 'glass' theme in CUSTOM_CSS; users want choice.
   Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Builds on and supersedes ROLO-0011 (follow-system light/dark), which can become the 'Auto' option.
+  Inherited from ROLO-0016 on 2026-09-21: checking the palettes against
+  common colourblindness simulations belongs here, since ROLO-0016 shipped
+  before any theme palette existed to check. The field-type icons landed
+  there, so a palette that fails a simulation is no longer the only cue —
+  but it is still a defect.
+  Also inherited: a palette must not be the only thing separating two
+  field categories, and the icon set in FIELD_CATEGORY_CUES is drawn by
+  whatever icon theme the desktop supplies, so a theme change can alter
+  the shapes without touching this code.
   **Layman:** Let people pick from several looks (colour schemes) instead of the one fixed dark theme.
   Kind: ux.
   Source: user-request-2026-07-04.
 
-- 📋 [ROLO-0016] **Colourblind-friendly field cues that don't rely on colour alone.**
+- ✅ [ROLO-0016] **Colourblind-friendly field cues that don't rely on colour alone.**
   Why: field types (credential/key/identity/url/date/other) are distinguished only by a coloured left-border today — invisible to many colourblind users, and colour-alone fails WCAG 1.4.1.
   Scope: add a redundant non-colour cue per field category — a small type icon and/or a short text tag next to the label — so the category is legible in greyscale. Verify the theme palettes (ROLO-0015) against common colourblindness simulations. Touches _show_detail and the CSS.
   Groundwork 2026-09-18, no code yet: field rows are built in
@@ -565,6 +574,25 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   text-x-generic-symbolic (other). For url use insert-link-symbolic:
   web-browser-symbolic lives in Adwaita's legacy/ set, which themes are
   dropping.
+  Resolved 2026-09-21. Each detail-view field row carries a symbolic icon
+  before its label, named for a screen reader via a11y_label, from the new
+  pure-layer FIELD_CATEGORY_CUES. Spec: INV-19 in
+  docs/specs/entries-and-fields.md. The user chose icon-only over an
+  icon-plus-text-tag on 2026-09-21.
+  Two things the plan above did not anticipate, both found by rendering
+  the result rather than by reading code. The planned icon names were
+  wrong: the icon theme is the desktop's, not Adwaita, and a KDE session
+  supplies breeze-dark, which has no x-office-calendar-symbolic — that
+  name draws a broken-image square. Every cue name is now one GTK 4 ships
+  inside the library, which also keeps the icons in the frozen build
+  (ROLO-0088), and test_ROLO0016_every_cue_icon_resolves_on_this_theme
+  holds it. And presence is not enough: breeze-dark draws both
+  dialog-password and changes-prevent as a padlock, so the semantically
+  obvious pairing left credential and key indistinguishable. The set was
+  re-picked by rendering it under breeze-dark and Adwaita.
+  NOT done here: verifying the theme palettes against colourblindness
+  simulations. There are no theme palettes yet — that belongs with
+  ROLO-0015, which is still open.
   **Layman:** Make the field types tell-apart-able without needing to see colour.
   Kind: accessibility.
   Source: user-request-2026-07-04.

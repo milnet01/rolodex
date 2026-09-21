@@ -56,12 +56,13 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
   `credential | key | identity | url | date | other` using `FIELD_CATEGORIES`, first match
   wins, case-insensitive substring match. Unmatched labels are `other`.
 - **INV-14** This classification is presentational only (it selects the `.field-<category>`
-  CSS border colour) and is independent of the `sensitive` flag and of the user's category.
+  CSS border colour and the row's type icon) and is independent of the `sensitive` flag and of
+  the user's category.
 
 ### Detail view & delete
 
-- **INV-15** The detail view shows name, fields (with per-field copy buttons), notes (only if
-  present), Reveal/Edit/Delete actions, and created/modified timestamps.
+- **INV-15** The detail view shows name, fields (each with a type icon and a copy button),
+  notes (only if present), Reveal/Edit/Delete actions, and created/modified timestamps.
 - **INV-16** Copying a field puts its raw value on the clipboard and shows a "Copied <label>"
   toast; if no clipboard tool is available it shows "Clipboard not available".
 - **INV-17** Delete requires confirmation via an `Adw.AlertDialog`; on confirm the entry is
@@ -71,6 +72,17 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
   import-preview `Adw.ActionRow` title. Plain `Gtk.Label` sinks (the detail-view entry name,
   field values, notes body, and timestamps) are not markup and receive their text verbatim, so
   no escaping is needed there.
+- **INV-19** Every detail-view field row carries a type icon before its label, one per
+  `field_category` value, named for a screen reader from `FIELD_CATEGORY_CUES` (ROLO-0016).
+  It is the non-colour half of the cue: the border colour alone fails WCAG 1.4.1. Two
+  constraints hold on the icon names. Each must be one GTK 4 ships inside the library, so no
+  desktop icon theme can leave one missing — breeze-dark, which a KDE session supplies, has no
+  `x-office-calendar-symbolic` and would draw a broken-image square. And the six must stay
+  visually distinct *from each other* under whichever theme draws them: breeze-dark draws both
+  `dialog-password-symbolic` and `changes-prevent-symbolic` as a padlock, which would leave
+  credential and key indistinguishable. Only the first is mechanically checked
+  (`test_ROLO0016_every_cue_icon_resolves_on_this_theme`); the second needs the set rendered
+  and looked at.
 
 ## Notes
 

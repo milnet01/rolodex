@@ -51,9 +51,11 @@ carry one and it drifted by hundreds of lines.)
 ```
 Each field is `{"label", "value", "sensitive": bool}`. `sensitive` fields are masked in the
 UI and auto-detected from the label via `SENSITIVE_KEYWORDS`. Separately, `field_category()`
-classifies a label into one of `credential/key/identity/url/date/other` purely for the
-colored left-border in the detail view (`FIELD_CATEGORIES`, first-match-wins) — that is
-cosmetic and unrelated to the `sensitive` flag or the user-defined `categories`.
+classifies a label into one of `credential/key/identity/url/date/other`, which picks both the
+colored left-border and the type icon at the head of the row in the detail view
+(`FIELD_CATEGORIES`, first-match-wins; `FIELD_CATEGORY_CUES` holds each category's icon and
+the name a screen reader speaks) — that is presentational and unrelated to the `sensitive`
+flag or the user-defined `categories`.
 
 **Migration** — `migrate_vault()` upgrades older vaults in place (adds `categories`, backfills
 `entry["category"]`, stamps `version: 2`). It is idempotent and MUST be called after every

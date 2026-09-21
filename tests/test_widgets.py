@@ -490,3 +490,67 @@ def test_ROLO0009_filter_shows_one_category_and_hides_without_categories(app, tm
     other.mkdir()
     plain = _window_with(app, other, monkeypatch, [])
     assert not plain.category_filter.get_visible()
+
+
+# --- ROLO-0016: field type is legible without colour ---------------------------------------
+
+
+def _entry_with_one_field_per_category(app, tmp_path, monkeypatch):
+    monkeypatch.setattr(rolodex, "CONFIG_FILE", str(tmp_path / "conf"))
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+    labels = ["Password", "API Key", "Email", "Website", "Expiry Date", "Colour"]
+    entry_id = rolodex.add_entry(
+        vault, "Steam",
+        [{"label": lbl, "value": "x", "sensitive": False} for lbl in labels])
+    return rolodex.MainWindow(app, vault, salt, PW, path, key), entry_id, labels
+
+
+def _icon_names(widget):
+    from gi.repository import Gtk
+
+    found = []
+
+    def walk(w):
+        if isinstance(w, Gtk.Image) and w.get_icon_name():
+            found.append(w.get_icon_name())
+        child = w.get_first_child()
+        while child is not None:
+            walk(child)
+            child = child.get_next_sibling()
+
+    walk(widget)
+    return found
+
+
+def test_ROLO0016_every_field_row_shows_its_category_icon(app, tmp_path, monkeypatch):
+    win, entry_id, labels = _entry_with_one_field_per_category(app, tmp_path, monkeypatch)
+    win._show_detail(entry_id)
+    expected = [rolodex.FIELD_CATEGORY_CUES[rolodex.field_category(lbl)][0] for lbl in labels]
+    # The rows also carry copy-button icons, so match on the cue set in field order.
+    assert [i for i in _icon_names(win.detail_box) if i in expected] == expected
+
+
+def test_ROLO0016_the_category_icon_is_named_for_a_screen_reader(app, tmp_path, monkeypatch):
+    win, entry_id, _ = _entry_with_one_field_per_category(app, tmp_path, monkeypatch)
+    seen = []
+    orig = rolodex.a11y_label
+    # Gtk exposes no getter for an accessible property, so assert through the helper's call.
+    monkeypatch.setattr(rolodex, "a11y_label", lambda w, t: seen.append(t) or orig(w, t))
+    win._show_detail(entry_id)
+    for _icon, name in rolodex.FIELD_CATEGORY_CUES.values():
+        assert name in seen
+
+
+def test_ROLO0016_every_cue_icon_resolves_on_this_theme(app, tmp_path, monkeypatch):
+    from gi.repository import Gdk, Gtk
+
+    # The desktop supplies the icon theme, and it need not be Adwaita: a KDE session hands GTK
+    # breeze-dark, which has no x-office-calendar-symbolic, so that name draws a broken-image
+    # square. Every cue name must be one GTK carries internally, which this asserts for real
+    # against whatever theme the run happens to have.
+    win, entry_id, _ = _entry_with_one_field_per_category(app, tmp_path, monkeypatch)
+    theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+    for icon, _name in rolodex.FIELD_CATEGORY_CUES.values():
+        assert theme.has_icon(icon), icon
+    win._show_detail(entry_id)

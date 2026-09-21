@@ -388,12 +388,45 @@ FIELD_CATEGORIES = [
 
 
 def field_category(label: str) -> str:
-    """Classify a field label into a category for color-coding."""
+    """Classify a field label into a category for its colour bar and type icon."""
     label_lower = label.lower()
     for category, keywords in FIELD_CATEGORIES:
         if any(kw in label_lower for kw in keywords):
             return category
     return "other"
+
+
+# The non-colour half of the field-category cue (ROLO-0016). Colour alone fails WCAG 1.4.1,
+# so every category also carries a distinct shape and a name a screen reader can speak. One
+# icon per category, never shared: a repeated icon tells two categories apart no better than
+# the border colour does.
+#
+# Two rules picked these names, and both were learnt by rendering the alternatives rather
+# than by reading the icon-naming spec.
+#
+# 1. Every name is one GTK 4 carries INSIDE the library (its own gresource icon set). The
+#    icon theme is whatever the desktop supplies — a KDE session hands GTK breeze-dark,
+#    which has no x-office-calendar-symbolic at all, so the obvious calendar name renders as
+#    a broken-image square. A theme may override any of these with its own drawing; what it
+#    cannot do is leave one missing. It also keeps the icons in the frozen build, which
+#    bundles GTK but no system icon theme (ROLO-0088).
+# 2. The six must stay distinct FROM EACH OTHER under whichever theme draws them, since the
+#    shape is the cue. That rules out the semantically obvious pairing: breeze-dark draws
+#    both dialog-password and changes-prevent as a padlock, so credential and key became
+#    indistinguishable — the exact failure this item exists to fix, in greyscale or not.
+#    Checked by rendering the set under breeze-dark and Adwaita.
+#
+# test_ROLO0016_every_cue_icon_resolves_on_this_theme holds rule 1. Nothing can hold rule 2
+# mechanically — no tool compares two drawings — so changing a name here means rendering
+# the set again and looking at it.
+FIELD_CATEGORY_CUES = {
+    "credential": ("dialog-password-symbolic",   "Credential field"),     # key / padlock
+    "key":        ("emblem-system-symbolic",     "Key or token field"),   # a cog
+    "identity":   ("emoji-people-symbolic",      "Identity field"),       # a face
+    "url":        ("network-workgroup-symbolic", "Link field"),           # a network
+    "date":       ("emoji-recent-symbolic",      "Date field"),           # a clock
+    "other":      ("text-x-generic-symbolic",    "Uncategorised field"),  # a document
+}
 
 
 # TOTP / 2FA codes (ROLO-0006) — pure RFC 6238, no new dependency (stdlib hmac/hashlib).
@@ -2663,7 +2696,14 @@ class MainWindow(Adw.ApplicationWindow):
         for i, field in enumerate(entry["fields"]):
             row = Adw.ActionRow()
             row.set_title(GLib.markup_escape_text(field["label"]))
-            row.add_css_class(f"field-{field_category(field['label'])}")
+            category = field_category(field["label"])
+            row.add_css_class(f"field-{category}")
+
+            # The colour bar above is one cue; this icon is the same fact in a form that
+            # survives greyscale and colourblindness (ROLO-0016).
+            cue_icon, cue_name = FIELD_CATEGORY_CUES[category]
+            row.add_prefix(a11y_label(Gtk.Image(icon_name=cue_icon, valign=Gtk.Align.CENTER,
+                                                tooltip_text=cue_name), cue_name))
 
             # Value display
             is_sensitive = field_is_sensitive(field)
@@ -2780,6 +2820,11 @@ class MainWindow(Adw.ApplicationWindow):
         row = Adw.ActionRow()
         row.set_title("Code")
         row.add_css_class("totp-row")
+        # Decorative, and unnamed on purpose: the row's own "Code" title already says what
+        # this is. It exists so the row keeps its left edge with the field rows around it,
+        # which carry a type icon since ROLO-0016.
+        row.add_prefix(Gtk.Image(icon_name=FIELD_CATEGORY_CUES["credential"][0],
+                                 valign=Gtk.Align.CENTER))
         if self._clock_synced is False:
             # RFC 6238 needs both sides to agree on the time. A drifted clock makes every code
             # wrong, and it looks like "the site rejected my code" (ROLO-0068).

@@ -429,6 +429,18 @@ def test_field_category_first_match_wins():
     assert rolodex.field_category("Password reset token") == "credential"
 
 
+def test_ROLO0016_every_field_category_has_a_non_colour_cue():
+    # A category with no cue would fall back to colour alone, which is what ROLO-0016 fixes.
+    assert set(rolodex.FIELD_CATEGORY_CUES) == {c for c, _ in rolodex.FIELD_CATEGORIES} | {"other"}
+
+
+def test_ROLO0016_each_category_cue_is_distinct_and_named():
+    icons = [icon for icon, _ in rolodex.FIELD_CATEGORY_CUES.values()]
+    # Two categories sharing an icon tell them apart no better than the border colour does.
+    assert len(set(icons)) == len(icons)
+    assert all(name.strip() for _, name in rolodex.FIELD_CATEGORY_CUES.values())
+
+
 def test_is_sensitive_label_matches_keywords_case_insensitively():
     for label in ("Password", "PIN", "Secret", "API Key", "Token", "Authenticator", "passphrase"):
         assert rolodex.is_sensitive_label(label) is True
