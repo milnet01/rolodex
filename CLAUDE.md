@@ -31,8 +31,7 @@ section). Don't hardcode a machine-specific absolute path into it.
 
 The file is organised top-to-bottom as **pure logic → GUI**. The pure layer — everything above
 the `# GTK4 / Adwaita GUI` banner — has no GTK imports and is the safest place to make and
-reason about changes. (Grep for the banner rather than trusting a line number; this file used to
-carry one and it drifted by hundreds of lines.)
+reason about changes. (Grep for the banner rather than trusting a line number.)
 
 **Encryption layer** (`derive_key`, `save_vault`, `load_vault`, `create_vault`, plus their
 `*_with_key` siblings) — canonical contract: `docs/specs/vault-format-and-crypto.md`:
@@ -163,10 +162,15 @@ correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
 - **The pre-push gate needs two `git config` keys per clone, and says nothing if unset.**
   `git config ants.gate.command ./CI-local.sh` and
   `git config ants.gate.docsGlob '*.md:docs/**:LICENSE:.github/ISSUE_TEMPLATE/**'`.
-  These are local git config, so they do not survive a fresh clone and an unset gate is
+  `core.hooksPath` is a third, set to `.githooks` so the delegating hooks run.
+  All three are local git config, so they do not survive a fresh clone and an unset gate is
   indistinguishable from a passing one — the hook warns, then pushes anyway. `CI-local.sh`
   mirrors `ci.yml` step for step (ruff → pytest → Linux build); keep them in lockstep or the
   local run returns green for a pipeline that will fail.
 - This directory sits under `/mnt/Games`, whose project `CLAUDE.md` requires
   `SUDO_ASKPASS=/usr/libexec/ssh/ksshaskpass sudo -A -p "..."` for any privileged command —
   never bare `sudo`.
+
+---
+
+Why these rules say what they say: [`docs/history/claude-md.md`](docs/history/claude-md.md).
