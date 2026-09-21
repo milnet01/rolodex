@@ -1,5 +1,8 @@
 # Dependency Management Standards
 
+Genre: standard
+Status: active
+
 ## Policy: latest by default
 
 **All dependencies are kept on the latest stable version** — this applies to new features and

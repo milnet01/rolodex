@@ -1,5 +1,9 @@
 # Spec: Vault Format & Cryptography
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for the encryption layer (`derive_key`, `save_vault`, `load_vault`,
 `create_vault`, `migrate_vault`, and the `save_vault_with_key` / `load_vault_with_key` /
 `create_vault_with_key` siblings that keep the KDF to once per credential — see INV-17).

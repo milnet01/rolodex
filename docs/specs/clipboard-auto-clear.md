@@ -1,5 +1,9 @@
 # Spec: Clipboard Auto-Clear
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for ROLO-0003 — copying a secret to the system clipboard and wiping it again.
 Pure layer: `copy_to_clipboard`, `read_clipboard`. GUI layer: `_copy_value`,
 `_clear_clipboard_if_unchanged`, `_cancel_clipboard_timer`, `_clear_clipboard_on_lock`.

@@ -1,5 +1,8 @@
 # Review record — `docs/documentation-standards.md`
 
+Genre: record
+Status: active
+
 Cold-review loop log for the documentation standard, kept here rather than in the document
 itself, as the project does for its other standards. The document carries a one-line pointer.
 

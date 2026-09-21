@@ -1,5 +1,8 @@
 # Documentation Standards
 
+Genre: standard
+Status: active
+
 Cold-review history for this document is kept in `review-2026-09-18-documentation-standards.md`.
 
 ## What must stay current

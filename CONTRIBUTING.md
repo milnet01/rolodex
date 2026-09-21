@@ -1,5 +1,8 @@
 # Contributing to Rolodex
 
+Genre: instructions
+Status: active
+
 Thanks for your interest. Rolodex is a small, deliberately simple project — one Python file,
 no build step, no framework beyond GTK 4 / libadwaita. Contributions that keep it that way
 are the most welcome.

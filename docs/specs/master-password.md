@@ -1,5 +1,9 @@
 # Spec: Master Password
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for creating, unlocking, and changing the master password (`UnlockDialog`,
 `ChangePasswordDialog`, `MainWindow._finish_change_password`).
 

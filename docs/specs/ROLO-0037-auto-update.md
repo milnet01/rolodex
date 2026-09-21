@@ -1,6 +1,11 @@
 # Spec: Opt-in Signed Auto-Update (ROLO-0037)
 
-**Status:** accepted (2026-08-27) — gated by `review-contract`, 2 loops, 18 findings verified and fixed, cap reached (calm). Tail empty.
+Genre: spec
+Status: active
+Describes: current
+
+**Gate:** accepted 2026-08-27 — `review-contract`, 2 loops, 18 findings verified and fixed,
+cap reached (calm). Tail empty. Predates this project's gate log, so it cites no run id.
 
 **Roadmap:** ROLO-0037
 

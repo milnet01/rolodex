@@ -1,5 +1,8 @@
 # Coding Standards
 
+Genre: standard
+Status: active
+
 These rules describe how Rolodex's code is written today and how it should stay. They are
 tuned to *this* project — a single-file GTK 4 / libadwaita Python app — not generic advice.
 

@@ -1,5 +1,8 @@
 # Security Standards
 
+Genre: standard
+Status: active
+
 Engineering rules for anyone changing Rolodex. These are stricter than ordinary coding style
 because this app guards secrets. `SECURITY.md` is the outward-facing policy; this file is the
 internal checklist. When the two overlap, they must agree.

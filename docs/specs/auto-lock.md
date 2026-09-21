@@ -1,5 +1,9 @@
 # Spec: Auto-Lock on Idle, and Manual Lock
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for ROLO-0002 — the idle timer that locks the vault, the manual Lock action,
 and what locking tears down. GUI layer: `_bump_activity`, `_start_idle_timer`, `_idle_check`,
 `_lock`.

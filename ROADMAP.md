@@ -3,6 +3,9 @@
 
 # Rolodex Roadmap
 
+Genre: record
+Status: active
+
 Planned and proposed work for Rolodex, grouped by priority. Each item is written to be
 spec-ready: a future session can pick one up, write a spec under `docs/specs/`, and implement.
 

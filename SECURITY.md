@@ -1,5 +1,8 @@
 # Security Policy
 
+Genre: prose
+Status: active
+
 Rolodex stores credentials. Security is the whole point of the app, so this document
 describes both how it protects data and how to report a problem.
 

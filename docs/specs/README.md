@@ -1,13 +1,17 @@
 # Feature Specs
 
+Genre: standard
+Status: active
+
 Most of these are **retroactive** specifications: they document how Rolodex *already* behaves,
 feature by feature, extracted from the shipped code. They exist so that future changes have a
 written contract to check against, and so a reviewer can tell intended behaviour from an
 accident.
 
 Specs carrying a `ROLO-NNNN` id in their filename are the other kind: written **before** the
-code, as the contract an implementer builds to. They carry a Status line and a review loop log;
-the retroactive ones do not.
+code, as the contract an implementer builds to, and gated by a cold read before coding began.
+Every spec here carries the `Genre:` / `Status:` / `Describes:` header; what the id-carrying
+ones additionally record is the gate that ran and what it found.
 
 Rolodex is a small app, so this set is small.
 

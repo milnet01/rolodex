@@ -1,5 +1,9 @@
 # Spec: Search
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for sidebar search (`search_entries`, `MainWindow._on_search_changed`,
 `MainWindow._refresh_list`).
 

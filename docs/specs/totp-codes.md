@@ -1,5 +1,9 @@
 # Spec: TOTP / Live 2FA Codes
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for ROLO-0006 — the detection of a 2FA seed in a stored field, the RFC 6238
 code derived from it, and the live "Code" row in the detail pane. Pure layer:
 `TOTP_LABEL_KEYWORDS`, `_decode_base32`, `totp_code`, `totp_remaining`, `_parse_otpauth_uri`,

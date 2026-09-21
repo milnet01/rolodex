@@ -1,5 +1,8 @@
 # Review record — `docs/security-standards.md`
 
+Genre: record
+Status: active
+
 Cold-review loop log for the security standard, kept here rather than in the
 document itself: the standard has never carried one, and no project standard
 requires one of a standard. The document carries a one-line pointer to this file.

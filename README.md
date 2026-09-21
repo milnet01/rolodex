@@ -1,5 +1,8 @@
 # Rolodex
 
+Genre: instructions
+Status: active
+
 **A safe, simple place to keep your passwords, keys, and private notes — on your own computer.**
 
 Rolodex tucks all your logins, API keys, and secret notes inside a single encrypted file. One

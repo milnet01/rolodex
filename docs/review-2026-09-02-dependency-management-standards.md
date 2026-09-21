@@ -1,5 +1,8 @@
 # review-contract — docs/dependency-management-standards.md
 
+Genre: record
+Status: active
+
 Review record for `docs/dependency-management-standards.md`. The log is kept here rather than
 in the document because this project keeps standards' review history in a dated `docs/` record
 (`docs/review-2026-09-02-security-standards.md` set the precedent); the standard itself carries

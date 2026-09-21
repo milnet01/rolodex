@@ -1,5 +1,9 @@
 # Spec: Import, Export, Backup & Restore
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for the data-movement features (`parse_text_file`, `import_entries`,
 `ImportPreviewDialog`, and the backup/restore/export handlers on `MainWindow`).
 

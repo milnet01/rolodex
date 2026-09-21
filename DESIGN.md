@@ -1,5 +1,8 @@
 # Rolodex — Design
 
+Genre: adr
+Status: active
+
 This document explains *why* Rolodex is built the way it is. For the day-to-day architecture
 map aimed at code assistants see `CLAUDE.md`; for the outward security policy see `SECURITY.md`;
 for feature-level behaviour contracts see `docs/specs/`.

@@ -1,5 +1,8 @@
 # Versioning Standards
 
+Genre: standard
+Status: active
+
 ## Policy: Semantic Versioning
 
 Rolodex versions are **`MAJOR.MINOR.PATCH`** (e.g. `1.4.0`), following

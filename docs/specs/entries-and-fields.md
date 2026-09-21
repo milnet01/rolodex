@@ -1,5 +1,9 @@
 # Spec: Entries & Fields
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for the entry data model and the add/edit/delete/detail flows
 (`add_entry`, `update_entry`, `delete_entry`, `is_sensitive_label`, `field_category`,
 `AddEditDialog`, `FieldRow`, `MainWindow._show_detail`, `_move_entry_to_category`, and related

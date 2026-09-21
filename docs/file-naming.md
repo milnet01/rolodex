@@ -1,5 +1,8 @@
 # File & Naming Standards
 
+Genre: standard
+Status: active
+
 ## Repository files
 
 | Kind | Convention | Example |

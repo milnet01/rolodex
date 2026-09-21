@@ -1,5 +1,9 @@
 # Spec: Categories
 
+Genre: spec
+Status: active
+Describes: current
+
 Retroactive spec for category grouping (`add_category`, `rename_category`, `delete_category`,
 `entries_by_category`, `CategoryHeaderRow`, `ManageCategoriesDialog`, `MainWindow._refresh_list`).
 
