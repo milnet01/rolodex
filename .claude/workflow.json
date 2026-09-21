@@ -1,0 +1,54 @@
+{
+  "_comment": "The project's one declaration file. A second file is a second thing to forget.",
+  "version_files": [
+    "CHANGELOG.md",
+    "rolodex.py"
+  ],
+  "boundaries": [
+    "load_vault_with_key \u2014 the vault file: ciphertext, then JSON, from disk",
+    "parse_text_file \u2014 an import file the user picks",
+    "fetch_latest_release / download_to \u2014 release JSON, the downloaded asset and its signature",
+    "load_config \u2014 .rolodex.conf JSON"
+  ],
+  "commit_subject": "^(?:ROLO-[0-9]{4}|Roadmap|chore|docs|fix|[0-9]+\\.[0-9]+\\.[0-9]+): ",
+  "attribution": [
+    "Co-Authored-By"
+  ],
+  "calibration_ledger": "docs/reviews/calibration.md",
+  "check_doc": {
+    "bare_filenames": false,
+    "ignore_paths": [
+      "docs/reviews/gate-log.md",
+      ".claude/workflow.json"
+    ],
+    "required_sections": {},
+    "id_prefix": "ROLO",
+    "id_digits": 4
+  },
+  "deviations": [
+    {
+      "standard": "documents.md",
+      "clause": "where-a-document-lives",
+      "instead": "The design document is DESIGN.md at the repository root, not docs/design.md.",
+      "reason": "It predates this workflow and is linked from README.md, CLAUDE.md and SECURITY.md. Moving it breaks those links to gain a filename."
+    },
+    {
+      "standard": "documents.md",
+      "clause": "where-a-document-lives",
+      "instead": "Standards are docs/<topic>-standards.md, not docs/standards/<topic>.md.",
+      "reason": "docs/file-naming.md fixes this convention and docs/documentation-standards.md lists these paths in its update table. Moving them edits both standards to match a layout neither chose."
+    },
+    {
+      "standard": "documents.md",
+      "clause": "where-a-document-lives",
+      "instead": "Retroactive specs are docs/specs/<topic>.md, with no roadmap id in the filename.",
+      "reason": "They document behaviour extracted from shipped code and serve no single roadmap item, so there is no id to name. docs/specs/README.md states this split; the forward specs do carry an id."
+    }
+  ],
+  "subject_limit": null,
+  "not_documents": [],
+  "dead_names": {},
+  "roadmap_archives": [],
+  "gate_log": "docs/reviews/gate-log.md",
+  "prose_bodies": []
+}
