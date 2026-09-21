@@ -640,6 +640,26 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 - 📋 [ROLO-0017] **Screen-reader support: accessible names, roles, and relationships.**
   Why: icon-only buttons (add, copy, rename, delete, drag handles) and masked fields need explicit accessible names/descriptions; masked values must not be announced as raw dots, and reveal state should be conveyed.
   Scope: set Gtk.Accessible names/descriptions and appropriate roles across the UI, ensure focus order and keyboard operability (pairs with ROLO-0007 shortcuts), and test end-to-end with Orca. Announce toasts and dialog headings.
+  Groundwork 2026-09-21, no code yet.
+  NO SPEC NEEDED, decided against spec-format.md section 1: this is one
+  subsystem (the GUI layer of rolodex.py), the shape is obvious, and
+  nothing else binds to it as a contract. The roadmap bullet plus
+  write-code is the whole contract. Do not open write-spec for it.
+  Start from a11y_label (rolodex.py), which ROLO-0053 added: it sets
+  Gtk.AccessibleProperty.LABEL, because a tooltip is exposed as a
+  DESCRIPTION and leaves the widget announced as nameless. That helper is
+  the pattern; the job is finding every icon-only control that lacks it.
+  READ docs/specs/entries-and-fields.md INV-19 before touching any icon.
+  It carries the trap ROLO-0016 hit: the icon theme is the desktop's, not
+  Adwaita, so a KDE session supplies breeze-dark and a name Adwaita has
+  may be missing there entirely (x-office-calendar-symbolic) or drawn as a
+  different shape that collides with another cue (two padlocks). Use names
+  GTK 4 ships inside the library; enumerate them with
+  Gio.resources_enumerate_children over /org/gtk/libgtk/icons/.
+  That trap is deliberately NOT in CLAUDE.md. Adding a new rule to its
+  Conventions list would arm the CLAUDE.md rule 14 gate, and INV-19 is the
+  rule's one home. If a later session wants it in CLAUDE.md, that is its
+  own gated change.
   **Layman:** Make the app work properly with screen readers that read the interface aloud.
   Kind: accessibility.
   Source: user-request-2026-07-04.
@@ -757,6 +777,12 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
   Recorded rather than acted on: the diagnosis was produced elsewhere,
   and what to do about it is this project's call.
+  Timing decided with the user 2026-09-21: have this conversation AFTER the
+  current batch of accessibility/UX features (ROLO-0017, 0015, 0024, 0025,
+  0012) and the release that follows them. It is not blocking that work.
+  The user's words for the choice were "after this batch of features" over
+  "now, before any more features" and "skip it" — so it is deferred, not
+  declined, and a future session should not re-ask which.
   **Layman:** The security side has real, judgeable goals. The "simple to use" half of the promise has none, so nothing can tell us whether we delivered it.
   Kind: doc.
   Source: adopt-project-run-2026-08-14 (from ~/.claude).
