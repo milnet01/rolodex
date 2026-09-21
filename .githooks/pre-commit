@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Delegates to the machine-wide pre-commit hook: the genre, declaration,
+# dead-name, roadmap-id and document checks. Warns and exits 0 where that
+# hook is absent, so a fresh clone on a machine without the workflow is
+# not blocked by a hook it does not have.
+set -u
+hook="${CLAUDE_HOOKS:-$HOME/.claude/hooks}/pre-commit"
+if [ ! -x "$hook" ]; then
+  echo "pre-commit: no hook at $hook — NOTHING WAS CHECKED" >&2
+  exit 0
+fi
+exec "$hook" "$@"

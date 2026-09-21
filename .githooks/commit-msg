@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Delegates to the machine-wide gate-record hook. Warns and exits 0 where
+# that hook is absent, so a fresh clone on another machine is not blocked
+# by a hook it does not have.
+set -u
+hook="${CLAUDE_HOOKS:-$HOME/.claude/hooks}/gate-record"
+if [ ! -x "$hook" ]; then
+  echo "commit-msg: gate-record not found at $hook — NOTHING WAS CHECKED" >&2
+  exit 0
+fi
+exec "$hook" "$@"

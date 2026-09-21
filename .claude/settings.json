@@ -1,0 +1,21 @@
+{
+  "_comment": "Wires the machine-wide tool-call hooks. A hook absent from this machine simply does not fire; each one warns rather than blocking.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude/hooks/no-hand-edit" },
+          { "type": "command", "command": "$HOME/.claude/hooks/git-discard-guard" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$HOME/.claude/hooks/agent-cost" }
+        ]
+      }
+    ]
+  }
+}

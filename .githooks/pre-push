@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Runs this project's gate over what is being pushed.
+#
+# Rolodex's gate is CI-local.sh. Until adoption it was reached through the
+# machine-wide pre-push hook, which finds it via `git config
+# ants.gate.command` and which git ran directly because core.hooksPath
+# pointed at that directory. Pointing core.hooksPath here stops git
+# reading it, so this hands back to it explicitly.
+#
+# It is NOT the skeleton's scripts/gate.sh: this project has no such
+# script, and renaming CI-local.sh to match a skeleton would break the
+# two git config keys and every reference in CLAUDE.md.
+set -u
+if [ -n "${SKIP_LOCAL_GATE:-}" ]; then
+  echo "pre-push: gate skipped by SKIP_LOCAL_GATE" >&2
+  exit 0
+fi
+gate="$HOME/.claude/githooks/pre-push"
+if [ -x "$gate" ]; then
+  exec "$gate" "$@"
+fi
+# No machine-wide hook here — run the project's gate directly, so a clone
+# on another machine still gets the gate rather than silently none.
+exec ./CI-local.sh
