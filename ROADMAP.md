@@ -77,7 +77,7 @@ release, which is what proves the in-app updater end to end: it installs from
 
 - 📋 [ROLO-0015] **User-selectable themes and accent colours.**
   Why: the UI is currently a single hardcoded dark 'glass' theme in CUSTOM_CSS; users want choice.
-  Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Builds on and supersedes ROLO-0011 (follow-system light/dark), which can become the 'Auto' option.
+  Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Absorbs ROLO-0011 (dropped 2026-09-24 as a duplicate): the theme list includes an 'Auto' option that follows the desktop's light/dark setting through Adw.StyleManager's color-scheme and switches live when the desktop changes, gating the dark overrides on the active scheme rather than hardcoding them. Which theme is the default is not yet decided.
   Inherited from ROLO-0016 on 2026-09-21: checking the palettes against
   common colourblindness simulations belongs here, since ROLO-0016 shipped
   before any theme palette existed to check. The field-type icons landed
@@ -90,17 +90,6 @@ release, which is what proves the in-app updater end to end: it installs from
   **Layman:** Let people pick from several looks (colour schemes) instead of the one fixed dark theme.
   Kind: ux.
   Source: user-request-2026-07-04.
-
-- 📋 [ROLO-0011] **Follow the system light/dark theme instead of a hardcoded dark theme.**
-  Why: CUSTOM_CSS is a fixed dark 'glass' theme that ignores the user's preference and can look wrong in light mode.
-  Scope: split the CSS into theme-aware variables via Adw.StyleManager color-scheme, or gate the dark overrides on the active scheme. Purely presentational — no data or logic change.
-  **Layman:** Let the app match your desktop's light or dark setting automatically.
-  Kind: ux.
-  Source: in-session-2026-07-04.
-  Folded into ROLO-0015 (user-selectable themes) as the 'Auto' / follow-system option; implement there rather than standalone.
-  Scheduled 2026-09-24 into 1.7.0 beside ROLO-0015, which already absorbs
-  this work as its 'Auto' (follow-system) option. Candidate for dropping
-  as a duplicate; that is the user's call and has been put to them.
 
 - 📋 [ROLO-0024] **Adaptive layout for narrow windows using libadwaita breakpoints.**
   Why: the fixed two-pane Gtk.Paned doesn't collapse; on a narrow window the sidebar and detail fight for space.
@@ -1871,3 +1860,18 @@ Wanted work not yet promised to any release.
   Kind: fix.
   Source: review-code 2026-08-31 lane 1 (verified; undocumented consequences of a shipped change).
   Lanes: crypto, docs.
+
+- 🚫 [ROLO-0011] **Follow the system light/dark theme instead of a hardcoded dark theme.**
+  Why: CUSTOM_CSS is a fixed dark 'glass' theme that ignores the user's preference and can look wrong in light mode.
+  Scope: split the CSS into theme-aware variables via Adw.StyleManager color-scheme, or gate the dark overrides on the active scheme. Purely presentational — no data or logic change.
+  **Layman:** Let the app match your desktop's light or dark setting automatically.
+  Kind: ux.
+  Source: in-session-2026-07-04.
+  Folded into ROLO-0015 (user-selectable themes) as the 'Auto' / follow-system option; implement there rather than standalone.
+  Scheduled 2026-09-24 into 1.7.0 beside ROLO-0015, which already absorbs
+  this work as its 'Auto' (follow-system) option. Candidate for dropping
+  as a duplicate; that is the user's call and has been put to them.
+  Dropped 2026-09-24 as a duplicate, not abandoned: the work is delivered
+  by ROLO-0015 (user-selectable themes) as its 'Auto' option, which
+  follows the desktop light/dark setting. The user's ruling: "I want it
+  to offer themes". ROLO-0015's body now carries this item's scope.
