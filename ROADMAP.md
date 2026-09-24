@@ -77,7 +77,7 @@ release, which is what proves the in-app updater end to end: it installs from
 
 - 📋 [ROLO-0015] **User-selectable themes and accent colours.**
   Why: the UI is currently a single hardcoded dark 'glass' theme in CUSTOM_CSS; users want choice.
-  Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Absorbs ROLO-0011 (dropped 2026-09-24 as a duplicate): the theme list includes an 'Auto' option that follows the desktop's light/dark setting through Adw.StyleManager's color-scheme and switches live when the desktop changes, gating the dark overrides on the active scheme rather than hardcoding them. Which theme is the default is not yet decided.
+  Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Absorbs ROLO-0011 (dropped 2026-09-24 as a duplicate): the theme list includes an 'Auto' option that follows the desktop's light/dark setting through Adw.StyleManager's color-scheme and switches live when the desktop changes, gating the dark overrides on the active scheme rather than hardcoding them. 'Auto' is the default theme (user decision 2026-09-24).
   Inherited from ROLO-0016 on 2026-09-21: checking the palettes against
   common colourblindness simulations belongs here, since ROLO-0016 shipped
   before any theme palette existed to check. The field-type icons landed
