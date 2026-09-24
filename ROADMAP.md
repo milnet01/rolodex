@@ -11,6 +11,241 @@ spec-ready: a future session can pick one up, write a spec under `docs/specs/`, 
 
 Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considered
 
+## 1.6.0 — Signed releases
+
+Do not cut 1.6.0 until ROLO-0089 is done — [Unreleased] already claims releases
+are signed, and build.yml ships unsigned without the secret. Beyond that, 1.6.0
+ships what is already under [Unreleased] in CHANGELOG.md.
+
+- 📋 [ROLO-0089] **Add ROLODEX_SIGNING_KEY as a repository secret so releases are actually signed.**
+  ROLO-0041 put the real public key in rolodex.py. The other half of that
+  job is not done: build.yml reads the private key from the repository
+  secret ROLODEX_SIGNING_KEY, and when it is unset the signing step
+  no-ops with "::warning::ROLODEX_SIGNING_KEY is not set - shipping
+  unsigned" and attaches no .sig files. A release cut in that state makes
+  no update offer at all, so the updater is still inert.
+
+  MAINTAINER ACTION, and it cannot be done from a session: the private
+  key must never enter this repository or a transcript. Settings ->
+  Secrets and variables -> Actions -> New repository secret, named
+  ROLODEX_SIGNING_KEY, holding the contents of the rolodex-signing.key
+  file generated on 2026-09-21. Then move that file somewhere backed up
+  and out of the working tree; .gitignore keeps it untracked, which is not
+  the same as keeping it safe.
+
+  Done when a release's assets carry a matching .sig each. The end-to-end
+  install path needs two signed releases to prove — one to install from,
+  one to install — so the first signed release only closes this item, not
+  the proof.
+  **Layman:** The signing key exists, but GitHub does not have its half yet, so releases still go out unsigned.
+  Kind: security.
+  Source: in-session-2026-09-21.
+
+## 1.7.0 — Accessibility and layout
+
+The accessibility and UX batch the user chose on 2026-09-21. ROLO-0036's
+discovery conversation follows this release. 1.7.0 is also the second signed
+release, which is what proves the in-app updater end to end: it installs from
+1.6.0.
+
+- 📋 [ROLO-0017] **Screen-reader support: accessible names, roles, and relationships.**
+  Why: icon-only buttons (add, copy, rename, delete, drag handles) and masked fields need explicit accessible names/descriptions; masked values must not be announced as raw dots, and reveal state should be conveyed.
+  Scope: set Gtk.Accessible names/descriptions and appropriate roles across the UI, ensure focus order and keyboard operability (pairs with ROLO-0007 shortcuts), and test end-to-end with Orca. Announce toasts and dialog headings.
+  Groundwork 2026-09-21, no code yet.
+  NO SPEC NEEDED, decided against spec-format.md section 1: this is one
+  subsystem (the GUI layer of rolodex.py), the shape is obvious, and
+  nothing else binds to it as a contract. The roadmap bullet plus
+  write-code is the whole contract. Do not open write-spec for it.
+  Start from a11y_label (rolodex.py), which ROLO-0053 added: it sets
+  Gtk.AccessibleProperty.LABEL, because a tooltip is exposed as a
+  DESCRIPTION and leaves the widget announced as nameless. That helper is
+  the pattern; the job is finding every icon-only control that lacks it.
+  READ docs/specs/entries-and-fields.md INV-19 before touching any icon.
+  It carries the trap ROLO-0016 hit: the icon theme is the desktop's, not
+  Adwaita, so a KDE session supplies breeze-dark and a name Adwaita has
+  may be missing there entirely (x-office-calendar-symbolic) or drawn as a
+  different shape that collides with another cue (two padlocks). Use names
+  GTK 4 ships inside the library; enumerate them with
+  Gio.resources_enumerate_children over /org/gtk/libgtk/icons/.
+  That trap is deliberately NOT in CLAUDE.md. Adding a new rule to its
+  Conventions list would arm the CLAUDE.md rule 14 gate, and INV-19 is the
+  rule's one home. If a later session wants it in CLAUDE.md, that is its
+  own gated change.
+  **Layman:** Make the app work properly with screen readers that read the interface aloud.
+  Kind: accessibility.
+  Source: user-request-2026-07-04.
+
+- 📋 [ROLO-0015] **User-selectable themes and accent colours.**
+  Why: the UI is currently a single hardcoded dark 'glass' theme in CUSTOM_CSS; users want choice.
+  Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Builds on and supersedes ROLO-0011 (follow-system light/dark), which can become the 'Auto' option.
+  Inherited from ROLO-0016 on 2026-09-21: checking the palettes against
+  common colourblindness simulations belongs here, since ROLO-0016 shipped
+  before any theme palette existed to check. The field-type icons landed
+  there, so a palette that fails a simulation is no longer the only cue —
+  but it is still a defect.
+  Also inherited: a palette must not be the only thing separating two
+  field categories, and the icon set in FIELD_CATEGORY_CUES is drawn by
+  whatever icon theme the desktop supplies, so a theme change can alter
+  the shapes without touching this code.
+  **Layman:** Let people pick from several looks (colour schemes) instead of the one fixed dark theme.
+  Kind: ux.
+  Source: user-request-2026-07-04.
+
+- 📋 [ROLO-0011] **Follow the system light/dark theme instead of a hardcoded dark theme.**
+  Why: CUSTOM_CSS is a fixed dark 'glass' theme that ignores the user's preference and can look wrong in light mode.
+  Scope: split the CSS into theme-aware variables via Adw.StyleManager color-scheme, or gate the dark overrides on the active scheme. Purely presentational — no data or logic change.
+  **Layman:** Let the app match your desktop's light or dark setting automatically.
+  Kind: ux.
+  Source: in-session-2026-07-04.
+  Folded into ROLO-0015 (user-selectable themes) as the 'Auto' / follow-system option; implement there rather than standalone.
+  Scheduled 2026-09-24 into 1.7.0 beside ROLO-0015, which already absorbs
+  this work as its 'Auto' (follow-system) option. Candidate for dropping
+  as a duplicate; that is the user's call and has been put to them.
+
+- 📋 [ROLO-0024] **Adaptive layout for narrow windows using libadwaita breakpoints.**
+  Why: the fixed two-pane Gtk.Paned doesn't collapse; on a narrow window the sidebar and detail fight for space.
+  Scope: migrate to Adw.NavigationSplitView with an Adw.Breakpoint so the sidebar and detail become a single navigable stack below a width threshold. Presentational restructure of MainWindow.
+  **Layman:** Make the app usable when the window is small or on a phone-sized screen.
+  Kind: enhancement.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0025] **Multi-select entries for bulk delete and bulk move-to-category.**
+  Why: every operation is one-entry-at-a-time; tidying a large vault is tedious.
+  Scope: a selection mode in the sidebar (checkboxes / Ctrl-click) with a bulk action bar for delete (single confirm) and move-to-category. Interacts with _refresh_list selection handling — best sequenced after ROLO-0018.
+  **Layman:** Select several entries at once to delete or re-file them together.
+  Kind: feature.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0012] **CSV import and export for interoperability with other managers.**
+  Why: the current importer only understands one bespoke text layout; CSV eases migration from other tools.
+  Scope: a CSV parser/writer alongside parse_text_file, reusing the ImportPreviewDialog. Warn loudly that CSV export is plaintext (same gating as the existing export).
+  **Layman:** Move data in and out using the spreadsheet format other password apps use.
+  Kind: feature.
+  Source: in-session-2026-07-04.
+
+## Unscheduled
+
+Wanted work not yet promised to any release.
+
+- 📋 [ROLO-0036] **Nothing here says how we would know Rolodex works, outside security.**
+  Diagnosed 2026-08-14 by `adopt-project`, run from ~/.claude. Two cold
+  readers, five documents each, plus a second pass. No source was read
+  and no test was run -- this is not an audit and says nothing about
+  code quality.
+
+  **Verdict: state 1**, on ~/.claude/workflow.md's five states. That is
+  the discovery state, and it holds however much code exists.
+
+  What the reading found:
+
+  - **What it is for: YES**, stated and quotable, non-goals included.
+  - **How we would know it works: NO** -- for one half of the purpose.
+
+  `SECURITY.md`'s threat model **does** state judgeable outcomes, and the
+  reader was right to count them. But they cover security alone, and the
+  stated purpose begins *"A safe, **simple** place..."*. There is no
+  criterion for usability, speed or durability anywhere.
+
+  The seven specs do not fill the gap. They are explicitly *"retroactive
+  ... extracted from the shipped code"*, so every invariant in them
+  describes what **was built** rather than what would count as **working**.
+  A spec written backwards from the code cannot fail.
+
+  **What would close this.** Success criteria for the "simple" half --
+  what a first-time user must be able to do, and how fast. Discovery is
+  a conversation, not a writing task, so this is not a doc someone
+  drafts alone.
+
+  Recorded rather than acted on: the diagnosis was produced elsewhere,
+  and what to do about it is this project's call.
+  Timing decided with the user 2026-09-21: have this conversation AFTER the
+  current batch of accessibility/UX features (ROLO-0017, 0015, 0024, 0025,
+  0012) and the release that follows them. It is not blocking that work.
+  The user's words for the choice were "after this batch of features" over
+  "now, before any more features" and "skip it" — so it is deferred, not
+  declined, and a future session should not re-ask which.
+  **Layman:** The security side has real, judgeable goals. The "simple to use" half of the promise has none, so nothing can tell us whether we delivered it.
+  Kind: doc.
+  Source: adopt-project-run-2026-08-14 (from ~/.claude).
+
+- 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
+  Why: Argon2id is memory-hard and resists GPU/ASIC cracking better than PBKDF2.
+  Scope: add an argon2 KDF path, record the algorithm + parameters in the vault header, bump the format version, and re-wrap the vault on next save. migrate_vault gains a KDF-upgrade branch. Requires the argon2-cffi dependency — weigh against the one-file/minimal-deps goal.
+  **Layman:** Upgrade the password-scrambling to a newer, tougher method, converting old vaults automatically.
+  Kind: security.
+  Source: in-session-2026-07-04.
+  Progress (2026-09-02): review-contract loop 2 on vault-format-and-crypto.md
+  surfaced two decisions this item must settle, and deliberately did NOT settle
+  them in the spec -- they are design choices, not corrections.
+
+  1. The successor magic's SHAPE. INV-5 requires a new magic but pins nothing. Two
+     implementers picking `ARG1` and `VLT2` produce headers today's loader cannot
+     tell apart from garbage.
+  2. What a build PREDATING the new format does on meeting one. INV-2 currently
+     raises "Not a valid vault file", so a vault written by a newer Rolodex is
+     reported as not a vault at all -- the same class of misreport INV-2 and
+     INV-12 each spend a sentence forbidding. A recognisable family (a shared
+     prefix with a version digit, say) would let the old loader raise INV-12's
+     "upgrade Rolodex" error instead.
+
+  INV-2 was amended in that loop to reject "a magic it does not recognise" rather
+  than "not VLT1", so a successor joins the recognised set instead of being
+  rejected by the invariant that mandates it. The shape itself remains open.
+
+  Also noted, not filed: this item's Scope line says "bump the format version",
+  where INV-5 requires a NEW MAGIC. The `version` field lives inside the encrypted
+  JSON, so it cannot be read before choosing a KDF. Two lanes raised it
+  independently; the spec is the correct side.
+
+- 📋 [ROLO-0042] **Extend in-app auto-update to Windows.**
+  Deferred from ROLO-0037 (its scope decision S4), and refused up front rather
+  than half-working: PLATFORM_ASSETS has no win32 entry, so is_update_supported()
+  is False there and no offer is made.
+
+  Windows needs a materially different mechanism. os.replace cannot swap a
+  running, locked .exe, and the relaunch goes through /bin/sh, which Windows does
+  not have. finbreak solved the same problem with a detached PowerShell helper
+  that polls until the image is free, then moves the new binary in and restarts it
+  -- see docs/specs/FIBR-0131.md at /mnt/Games/Scripts/Linux/finbreak.
+
+  It also cannot be tested from this machine at all, so the swap and relaunch are
+  empirical-only: they need a real two-cycle run on Windows against two signed
+  releases. Specify it separately rather than folding it into ROLO-0037's spec.
+  **Layman:** Windows users can't yet update from inside the app; the swap has to work differently there.
+  Kind: feature.
+  Source: in-session-2026-08-27.
+
+- 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
+  Why: today users must hand-install GTK4, libadwaita, and cryptography and edit the .desktop file.
+  Scope: a Flatpak manifest (GNOME runtime) bundling the cryptography wheel, a proper desktop file and icon install, and filesystem access scoped to where the vault lives.
+  **Layman:** A one-click install that bundles the app and its dependencies for any Linux distro.
+  Kind: package.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0027] **Ship AppStream metainfo so the app appears properly in software centers.**
+  Why: a com.rolodex.Contacts.metainfo.xml is needed for GNOME Software / KDE Discover listings and pairs with the Flatpak (ROLO-0010).
+  Scope: author the AppStream metainfo XML with summary, description, categories, and screenshots, and mirror release notes from CHANGELOG.md into its <releases> block (per documentation standards).
+  **Layman:** Make the app show up nicely (name, screenshots, description) in Linux app stores.
+  Kind: package.
+  Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
+  Why: all UI text is hardcoded English; internationalization widens reach and is expected of a desktop app.
+  Scope: wrap user-facing strings in gettext _(), add a translation template (.pot) and a build step, and document the workflow. Touches every UI string — do it as one deliberate pass.
+  Re-requested by the user 2026-09-18: "add other language support to
+  the app." Confirms this item is wanted, not a nice-to-have left for
+  its own sake. Which languages are wanted first is still to be settled
+  with the user.
+  Languages decided 2026-09-21 (user): the plumbing first, then
+  German, French and Spanish; then Chinese and Japanese; then the RTL
+  languages, Hebrew and Arabic. RTL is not just a catalogue — it needs the
+  layout mirrored (Gtk.Widget direction, start/end margins rather than
+  left/right, and the CSS border-left field cues become border-inline-start).
+  Treat RTL as its own unit of work, not as two more catalogues.
+  **Layman:** Prepare the app so it can be translated into other languages.
+  Kind: accessibility.
+  Source: in-session-2026-07-04.
+
 ## High priority
 
 - ✅ [ROLO-0001] **Add an automated test suite for the pure-logic layer.**
@@ -185,24 +420,6 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   real signed releases to prove — one to install from, one to install.
   **Layman:** One manual step by the maintainer turns the update feature from "can look" into "can install".
   Kind: security.
-  Source: in-session-2026-08-27.
-
-- 📋 [ROLO-0042] **Extend in-app auto-update to Windows.**
-  Deferred from ROLO-0037 (its scope decision S4), and refused up front rather
-  than half-working: PLATFORM_ASSETS has no win32 entry, so is_update_supported()
-  is False there and no offer is made.
-
-  Windows needs a materially different mechanism. os.replace cannot swap a
-  running, locked .exe, and the relaunch goes through /bin/sh, which Windows does
-  not have. finbreak solved the same problem with a detached PowerShell helper
-  that polls until the image is free, then moves the new binary in and restarts it
-  -- see docs/specs/FIBR-0131.md at /mnt/Games/Scripts/Linux/finbreak.
-
-  It also cannot be tested from this machine at all, so the swap and relaunch are
-  empirical-only: they need a real two-cycle run on Windows against two signed
-  releases. Specify it separately rather than folding it into ROLO-0037's spec.
-  **Layman:** Windows users can't yet update from inside the app; the swap has to work differently there.
-  Kind: feature.
   Source: in-session-2026-08-27.
 
 - ✅ [ROLO-0043] **Cache the derived Fernet key so saving does not re-run the 600k KDF on the UI thread.**
@@ -497,60 +714,7 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-09-18 (post-release check of v1.4.0).
   Lanes: packaging.
 
-- 📋 [ROLO-0089] **Add ROLODEX_SIGNING_KEY as a repository secret so releases are actually signed.**
-  ROLO-0041 put the real public key in rolodex.py. The other half of that
-  job is not done: build.yml reads the private key from the repository
-  secret ROLODEX_SIGNING_KEY, and when it is unset the signing step
-  no-ops with "::warning::ROLODEX_SIGNING_KEY is not set - shipping
-  unsigned" and attaches no .sig files. A release cut in that state makes
-  no update offer at all, so the updater is still inert.
-
-  MAINTAINER ACTION, and it cannot be done from a session: the private
-  key must never enter this repository or a transcript. Settings ->
-  Secrets and variables -> Actions -> New repository secret, named
-  ROLODEX_SIGNING_KEY, holding the contents of the rolodex-signing.key
-  file generated on 2026-09-21. Then move that file somewhere backed up
-  and out of the working tree; .gitignore keeps it untracked, which is not
-  the same as keeping it safe.
-
-  Done when a release's assets carry a matching .sig each. The end-to-end
-  install path needs two signed releases to prove — one to install from,
-  one to install — so the first signed release only closes this item, not
-  the proof.
-  **Layman:** The signing key exists, but GitHub does not have its half yet, so releases still go out unsigned.
-  Kind: security.
-  Source: in-session-2026-09-21.
-
 ## Medium priority
-
-- 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
-  Why: Argon2id is memory-hard and resists GPU/ASIC cracking better than PBKDF2.
-  Scope: add an argon2 KDF path, record the algorithm + parameters in the vault header, bump the format version, and re-wrap the vault on next save. migrate_vault gains a KDF-upgrade branch. Requires the argon2-cffi dependency — weigh against the one-file/minimal-deps goal.
-  **Layman:** Upgrade the password-scrambling to a newer, tougher method, converting old vaults automatically.
-  Kind: security.
-  Source: in-session-2026-07-04.
-  Progress (2026-09-02): review-contract loop 2 on vault-format-and-crypto.md
-  surfaced two decisions this item must settle, and deliberately did NOT settle
-  them in the spec -- they are design choices, not corrections.
-
-  1. The successor magic's SHAPE. INV-5 requires a new magic but pins nothing. Two
-     implementers picking `ARG1` and `VLT2` produce headers today's loader cannot
-     tell apart from garbage.
-  2. What a build PREDATING the new format does on meeting one. INV-2 currently
-     raises "Not a valid vault file", so a vault written by a newer Rolodex is
-     reported as not a vault at all -- the same class of misreport INV-2 and
-     INV-12 each spend a sentence forbidding. A recognisable family (a shared
-     prefix with a version digit, say) would let the old loader raise INV-12's
-     "upgrade Rolodex" error instead.
-
-  INV-2 was amended in that loop to reject "a magic it does not recognise" rather
-  than "not VLT1", so a successor joins the recognised set instead of being
-  rejected by the invariant that mandates it. The shape itself remains open.
-
-  Also noted, not filed: this item's Scope line says "bump the format version",
-  where INV-5 requires a NEW MAGIC. The `version` field lives inside the encrypted
-  JSON, so it cannot be read before choosing a KDF. Two lanes raised it
-  independently; the spec is the correct side.
 
 - ✅ [ROLO-0006] **Generate TOTP 2FA codes from stored authenticator secrets.**
   Why: 'authenticator' is already a recognised sensitive keyword; users store 2FA seeds but must go elsewhere to use them.
@@ -589,22 +753,6 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Kind: enhancement.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0015] **User-selectable themes and accent colours.**
-  Why: the UI is currently a single hardcoded dark 'glass' theme in CUSTOM_CSS; users want choice.
-  Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Builds on and supersedes ROLO-0011 (follow-system light/dark), which can become the 'Auto' option.
-  Inherited from ROLO-0016 on 2026-09-21: checking the palettes against
-  common colourblindness simulations belongs here, since ROLO-0016 shipped
-  before any theme palette existed to check. The field-type icons landed
-  there, so a palette that fails a simulation is no longer the only cue —
-  but it is still a defect.
-  Also inherited: a palette must not be the only thing separating two
-  field categories, and the icon set in FIELD_CATEGORY_CUES is drawn by
-  whatever icon theme the desktop supplies, so a theme change can alter
-  the shapes without touching this code.
-  **Layman:** Let people pick from several looks (colour schemes) instead of the one fixed dark theme.
-  Kind: ux.
-  Source: user-request-2026-07-04.
-
 - ✅ [ROLO-0016] **Colourblind-friendly field cues that don't rely on colour alone.**
   Why: field types (credential/key/identity/url/date/other) are distinguished only by a coloured left-border today — invisible to many colourblind users, and colour-alone fails WCAG 1.4.1.
   Scope: add a redundant non-colour cue per field category — a small type icon and/or a short text tag next to the label — so the category is legible in greyscale. Verify the theme palettes (ROLO-0015) against common colourblindness simulations. Touches _show_detail and the CSS.
@@ -637,33 +785,6 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   simulations. There are no theme palettes yet — that belongs with
   ROLO-0015, which is still open.
   **Layman:** Make the field types tell-apart-able without needing to see colour.
-  Kind: accessibility.
-  Source: user-request-2026-07-04.
-
-- 📋 [ROLO-0017] **Screen-reader support: accessible names, roles, and relationships.**
-  Why: icon-only buttons (add, copy, rename, delete, drag handles) and masked fields need explicit accessible names/descriptions; masked values must not be announced as raw dots, and reveal state should be conveyed.
-  Scope: set Gtk.Accessible names/descriptions and appropriate roles across the UI, ensure focus order and keyboard operability (pairs with ROLO-0007 shortcuts), and test end-to-end with Orca. Announce toasts and dialog headings.
-  Groundwork 2026-09-21, no code yet.
-  NO SPEC NEEDED, decided against spec-format.md section 1: this is one
-  subsystem (the GUI layer of rolodex.py), the shape is obvious, and
-  nothing else binds to it as a contract. The roadmap bullet plus
-  write-code is the whole contract. Do not open write-spec for it.
-  Start from a11y_label (rolodex.py), which ROLO-0053 added: it sets
-  Gtk.AccessibleProperty.LABEL, because a tooltip is exposed as a
-  DESCRIPTION and leaves the widget announced as nameless. That helper is
-  the pattern; the job is finding every icon-only control that lacks it.
-  READ docs/specs/entries-and-fields.md INV-19 before touching any icon.
-  It carries the trap ROLO-0016 hit: the icon theme is the desktop's, not
-  Adwaita, so a KDE session supplies breeze-dark and a name Adwaita has
-  may be missing there entirely (x-office-calendar-symbolic) or drawn as a
-  different shape that collides with another cue (two padlocks). Use names
-  GTK 4 ships inside the library; enumerate them with
-  Gio.resources_enumerate_children over /org/gtk/libgtk/icons/.
-  That trap is deliberately NOT in CLAUDE.md. Adding a new rule to its
-  Conventions list would arm the CLAUDE.md rule 14 gate, and INV-19 is the
-  rule's one home. If a later session wants it in CLAUDE.md, that is its
-  own gated change.
-  **Layman:** Make the app work properly with screen readers that read the interface aloud.
   Kind: accessibility.
   Source: user-request-2026-07-04.
 
@@ -707,20 +828,6 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: in-session-2026-07-04.
   Resolved (2026-07-17): pure find_entry_by_name() (case/whitespace-insensitive, excludes self on edit) + tests; AddEditDialog._on_save prompts a Save-Anyway confirmation on a name collision.
 
-- 📋 [ROLO-0024] **Adaptive layout for narrow windows using libadwaita breakpoints.**
-  Why: the fixed two-pane Gtk.Paned doesn't collapse; on a narrow window the sidebar and detail fight for space.
-  Scope: migrate to Adw.NavigationSplitView with an Adw.Breakpoint so the sidebar and detail become a single navigable stack below a width threshold. Presentational restructure of MainWindow.
-  **Layman:** Make the app usable when the window is small or on a phone-sized screen.
-  Kind: enhancement.
-  Source: in-session-2026-07-04.
-
-- 📋 [ROLO-0025] **Multi-select entries for bulk delete and bulk move-to-category.**
-  Why: every operation is one-entry-at-a-time; tidying a large vault is tedious.
-  Scope: a selection mode in the sidebar (checkboxes / Ctrl-click) with a bulk action bar for delete (single confirm) and move-to-category. Interacts with _refresh_list selection handling — best sequenced after ROLO-0018.
-  **Layman:** Select several entries at once to delete or re-file them together.
-  Kind: feature.
-  Source: in-session-2026-07-04.
-
 - ✅ [ROLO-0030] **Self-contained Linux build (single AppImage, no system dependencies).**
   Why: today Linux users must install GTK4, libadwaita, PyGObject and cryptography from their distro; the user wants a zero-dependency single file.
   Scope: bundle the Python runtime + GTK4/libadwaita + cryptography into one relocatable executable — AppImage (packaging the GNOME platform runtime) or PyInstaller/Nuitka one-file. Ship it as a release asset. The hard part is bundling the GTK stack and its typelib/GObject-introspection data, not the Python. Supersedes part of ROLO-0010 (Flatpak) as the dependency-free distribution path; keep Flatpak for software-center listing.
@@ -748,47 +855,6 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   Source: user-request-2026-07-04.
   CI job added (.github/workflows/build.yml, macos-latest via Homebrew gtk4/libadwaita/pygobject3, PyInstaller, unsigned per user). Best-effort/untested; needs CI-run iteration. Unsigned .app requires right-click->Open past Gatekeeper (no Apple Developer account).
   Shipped in v1.1.0: rolodex-macos-arm64 (unsigned; right-click->Open past Gatekeeper). CI builds on macos-latest via Homebrew and passes the native --selftest gate. Signing/notarization is future work if an Apple Developer account is obtained.
-
-- 📋 [ROLO-0036] **Nothing here says how we would know Rolodex works, outside security.**
-  Diagnosed 2026-08-14 by `adopt-project`, run from ~/.claude. Two cold
-  readers, five documents each, plus a second pass. No source was read
-  and no test was run -- this is not an audit and says nothing about
-  code quality.
-
-  **Verdict: state 1**, on ~/.claude/workflow.md's five states. That is
-  the discovery state, and it holds however much code exists.
-
-  What the reading found:
-
-  - **What it is for: YES**, stated and quotable, non-goals included.
-  - **How we would know it works: NO** -- for one half of the purpose.
-
-  `SECURITY.md`'s threat model **does** state judgeable outcomes, and the
-  reader was right to count them. But they cover security alone, and the
-  stated purpose begins *"A safe, **simple** place..."*. There is no
-  criterion for usability, speed or durability anywhere.
-
-  The seven specs do not fill the gap. They are explicitly *"retroactive
-  ... extracted from the shipped code"*, so every invariant in them
-  describes what **was built** rather than what would count as **working**.
-  A spec written backwards from the code cannot fail.
-
-  **What would close this.** Success criteria for the "simple" half --
-  what a first-time user must be able to do, and how fast. Discovery is
-  a conversation, not a writing task, so this is not a doc someone
-  drafts alone.
-
-  Recorded rather than acted on: the diagnosis was produced elsewhere,
-  and what to do about it is this project's call.
-  Timing decided with the user 2026-09-21: have this conversation AFTER the
-  current batch of accessibility/UX features (ROLO-0017, 0015, 0024, 0025,
-  0012) and the release that follows them. It is not blocking that work.
-  The user's words for the choice were "after this batch of features" over
-  "now, before any more features" and "skip it" — so it is deferred, not
-  declined, and a future session should not re-ask which.
-  **Layman:** The security side has real, judgeable goals. The "simple to use" half of the promise has none, so nothing can tell us whether we delivered it.
-  Kind: doc.
-  Source: adopt-project-run-2026-08-14 (from ~/.claude).
 
 - ✅ [ROLO-0039] **Publish release notes from CHANGELOG.md instead of an empty body.**
   build.yml's "Attach to Release" step uses softprops/action-gh-release@v3 with
@@ -1427,28 +1493,6 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
 ## Low priority / nice-to-have
 
-- 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
-  Why: today users must hand-install GTK4, libadwaita, and cryptography and edit the .desktop file.
-  Scope: a Flatpak manifest (GNOME runtime) bundling the cryptography wheel, a proper desktop file and icon install, and filesystem access scoped to where the vault lives.
-  **Layman:** A one-click install that bundles the app and its dependencies for any Linux distro.
-  Kind: package.
-  Source: in-session-2026-07-04.
-
-- 📋 [ROLO-0011] **Follow the system light/dark theme instead of a hardcoded dark theme.**
-  Why: CUSTOM_CSS is a fixed dark 'glass' theme that ignores the user's preference and can look wrong in light mode.
-  Scope: split the CSS into theme-aware variables via Adw.StyleManager color-scheme, or gate the dark overrides on the active scheme. Purely presentational — no data or logic change.
-  **Layman:** Let the app match your desktop's light or dark setting automatically.
-  Kind: ux.
-  Source: in-session-2026-07-04.
-  Folded into ROLO-0015 (user-selectable themes) as the 'Auto' / follow-system option; implement there rather than standalone.
-
-- 📋 [ROLO-0012] **CSV import and export for interoperability with other managers.**
-  Why: the current importer only understands one bespoke text layout; CSV eases migration from other tools.
-  Scope: a CSV parser/writer alongside parse_text_file, reusing the ImportPreviewDialog. Warn loudly that CSV export is plaintext (same gating as the existing export).
-  **Layman:** Move data in and out using the spreadsheet format other password apps use.
-  Kind: feature.
-  Source: in-session-2026-07-04.
-
 - 💭 [ROLO-0013] **Undo for entry and category deletion.**
   Why: deletion is immediate and permanent; the confirm dialog is the only guard.
   Scope: keep the deleted record in memory and offer Undo via the existing toast overlay for a few seconds before the save is finalised.
@@ -1473,30 +1517,6 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
   test_ROLO0026. Collapsed-category state was not added.
   **Layman:** Reopen the app where you left off, on the same entry.
   Kind: ux.
-  Source: in-session-2026-07-04.
-
-- 📋 [ROLO-0027] **Ship AppStream metainfo so the app appears properly in software centers.**
-  Why: a com.rolodex.Contacts.metainfo.xml is needed for GNOME Software / KDE Discover listings and pairs with the Flatpak (ROLO-0010).
-  Scope: author the AppStream metainfo XML with summary, description, categories, and screenshots, and mirror release notes from CHANGELOG.md into its <releases> block (per documentation standards).
-  **Layman:** Make the app show up nicely (name, screenshots, description) in Linux app stores.
-  Kind: package.
-  Source: in-session-2026-07-04.
-
-- 📋 [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
-  Why: all UI text is hardcoded English; internationalization widens reach and is expected of a desktop app.
-  Scope: wrap user-facing strings in gettext _(), add a translation template (.pot) and a build step, and document the workflow. Touches every UI string — do it as one deliberate pass.
-  Re-requested by the user 2026-09-18: "add other language support to
-  the app." Confirms this item is wanted, not a nice-to-have left for
-  its own sake. Which languages are wanted first is still to be settled
-  with the user.
-  Languages decided 2026-09-21 (user): the plumbing first, then
-  German, French and Spanish; then Chinese and Japanese; then the RTL
-  languages, Hebrew and Arabic. RTL is not just a catalogue — it needs the
-  layout mirrored (Gtk.Widget direction, start/end margins rather than
-  left/right, and the CSS border-left field cues become border-inline-start).
-  Treat RTL as its own unit of work, not as two more catalogues.
-  **Layman:** Prepare the app so it can be translated into other languages.
-  Kind: accessibility.
   Source: in-session-2026-07-04.
 
 - ✅ [ROLO-0029] **Provide a documented sample import file and format reference.**
