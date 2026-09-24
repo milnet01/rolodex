@@ -238,12 +238,17 @@ Wanted work not yet promised to any release.
   Kind: accessibility.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0090] **CI-local.sh skips the mypy step that ci.yml runs.**
+- 🚫 [ROLO-0090] **CI-local.sh skips the mypy step that ci.yml runs.**
   ci.yml runs `mypy rolodex.py` between ruff and pytest (ROLO-0052).
   CI-local.sh runs ruff, pytest and the Linux build only, so the
   pre-push gate is green for a type error GitHub will fail on. CLAUDE.md
   says the two are kept in lockstep. Found while cutting 1.6.0; mypy was
   run by hand for that release and passed. Add the step to CI-local.sh.
+  Dropped 2026-09-24: filed in error. CI-local.sh already runs `mypy
+  rolodex.py` in step 1, beside ruff. The search that suggested otherwise
+  was cut short by `| head` before it reached that line. The one real gap
+  was the header comment, which listed ruff but not mypy. That is fixed in
+  the same commit as this drop.
   **Layman:** The local pre-push check can pass code that GitHub's check then rejects for a type error.
   Kind: fix.
   Source: in-session-2026-09-24 (cut-release 1.6.0).

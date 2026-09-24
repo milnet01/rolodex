@@ -8,7 +8,9 @@
 #                               `ruff check .` also sweeps build/ dist/ out/ build_pyi/ and
 #                               reports findings CI never sees. The rule set is declared in
 #                               ruff.toml so an unpinned ruff cannot drift the gate (ROLO-0038).
-#   2. pytest                 — the pure-logic test suite (a regression net; CI runs this too
+#      mypy                   — the type check, run in the same step as ci.yml's
+#                               `mypy rolodex.py` (ROLO-0052).
+#   2. pytest                — the pure-logic test suite (a regression net; CI runs this too
 #                               via ci.yml (ROLO-0020), so this is a local mirror of that gate).
 #   3. Linux build + selftest — via packaging/linux-build.sh, the SAME script the GitHub
 #                               'ubuntu-latest' job runs. A green run here means the Linux
