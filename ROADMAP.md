@@ -13,11 +13,9 @@ Status legend: 📋 planned · 🚧 in-progress · ✅ shipped · 💭 considere
 
 ## 1.6.0 — Signed releases
 
-Do not cut 1.6.0 until ROLO-0089 is done — [Unreleased] already claims releases
-are signed, and build.yml ships unsigned without the secret. Beyond that, 1.6.0
-ships what is already under [Unreleased] in CHANGELOG.md.
+Released 2026-09-24 as v1.6.0: the first signed release. Every binary carries a .sig that verifies against the key the app ships with.
 
-- 📋 [ROLO-0089] **Add ROLODEX_SIGNING_KEY as a repository secret so releases are actually signed.**
+- ✅ [ROLO-0089] **Add ROLODEX_SIGNING_KEY as a repository secret so releases are actually signed.**
   ROLO-0041 put the real public key in rolodex.py. The other half of that
   job is not done: build.yml reads the private key from the repository
   secret ROLODEX_SIGNING_KEY, and when it is unset the signing step
@@ -37,6 +35,11 @@ ships what is already under [Unreleased] in CHANGELOG.md.
   install path needs two signed releases to prove — one to install from,
   one to install — so the first signed release only closes this item, not
   the proof.
+  Resolved 2026-09-24: the user added the secret with `gh secret set
+  ROLODEX_SIGNING_KEY < rolodex-signing.key`. v1.6.0 then published with
+  a .sig for all three binaries, and each verified against
+  RELEASE_PUBLIC_KEY_B64 in rolodex.py. The end-to-end install proof
+  still waits for 1.7.0, the second signed release.
   **Layman:** The signing key exists, but GitHub does not have its half yet, so releases still go out unsigned.
   Kind: security.
   Source: in-session-2026-09-21.
@@ -234,6 +237,16 @@ Wanted work not yet promised to any release.
   **Layman:** Prepare the app so it can be translated into other languages.
   Kind: accessibility.
   Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0090] **CI-local.sh skips the mypy step that ci.yml runs.**
+  ci.yml runs `mypy rolodex.py` between ruff and pytest (ROLO-0052).
+  CI-local.sh runs ruff, pytest and the Linux build only, so the
+  pre-push gate is green for a type error GitHub will fail on. CLAUDE.md
+  says the two are kept in lockstep. Found while cutting 1.6.0; mypy was
+  run by hand for that release and passed. Add the step to CI-local.sh.
+  **Layman:** The local pre-push check can pass code that GitHub's check then rejects for a type error.
+  Kind: fix.
+  Source: in-session-2026-09-24 (cut-release 1.6.0).
 
 ## High priority
 
