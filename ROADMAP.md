@@ -175,6 +175,20 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: accessibility.
   Source: in-session-2026-09-25 (ROLO-0017).
 
+- 📋 [ROLO-0092] **Send the website refreshed screenshots once 1.7.0 ships.**
+  Why: the Ants Projects Hub website session (antsprojectshub.co.za)
+  holds a logo and three screenshots taken before the themes landed, and
+  asked for refreshed ones after 1.7.0.
+  Scope: retake docs/screenshots/*.png with scripts/demo-screenshots.py
+  under `demoreel shot -s 1280x800`, and consider one picture per theme.
+  That script uses a throwaway vault, never contacts.vault. Then send the
+  absolute paths, with one sentence per picture for the screen reader,
+  via SendMessage to the session named ants-projects-hub-website-*, or
+  session_message if it has gone.
+  **Layman:** After the new themes are released, retake the pictures on the project website so they show the current look.
+  Kind: chore.
+  Source: in-session-2026-09-25 (ants-projects-hub-website session).
+
 ## Unscheduled
 
 Wanted work not yet promised to any release.
@@ -312,6 +326,26 @@ Wanted work not yet promised to any release.
   **Layman:** The local pre-push check can pass code that GitHub's check then rejects for a type error.
   Kind: fix.
   Source: in-session-2026-09-24 (cut-release 1.6.0).
+
+- 💭 [ROLO-0093] **Rate passwords on a common-passwords list as weak in Password Health.**
+  Why: password_strength() scores only length and character-class
+  variety, as its docstring says, so "password1" and "qwerty123" rate 2
+  (Fair). Not a bug in that contract; a gap in it.
+  Scope: awaiting the user's yes; raised 2026-09-25, no answer yet.
+  **Layman:** Password Health calls "password1" merely fair; it should know that is one of the most-guessed passwords.
+  Kind: enhancement.
+  Source: in-session-2026-09-25 (ROLO-0015 screenshots).
+
+- 💭 [ROLO-0094] **Classify 2FA-seed labels as a key field, not other.**
+  Why: FIELD_CATEGORIES has no "seed", "2fa", "totp" or "otp"
+  keyword, so field_category("2FA seed") is "other" and the row draws
+  the grey strip and the uncategorised icon (seen in AT-SPI as
+  "Uncategorised field").
+  Scope: awaiting the user's yes; raised 2026-09-25, no answer yet.
+  Adds keywords under docs/specs/entries-and-fields.md INV-13.
+  **Layman:** A field named "2FA seed" gets the grey 'other' colour instead of the key colour.
+  Kind: enhancement.
+  Source: in-session-2026-09-25 (ROLO-0015 screenshots).
 
 ## High priority
 

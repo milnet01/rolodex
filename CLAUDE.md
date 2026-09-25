@@ -121,6 +121,10 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   verify-delivery run was thrown away to that once. With a real `DISPLAY`, `MainWindow` can be
   constructed directly against a throwaway vault and its handlers driven in-process, which is
   how the end-to-end feature checks were done — `contacts.vault` is never involved.
+- **For screenshots, run `scripts/demo-screenshots.py <scene> [theme] [accent]` under
+  `demoreel shot`.** It builds a vault of made-up entries in a temporary folder, so neither
+  `contacts.vault` nor `.rolodex.conf` is touched. Starting `rolodex.py` itself opens the real
+  vault.
 - **The live TOTP code renders grouped: `"543 878"`, not `"543878"`.** A check asserting six
   contiguous digits fails against a working feature. Strip spaces before comparing.
 - **Never derive the key on a save path.** `MainWindow._key` holds the key derived at unlock,
