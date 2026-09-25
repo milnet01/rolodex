@@ -91,7 +91,7 @@ colours (`@rolo_*`) and never states them: each theme in `PALETTES` (pure layer)
 and `theme_css()` joins the palette, `CUSTOM_CSS` and the palette's `extra_css`, in that order.
 `ThemeManager` owns the one CSS provider and reloads it when the theme, the accent or the
 desktop's light/dark changes (ROLO-0015). A new colour goes into every palette, not into
-`CUSTOM_CSS`; `tests/test_themes.py` fails on a name one palette forgets, on field colours
+`CUSTOM_CSS`; `tests/test_themes.py` fails on a name a palette forgets, on field colours
 that merge under a colourblindness simulation, and on text below 4.5:1. The field-category
 border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CATEGORIES` keys.
 

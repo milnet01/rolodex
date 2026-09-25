@@ -15,7 +15,8 @@ All notable changes to Rolodex are documented here. The format is based on
   Automatic (the default) follows the desktop's light or dark setting as it
   changes. Dark is the familiar glass look; Light is the same look in
   daylight colours; High contrast is white on black with solid borders.
-  The accent follows the desktop's, or one of seven presets. Field colours
+  The accent follows the desktop's, or a preset: Blue, Teal, Green,
+  Orange, Pink, Purple or Slate. Field colours
   stay distinguishable under protanopia, deuteranopia and tritanopia
   simulations in every theme, and any accent is lightened or darkened
   until text drawn in it is readable.

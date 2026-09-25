@@ -39,7 +39,7 @@ data never leaves your machine. It runs on Linux, Windows, and macOS.
   for the common kinds of colourblindness.
 - **Your choice of look.** *Preferences* (`Ctrl+,`) offers Automatic (follows your desktop's
   light or dark setting), Dark, Light and High contrast themes. The accent colour follows your
-  desktop, or you can pick one of seven.
+  desktop, or you can pick Blue, Teal, Green, Orange, Pink, Purple or Slate.
 
 ## Download & run
 
