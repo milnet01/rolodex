@@ -150,6 +150,14 @@ release, which is what proves the in-app updater end to end: it installs from
   Adw.PasswordEntryRow uses. Keep the rule that peeking never changes the
   Hide flag. Then drop the Gtk.Entry skip from _unnamed() in
   tests/test_widgets.py so the test covers the new button.
+  How to verify against a real screen-reader view (used for ROLO-0017,
+  2026-09-25): the desktop session runs the AT-SPI bus, and python3 has
+  gi Atspi 2.0. Present the window on Xvfb :99 in one process
+  (env -u WAYLAND_DISPLAY GDK_BACKEND=x11 DISPLAY=:99), then from a second
+  process walk Atspi.get_desktop(0), picking the app whose
+  get_process_id() matches the first process's pid; its name is just
+  "python3". Print get_role_name() and get_name() for SHOWING nodes. An
+  Adw.Dialog has no children until presented, so present it first.
   **Layman:** The eye button that shows a hidden value while editing can only be clicked with a mouse, and a screen reader calls it just "image".
   Kind: accessibility.
   Source: in-session-2026-09-25 (ROLO-0017).
