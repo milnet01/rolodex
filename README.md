@@ -35,7 +35,11 @@ data never leaves your machine. It runs on Linux, Windows, and macOS.
 - **Backup & restore**, plus a plain-text export if you ever want to move your data elsewhere.
 - **Change your master password** whenever you like.
 - **Easy to scan.** Different kinds of fields — logins, keys, web addresses, dates — each get
-  their own colour accent so a card reads at a glance.
+  their own colour accent and icon so a card reads at a glance. The colours stay tellable apart
+  for the common kinds of colourblindness.
+- **Your choice of look.** *Preferences* (`Ctrl+,`) offers Automatic (follows your desktop's
+  light or dark setting), Dark, Light and High contrast themes. The accent colour follows your
+  desktop, or you can pick one of seven.
 
 ## Download & run
 
@@ -146,7 +150,8 @@ entries per file.
 - Two safety timers can be tuned in `.rolodex.conf` (plain text, no secrets): how long before it
   auto-locks (`idle_lock_seconds`, default 300 seconds; set `0` to turn off) and how soon a
   copied password is wiped from the clipboard (`clipboard_clear_seconds`, default 20; `0` to
-  turn off).
+  turn off). The theme and accent chosen in *Preferences* are stored there too (`theme`,
+  `accent`).
 - **Rolodex works offline, with one optional exception.** It can check GitHub for a newer
   version, and it **never does so on its own unless you turn it on** — tick *Check for updates
   automatically* in the app menu, or set `check_for_updates` to `true` in `.rolodex.conf`.

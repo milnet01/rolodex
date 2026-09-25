@@ -86,16 +86,21 @@ version and extend this function rather than assuming fields exist.
   is cancelled in `_cancel_totp_tick` on every rebuild and on close/lock — keep that lifecycle
   intact if you touch the detail pane, or the timer leaks across entries.
 
-**Styling** — all visual design lives in one `CUSTOM_CSS` string near the bottom, loaded once
-in `do_startup`. It's a hardcoded dark "glass" theme; the field-category border colors there
-correspond to `FIELD_CATEGORIES` keys (`.field-credential`, `.field-key`, etc.).
+**Styling** — all visual design lives in one `CUSTOM_CSS` string near the bottom. It names
+colours (`@rolo_*`) and never states them: each theme in `PALETTES` (pure layer) supplies them,
+and `theme_css()` joins the palette, `CUSTOM_CSS` and the palette's `extra_css`, in that order.
+`ThemeManager` owns the one CSS provider and reloads it when the theme, the accent or the
+desktop's light/dark changes (ROLO-0015). A new colour goes into every palette, not into
+`CUSTOM_CSS`; `tests/test_themes.py` fails on a name one palette forgets, on field colours
+that merge under a colourblindness simulation, and on text below 4.5:1. The field-category
+border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CATEGORIES` keys.
 
 ## Sibling files
 
 - `contacts.vault` — the user's real encrypted vault. **Never** read, move, or overwrite it
   without explicit instruction; it's live user data.
 - `.rolodex.conf` — plaintext JSON: window geometry plus non-secret preferences
-  (`idle_lock_seconds`, `clipboard_clear_seconds`). No secrets.
+  (`idle_lock_seconds`, `clipboard_clear_seconds`, `theme`, `accent`). No secrets.
 - `Backups/` — a user-maintained folder for backup copies (git-ignored). The app never writes
   here automatically; its Backup action just defaults the save-dialog filename to
   `contacts_backup_<timestamp>.vault` at a location the user picks.

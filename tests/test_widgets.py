@@ -580,7 +580,9 @@ def _unnamed(root):
     found = []
 
     def walk(w):
-        if w is not root and not w.get_visible():
+        # get_child_visible is how a Gtk.Stack hides the pages it is not showing, e.g. the
+        # search box behind an Adw.PreferencesDialog's title while search is off (ROLO-0015).
+        if w is not root and not (w.get_visible() and w.get_child_visible()):
             return
         if isinstance(w, (Adw.EntryRow, Gtk.WindowControls)) and w is not root:
             return
@@ -695,3 +697,77 @@ def test_ROLO0016_every_cue_icon_resolves_on_this_theme(app, tmp_path, monkeypat
     for icon, _name in rolodex.FIELD_CATEGORY_CUES.values():
         assert theme.has_icon(icon), icon
     win._show_detail(entry_id)
+
+
+# --- Themes and accent colours (ROLO-0015) ------------------------------------------------
+
+
+@pytest.fixture
+def make_themes(tmp_path, monkeypatch, request):
+    """Build a ThemeManager on a throwaway config, detached again afterwards: the StyleManager
+    it drives is process-wide, so a forced scheme would otherwise leak into later tests."""
+    from gi.repository import Gdk, Gtk
+
+    monkeypatch.setattr(rolodex, "CONFIG_FILE", str(tmp_path / "conf"))
+    Adw.init()
+
+    def build(**conf):
+        if conf:
+            rolodex.save_config(conf)
+        tm = rolodex.ThemeManager(Gdk.Display.get_default())
+
+        def detach():
+            for h in tm.handlers:
+                tm.style.disconnect(h)
+            Gtk.StyleContext.remove_provider_for_display(Gdk.Display.get_default(), tm.provider)
+            tm.style.set_color_scheme(Adw.ColorScheme.DEFAULT)
+        request.addfinalizer(detach)
+        return tm
+    return build
+
+
+def test_ROLO0015_preferences_controls_have_a_spoken_name(make_themes):
+    assert _unnamed(rolodex.PreferencesDialog(make_themes())) == []
+
+
+def test_ROLO0015_automatic_is_the_default_and_follows_the_desktop(make_themes):
+    tm = make_themes()
+    assert tm.theme == "auto" and tm.accent == "system"
+    assert tm.style.get_color_scheme() == Adw.ColorScheme.DEFAULT
+    assert tm.palette == ("dark" if tm.style.get_dark() else "light")
+
+
+@pytest.mark.parametrize("theme,scheme,palette", [
+    ("light", Adw.ColorScheme.FORCE_LIGHT, "light"),
+    ("dark", Adw.ColorScheme.FORCE_DARK, "dark"),
+    ("high-contrast", Adw.ColorScheme.FORCE_DARK, "high-contrast"),
+])
+def test_ROLO0015_choosing_a_theme_applies_it_and_remembers_it(make_themes, theme, scheme,
+                                                                palette):
+    tm = make_themes()
+    dlg = rolodex.PreferencesDialog(tm)
+    dlg.theme_row.set_selected(list(rolodex.THEMES).index(theme))
+    assert tm.style.get_color_scheme() == scheme
+    assert tm.palette == palette
+    assert rolodex.load_config()[rolodex.THEME_KEY] == theme
+
+
+def test_ROLO0015_choosing_an_accent_applies_it_and_remembers_it(make_themes):
+    tm = make_themes()
+    dlg = rolodex.PreferencesDialog(tm)
+    keys = [k for k, _ in rolodex.PreferencesDialog.ACCENT_CHOICES]
+    dlg.accent_row.set_selected(keys.index("teal"))
+    assert tm.accent_hex() == rolodex.ACCENT_PRESETS["teal"]
+    assert rolodex.load_config()[rolodex.ACCENT_KEY] == "teal"
+
+
+def test_ROLO0015_the_dialog_opens_on_the_saved_choices(make_themes):
+    tm = make_themes(theme="high-contrast", accent="pink")
+    dlg = rolodex.PreferencesDialog(tm)
+    assert rolodex.THEMES[list(rolodex.THEMES)[dlg.theme_row.get_selected()]] == "High contrast"
+    assert rolodex.PreferencesDialog.ACCENT_CHOICES[dlg.accent_row.get_selected()][0] == "pink"
+
+
+def test_ROLO0015_a_hand_edited_bad_setting_falls_back(make_themes):
+    tm = make_themes(theme="neon", accent="red")
+    assert (tm.theme, tm.accent) == ("auto", "system")

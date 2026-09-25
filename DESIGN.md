@@ -135,9 +135,12 @@ for password-based encryption); everything after is authenticated ciphertext. Se
   detail card on the right, following the libadwaita list/detail idiom.
 - **Progressive disclosure of secrets.** Sensitive fields render as dots until the user hits
   *Reveal*, which is per-entry and resets whenever the selection changes.
-- **Colour as information.** A hardcoded dark "glass" theme (`CUSTOM_CSS`) uses coloured
-  left-borders to make a card scannable at a glance. This is the one area that deliberately
-  departs from stock Adwaita styling; making it theme-aware is roadmap ROLO-0011.
+- **Colour as information.** A bespoke "glass" look (`CUSTOM_CSS`) uses coloured
+  left-borders, plus a type icon, to make a card scannable at a glance. This is the one area
+  that deliberately departs from stock Adwaita styling. The stylesheet names colours rather
+  than stating them; each theme in `PALETTES` supplies them (ROLO-0015). Automatic follows the
+  desktop's light/dark setting. Every palette's field colours are checked against
+  colourblindness simulations, and its text against WCAG contrast, in `tests/test_themes.py`.
 - **Non-destructive by default.** Every destructive action (delete entry/category, restore,
   export plaintext) is behind an `Adw.AlertDialog` confirmation.
 
@@ -148,7 +151,7 @@ for password-based encryption); everything after is authenticated ciphertext. Se
 | App structure | One file, minimal deps | Modularity, plugin surface |
 | Persistence | Rewrite whole vault per change | Write efficiency (a non-issue at this scale) |
 | KDF | PBKDF2 600k (via `cryptography`) | Argon2's memory-hardness (see ROLO-0005) |
-| Theme | Bespoke dark CSS | System light/dark following (see ROLO-0011) |
+| Theme | Bespoke palettes, one stylesheet | Stock Adwaita's look, which the themes approximate rather than reuse |
 | Recovery | None — password is the only key | Convenience; in exchange, zero server-side attack surface |
 
 ## Related documents

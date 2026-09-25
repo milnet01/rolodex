@@ -94,7 +94,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: accessibility.
   Source: user-request-2026-07-04.
 
-- 📋 [ROLO-0015] **User-selectable themes and accent colours.**
+- ✅ [ROLO-0015] **User-selectable themes and accent colours.**
   Why: the UI is currently a single hardcoded dark 'glass' theme in CUSTOM_CSS; users want choice.
   Scope: refactor CUSTOM_CSS into named, swappable theme definitions (e.g. dark-glass, light, high-contrast, plus an accent-colour picker), a theme setting persisted in .rolodex.conf, and a Preferences UI to choose one. The field-category border colours must remain distinguishable in every theme. Absorbs ROLO-0011 (dropped 2026-09-24 as a duplicate): the theme list includes an 'Auto' option that follows the desktop's light/dark setting through Adw.StyleManager's color-scheme and switches live when the desktop changes, gating the dark overrides on the active scheme rather than hardcoding them. 'Auto' is the default theme (user decision 2026-09-24).
   Inherited from ROLO-0016 on 2026-09-21: checking the palettes against
@@ -117,6 +117,13 @@ release, which is what proves the in-app updater end to end: it installs from
   desktop's light/dark. Accent presets are Blue, Teal, Green, Orange,
   Pink, Purple and Slate, plus Follow desktop as the default; red and
   yellow are left out. Light keeps the glass feel in light colours.
+  Resolved (2026-09-25): PALETTES + theme_css() in the pure layer,
+  ThemeManager and PreferencesDialog in the GUI. tests/test_themes.py
+  checks every palette against Machado protan/deutan/tritan simulations
+  (CIE76 at least 20 between any two field colours) and WCAG contrast;
+  tests/test_widgets.py checks the dialog applies, saves and names its
+  controls. Real AT-SPI walk of the Preferences window read "Theme" and
+  "Accent colour" as named combo boxes.
   **Layman:** Let people pick from several looks (colour schemes) instead of the one fixed dark theme.
   Kind: ux.
   Source: user-request-2026-07-04.

@@ -7,7 +7,9 @@ temporary directory that is removed on exit. Run it under a private display, e.g
     demoreel shot -o docs/screenshots/detail.png -s 1280x800 -- \
         python3 scripts/demo-screenshots.py detail
 
-Scenes: detail (an entry with a live 2FA code), health, edit, unlock.
+Scenes: detail (an entry with a live 2FA code), health, edit, unlock, preferences.
+Optional second and third arguments pick the theme and the accent (ROLO-0015), e.g.
+`detail light teal`.
 """
 import os
 import shutil
@@ -66,10 +68,13 @@ def populate(vault):
 
 def main():
     scene = sys.argv[1] if len(sys.argv) > 1 else "detail"
+    theme = sys.argv[2] if len(sys.argv) > 2 else rolodex.DEFAULT_THEME
+    accent = sys.argv[3] if len(sys.argv) > 3 else rolodex.DEFAULT_ACCENT
     tmp = tempfile.mkdtemp(prefix="rolodex-demo-")
     rolodex.CONFIG_FILE = os.path.join(tmp, ".rolodex.conf")
     rolodex.save_config({"window_width": 1280, "window_height": 800,
-                         rolodex.UPDATE_ENABLED_KEY: False})
+                         rolodex.UPDATE_ENABLED_KEY: False,
+                         rolodex.THEME_KEY: theme, rolodex.ACCENT_KEY: accent})
     vault_path = os.path.join(tmp, "demo.vault")
     vault, salt, key = rolodex.create_vault_with_key(DEMO_PASSWORD, vault_path)
     populate(vault)
@@ -89,6 +94,8 @@ def main():
                 GLib.timeout_add(500, lambda: rolodex.PasswordHealthDialog(win).present(win))
             elif scene == "edit":
                 GLib.timeout_add(500, lambda: win._on_edit(None, first))
+            elif scene == "preferences":
+                GLib.timeout_add(500, lambda: win._on_preferences())
 
     app = DemoApp()
     app.vault_path = vault_path

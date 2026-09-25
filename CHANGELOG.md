@@ -11,12 +11,28 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Themes and accent colours, chosen in a new Preferences window (Ctrl+,).** (ROLO-0015)
+  Automatic (the default) follows the desktop's light or dark setting as it
+  changes. Dark is the familiar glass look; Light is the same look in
+  daylight colours; High contrast is white on black with solid borders.
+  The accent follows the desktop's, or one of seven presets. Field colours
+  stay distinguishable under protanopia, deuteranopia and tritanopia
+  simulations in every theme, and any accent is lightened or darkened
+  until text drawn in it is readable.
+
 - **Screen readers now name the controls they used to skip.** (ROLO-0017)
   The search box, the edit dialog's field and notes boxes and the
   new-category box are announced by name. Hidden values are read as
   "Hidden value" rather than a string of bullets, and category headers
   say whether they are expanded or collapsed. The edit dialog's
   show-value eye is still unnamed (ROLO-0091).
+
+### Changed
+
+- **Dark theme: timestamps, category headings and masked values are brighter.** (ROLO-0015)
+  They sat between about 2:1 and 4:1 against the background; they now meet the 4.5:1
+  readability guideline. The field border colours are now solid and were
+  retuned so no two merge for colourblind readers.
 
 ## [1.6.0] - 2026-09-24
 

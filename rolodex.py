@@ -19,7 +19,7 @@ import time
 import urllib.parse
 import uuid
 from datetime import datetime
-from typing import IO, TYPE_CHECKING, Any, Callable, ClassVar, NoReturn
+from typing import IO, TYPE_CHECKING, Any, Callable, ClassVar, Collection, Iterable, NoReturn
 
 if TYPE_CHECKING:  # for annotations only: INV-12 keeps these network modules out at runtime
     import ssl
@@ -1090,6 +1090,221 @@ def save_config(data: dict, path: str | None = None) -> bool:
         # the user; the return value lets a caller say so where it matters.
         return False
     return True
+
+
+def config_choice(conf: dict, key: str, allowed: Collection[str], default: str) -> str:
+    """A string setting from the hand-editable config, or *default* when it is not one of
+    *allowed* -- the same fall-back-rather-than-raise contract as config_int."""
+    value = conf.get(key, default)
+    return value if isinstance(value, str) and value in allowed else default
+
+
+# ---------------------------------------------------------------------------
+# Themes and accent colours (ROLO-0015)
+#
+# A theme is a palette of named colours; CUSTOM_CSS refers only to those names (@rolo_*), so
+# swapping the palette restyles everything. The field-category colours in each palette were
+# chosen so every pair stays distinguishable under protanopia, deuteranopia and tritanopia
+# simulations -- tests/test_themes.py checks that, and the text contrast, for every palette.
+# ---------------------------------------------------------------------------
+
+THEME_KEY = "theme"
+ACCENT_KEY = "accent"
+THEMES = {"auto": "Automatic", "dark": "Dark", "light": "Light",
+          "high-contrast": "High contrast"}
+DEFAULT_THEME = "auto"
+# libadwaita's own accent values, so a preset matches what the desktop would draw. Red and
+# yellow are left out on purpose: red reads as "delete" here, and yellow text is unreadable on
+# the Light theme (user decision 2026-09-25).
+ACCENT_PRESETS = {"blue": "#3584e4", "teal": "#2190a4", "green": "#3a944a",
+                  "orange": "#ed5b00", "pink": "#d56199", "purple": "#9141ac",
+                  "slate": "#6f8396"}
+ACCENT_SYSTEM = "system"
+DEFAULT_ACCENT = ACCENT_SYSTEM
+FALLBACK_ACCENT = ACCENT_PRESETS["blue"]
+
+PALETTES: dict[str, dict] = {
+    # Today's glass look.
+    "dark": {
+        "dark": True,
+        "glow": True,
+        "surfaces": ("#0d1117", "#161b22", "#1b2027"),
+        "colors": {
+            "bg_1": "#0d1117", "bg_2": "#161b22", "bg_3": "#0f1923", "bg_dialog": "#131a24",
+            "sidebar_1": "rgba(13,17,23,0.95)", "sidebar_2": "rgba(22,27,34,0.9)",
+            "card_bg": "rgba(255,255,255,0.04)", "card_bg_strong": "rgba(255,255,255,0.06)",
+            "card_border": "rgba(255,255,255,0.08)", "row_line": "rgba(255,255,255,0.04)",
+            "hover": "rgba(255,255,255,0.04)", "hover_soft": "rgba(255,255,255,0.02)",
+            "highlight": "rgba(255,255,255,0.05)", "shadow": "rgba(0,0,0,0.3)",
+            "shadow_soft": "rgba(0,0,0,0.2)", "headerbar_bg": "rgba(13,17,23,0.85)",
+            "headerbar_border": "rgba(255,255,255,0.06)", "notes": "#2aa1b3",
+            "notes_bg": "rgba(255,255,255,0.03)", "pill_bg": "rgba(255,255,255,0.05)",
+            "pill_border": "rgba(255,255,255,0.1)", "count_bg": "rgba(255,255,255,0.06)",
+            "destructive_glow": "rgba(224,27,36,0.25)",
+            "destructive_glow_strong": "rgba(224,27,36,0.35)",
+            "reveal_hover_bg": "rgba(245,194,17,0.1)",
+            "reveal_hover_border": "rgba(245,194,17,0.25)",
+        },
+        "text": {"dim": "#8b949e", "muted": "#8b949e", "masked": "#848d97",
+                 "revealed": "#f5c211"},
+        "fields": {"credential": "#f6d32d", "key": "#dc8add", "identity": "#1c71d8",
+                   "url": "#57e389", "date": "#e66100", "other": "#77767b"},
+        "extra_css": "",
+    },
+    "light": {
+        "dark": False,
+        "glow": False,
+        "surfaces": ("#ffffff", "#eef2f7", "#f7f9fc"),
+        "colors": {
+            "bg_1": "#f7f9fc", "bg_2": "#eef2f7", "bg_3": "#f3f6fa", "bg_dialog": "#f1f4f8",
+            "sidebar_1": "rgba(255,255,255,0.75)", "sidebar_2": "rgba(240,244,249,0.85)",
+            "card_bg": "rgba(255,255,255,0.7)", "card_bg_strong": "rgba(255,255,255,0.85)",
+            "card_border": "rgba(20,30,50,0.1)", "row_line": "rgba(20,30,50,0.06)",
+            "hover": "rgba(20,30,50,0.05)", "hover_soft": "rgba(20,30,50,0.03)",
+            "highlight": "rgba(255,255,255,0.8)", "shadow": "rgba(30,45,70,0.12)",
+            "shadow_soft": "rgba(30,45,70,0.08)", "headerbar_bg": "rgba(247,249,252,0.9)",
+            "headerbar_border": "rgba(20,30,50,0.08)", "notes": "#1b7a8a",
+            "notes_bg": "rgba(255,255,255,0.6)", "pill_bg": "rgba(255,255,255,0.8)",
+            "pill_border": "rgba(20,30,50,0.12)", "count_bg": "rgba(20,30,50,0.07)",
+            "destructive_glow": "rgba(192,28,40,0.18)",
+            "destructive_glow_strong": "rgba(192,28,40,0.28)",
+            "reveal_hover_bg": "rgba(156,110,3,0.08)",
+            "reveal_hover_border": "rgba(156,110,3,0.25)",
+        },
+        "text": {"dim": "#57606a", "muted": "#57606a", "masked": "#636c76",
+                 "revealed": "#845400"},
+        "fields": {"credential": "#a77605", "key": "#813d9c", "identity": "#3387f8",
+                   "url": "#1b7f4d", "date": "#b10025", "other": "#6e6e78"},
+        "extra_css": "",
+    },
+    # One look, white on black, whatever the desktop does (user decision 2026-09-25).
+    "high-contrast": {
+        "dark": True,
+        "glow": False,
+        "surfaces": ("#000000",),
+        "colors": {
+            "bg_1": "#000000", "bg_2": "#000000", "bg_3": "#000000", "bg_dialog": "#000000",
+            "sidebar_1": "#000000", "sidebar_2": "#000000",
+            "card_bg": "#000000", "card_bg_strong": "#000000",
+            "card_border": "#ffffff", "row_line": "rgba(255,255,255,0.5)",
+            "hover": "rgba(255,255,255,0.18)", "hover_soft": "rgba(255,255,255,0.12)",
+            "highlight": "transparent", "shadow": "transparent", "shadow_soft": "transparent",
+            "headerbar_bg": "#000000", "headerbar_border": "#ffffff", "notes": "#33e0ff",
+            "notes_bg": "#000000", "pill_bg": "#000000", "pill_border": "#ffffff",
+            "count_bg": "rgba(255,255,255,0.2)", "destructive_glow": "transparent",
+            "destructive_glow_strong": "transparent",
+            "reveal_hover_bg": "rgba(242,208,1,0.2)", "reveal_hover_border": "#f2d001",
+        },
+        "text": {"dim": "#d0d0d0", "muted": "#d0d0d0", "masked": "#c8c8c8",
+                 "revealed": "#f2d001"},
+        "fields": {"credential": "#f2d001", "key": "#d873b1", "identity": "#5694fe",
+                   "url": "#31ff9a", "date": "#fa693d", "other": "#fefefe"},
+        "extra_css": """
+.boxed-list, .notes-frame, .reveal-btn, .edit-btn { border-width: 2px; }
+.field-credential, .field-key, .field-identity, .field-url, .field-date, .field-other,
+.notes-frame { border-left-width: 5px; }
+.navigation-sidebar row:selected { background: @rolo_accent_bg; color: #ffffff; }
+.notes-frame { border-color: @rolo_notes; }
+""",
+        # libadwaita's own surfaces, so its widgets are black and white too.
+        "adw": {"window_bg_color": "#000000", "window_fg_color": "#ffffff",
+                "view_bg_color": "#000000", "view_fg_color": "#ffffff",
+                "headerbar_bg_color": "#000000", "headerbar_fg_color": "#ffffff",
+                "card_bg_color": "#000000", "card_fg_color": "#ffffff",
+                "dialog_bg_color": "#000000", "dialog_fg_color": "#ffffff",
+                "popover_bg_color": "#000000", "popover_fg_color": "#ffffff",
+                "sidebar_bg_color": "#000000", "sidebar_fg_color": "#ffffff"},
+    },
+}
+
+
+def _hex_rgb(color: str) -> tuple[float, float, float]:
+    h = color.lstrip("#")
+    return (int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255)
+
+
+def _rgb_hex(rgb: Iterable[float]) -> str:
+    return "#" + "".join(f"{round(max(0.0, min(1.0, c)) * 255):02x}" for c in rgb)
+
+
+def mix_hex(a: str, b: str, t: float) -> str:
+    """*a* moved fraction *t* of the way to *b*, in sRGB."""
+    ra, rb = _hex_rgb(a), _hex_rgb(b)
+    return _rgb_hex(tuple(x + (y - x) * t for x, y in zip(ra, rb)))
+
+
+def relative_luminance(color: str) -> float:
+    """WCAG 2.x relative luminance of a #rrggbb colour."""
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = (lin(c) for c in _hex_rgb(color))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast_ratio(a: str, b: str) -> float:
+    """WCAG contrast ratio between two #rrggbb colours (1.0 to 21.0)."""
+    la, lb = sorted((relative_luminance(a), relative_luminance(b)), reverse=True)
+    return (la + 0.05) / (lb + 0.05)
+
+
+def readable_against(color: str, surfaces: Iterable[str], toward: str,
+                     target: float = 4.5) -> str:
+    """*color*, mixed toward *toward* in small steps until it reaches *target* contrast
+    against every one of *surfaces*. An accent is a hue first; this keeps its hue while
+    making text drawn in it readable, whatever accent the desktop hands over."""
+    for step in range(21):
+        candidate = mix_hex(color, toward, step / 20)
+        if all(contrast_ratio(candidate, s) >= target for s in surfaces):
+            return candidate
+    return toward
+
+
+def resolve_palette(theme: str, system_dark: bool) -> str:
+    """The palette a theme setting draws with. Only Automatic depends on the desktop."""
+    if theme == "auto":
+        return "dark" if system_dark else "light"
+    return theme if theme in PALETTES else "dark"
+
+
+def accent_tokens(accent: str, palette: dict) -> dict[str, str]:
+    """The colours derived from one accent for one palette.
+
+    accent_bg carries white text at 4.5:1 (buttons, selection); accent_text is readable on
+    the palette's surfaces (titles, links, the live code)."""
+    accent_bg = readable_against(accent, ("#ffffff",), "#000000")
+    toward = "#ffffff" if palette["dark"] else "#000000"
+    return {
+        "accent": accent,
+        "accent_bg": accent_bg,
+        "accent_bg_dark": mix_hex(accent_bg, "#000000", 0.2),
+        "accent_text": readable_against(accent, palette["surfaces"], toward),
+        "glow": accent if palette["glow"] else "transparent",
+    }
+
+
+def theme_css(palette_name: str, accent: str, css_vars: bool = True) -> str:
+    """The whole stylesheet for one palette and accent: its @define-color block, CUSTOM_CSS,
+    then the palette's own extra rules -- last, so they win over CUSTOM_CSS at equal weight.
+
+    *css_vars* also sets libadwaita's CSS custom properties, which it reads from 1.6 on; GTK
+    before 4.16 cannot parse them, so the caller turns them off there.
+    """
+    palette = PALETTES[palette_name]
+    tokens = dict(palette["colors"])
+    tokens.update(palette["text"])
+    tokens.update({f"field_{k}": v for k, v in palette["fields"].items()})
+    derived = accent_tokens(accent, palette)
+    tokens.update(derived)
+    lines = [f"@define-color rolo_{name} {value};" for name, value in tokens.items()]
+    adw = {"accent_bg_color": derived["accent_bg"], "accent_fg_color": "#ffffff",
+           "accent_color": derived["accent_text"]}
+    adw.update(palette.get("adw", {}))
+    lines += [f"@define-color {name} {value};" for name, value in adw.items()]
+    if css_vars:
+        props = "".join(f"  --{name.replace('_color', '').replace('_', '-')}-color: {value};\n"
+                        for name, value in adw.items())
+        lines.append(":root {\n" + props + "}")
+    return "\n".join(lines) + "\n" + CUSTOM_CSS + palette["extra_css"]
 
 
 # ---------------------------------------------------------------------------
@@ -2222,6 +2437,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Right side: menu
         menu = Gio.Menu()
+        menu.append("Preferences...", "win.preferences")
         menu.append("Password health...", "win.health")
         menu.append("Manage categories...", "win.manage-categories")
         menu.append("Import from text file...", "win.import")
@@ -2279,6 +2495,7 @@ class MainWindow(Adw.ApplicationWindow):
             ("add", self._on_add, ["<Control>n"]),
             ("copy-secret", self._copy_secret, ["<Control><Shift>c"]),
             ("shortcuts", self._show_shortcuts, ["<Control>question"]),
+            ("preferences", self._on_preferences, ["<Control>comma"]),
         ]:
             action = Gio.SimpleAction(name=name)
             action.connect("activate", callback)
@@ -2853,6 +3070,7 @@ class MainWindow(Adw.ApplicationWindow):
         row.add_suffix(code_label)
 
         ring = Gtk.DrawingArea(valign=Gtk.Align.CENTER)
+        ring.add_css_class("totp-ring")
         ring.set_content_width(18)
         ring.set_content_height(18)
         ring.set_draw_func(self._draw_totp_ring, state)
@@ -2890,16 +3108,19 @@ class MainWindow(Adw.ApplicationWindow):
             w["ring"].queue_draw()
         return True  # repeat; cancelled explicitly via _cancel_totp_tick
 
-    def _draw_totp_ring(self, _area, cr, width, height, state):
-        """Draw a ring that empties clockwise from the top as the code's window elapses."""
+    def _draw_totp_ring(self, area, cr, width, height, state):
+        """Draw a ring that empties clockwise from the top as the code's window elapses.
+
+        Both strokes use the ring's CSS colour (.totp-ring), so it follows the theme's accent."""
         frac = state.get("fraction", 1.0)
         cx, cy = width / 2, height / 2
         radius = min(width, height) / 2 - 2
+        color = area.get_color()
         cr.set_line_width(2.5)
-        cr.set_source_rgba(1, 1, 1, 0.15)  # faint full-circle track
+        cr.set_source_rgba(color.red, color.green, color.blue, 0.2)  # faint full-circle track
         cr.arc(cx, cy, radius, 0, 2 * math.pi)
         cr.stroke()
-        cr.set_source_rgba(0.36, 0.66, 1.0, 0.95)  # remaining arc, in the accent blue
+        cr.set_source_rgba(color.red, color.green, color.blue, 0.95)  # remaining arc
         start = -math.pi / 2
         cr.arc(cx, cy, radius, start, start + frac * 2 * math.pi)
         cr.stroke()
@@ -3183,6 +3404,11 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_password_health(self, *_args):
         PasswordHealthDialog(self).present(self)
+
+    def _on_preferences(self, *_args):
+        themes = getattr(self.get_application(), "themes", None)
+        if themes is not None:
+            PreferencesDialog(themes).present(self)
 
     # ------------------------------------------------------------------
     # Auto-lock (ROLO-0002)
@@ -4719,28 +4945,24 @@ class UpdateDialog(Adw.AlertDialog):
 
 
 CUSTOM_CSS = """
-/* ── Accent overrides ── */
-@define-color accent_bg_color #3584e4;
-@define-color accent_color #78aeed;
+/* Every colour here is a palette name (@rolo_*) defined by theme_css() (ROLO-0015). */
 
 /* ══════════════════════════════════════════════
    Gradient backgrounds
    ══════════════════════════════════════════════ */
 
-/* Main window background: deep dark gradient */
 .main-paned {
-    background-image: linear-gradient(160deg, #0d1117 0%, #161b22 35%, #0f1923 65%, #0d1117 100%);
+    background-image: linear-gradient(160deg, @rolo_bg_1 0%, @rolo_bg_2 35%, @rolo_bg_3 65%, @rolo_bg_1 100%);
 }
 
-/* Sidebar: subtle darker panel */
 .sidebar-box {
-    background-image: linear-gradient(180deg, rgba(13,17,23,0.95) 0%, rgba(22,27,34,0.9) 100%);
-    border-right: 1px solid rgba(120,174,237,0.08);
+    background-image: linear-gradient(180deg, @rolo_sidebar_1 0%, @rolo_sidebar_2 100%);
+    border-right: 1px solid alpha(@rolo_accent, 0.08);
 }
 
-/* Unlock dialog window */
+/* Unlock window */
 window.background {
-    background-image: linear-gradient(160deg, #0d1117 0%, #131a24 50%, #0d1117 100%);
+    background-image: linear-gradient(160deg, @rolo_bg_1 0%, @rolo_bg_dialog 50%, @rolo_bg_1 100%);
 }
 
 /* ══════════════════════════════════════════════
@@ -4749,65 +4971,41 @@ window.background {
 
 /* Boxed lists (field cards, import list, password rows) */
 .boxed-list {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: @rolo_card_bg;
+    border: 1px solid @rolo_card_border;
     border-radius: 12px;
     box-shadow:
-        0 4px 16px rgba(0,0,0,0.3),
-        inset 0 1px 0 rgba(255,255,255,0.05);
+        0 4px 16px @rolo_shadow,
+        inset 0 1px 0 @rolo_highlight;
 }
 
 .boxed-list row {
     background: transparent;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid @rolo_row_line;
 }
 
 .boxed-list row:last-child {
     border-bottom: none;
 }
 
-/* ── Field category left-border colors ── */
+/* ── Field category left-border colours (checked against colourblindness simulations) ── */
+.field-credential { border-left: 3px solid @rolo_field_credential; }
+.field-key        { border-left: 3px solid @rolo_field_key; }
+.field-identity   { border-left: 3px solid @rolo_field_identity; }
+.field-url        { border-left: 3px solid @rolo_field_url; }
+.field-date       { border-left: 3px solid @rolo_field_date; }
+.field-other      { border-left: 3px solid @rolo_field_other; }
 
-/*  Credential (password, pin, authenticator) — amber */
-.field-credential {
-    border-left: 3px solid rgba(229,165,10,0.7);
-}
-
-/*  Key / Token / Secret — purple */
-.field-key {
-    border-left: 3px solid rgba(145,65,172,0.7);
-}
-
-/*  Identity (username, email, account) — blue */
-.field-identity {
-    border-left: 3px solid rgba(53,132,228,0.7);
-}
-
-/*  URL / Link — green */
-.field-url {
-    border-left: 3px solid rgba(38,162,105,0.7);
-}
-
-/*  Date / Expiry / Subscription — orange */
-.field-date {
-    border-left: 3px solid rgba(230,97,0,0.7);
-}
-
-/*  Other / uncategorised — subtle grey */
-.field-other {
-    border-left: 3px solid rgba(94,92,100,0.5);
-}
-
-/* Notes frame: glass card — cyan, distinct from URL green & identity blue */
+/* Notes frame: glass card, in its own colour apart from the field categories */
 .notes-frame {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(42,161,179,0.15);
-    border-left: 3px solid rgba(42,161,179,0.6);
+    background: @rolo_notes_bg;
+    border: 1px solid alpha(@rolo_notes, 0.25);
+    border-left: 3px solid @rolo_notes;
     border-radius: 10px;
     padding: 4px 8px;
     box-shadow:
-        0 2px 12px rgba(0,0,0,0.25),
-        inset 0 1px 0 rgba(255,255,255,0.04);
+        0 2px 12px @rolo_shadow_soft,
+        inset 0 1px 0 @rolo_highlight;
 }
 
 /* Navigation sidebar rows: glass on hover/select */
@@ -4823,72 +5021,72 @@ window.background {
 }
 
 .navigation-sidebar row:hover {
-    background: rgba(255,255,255,0.04);
+    background: @rolo_hover;
 }
 
 .navigation-sidebar row:selected {
-    background: rgba(53,132,228,0.15);
-    border-left: 3px solid #3584e4;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    background: alpha(@rolo_accent, 0.15);
+    border-left: 3px solid @rolo_accent;
+    box-shadow: inset 0 1px 0 @rolo_highlight;
 }
 
 /* Action buttons: glass pill style */
 .reveal-btn, .edit-btn {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: @rolo_pill_bg;
+    border: 1px solid @rolo_pill_border;
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 8px @rolo_shadow_soft;
     padding: 6px 14px;
     transition: background 150ms ease, border-color 150ms ease;
 }
 
 .reveal-btn:hover {
-    background: rgba(245,194,17,0.1);
-    border-color: rgba(245,194,17,0.25);
+    background: @rolo_reveal_hover_bg;
+    border-color: @rolo_reveal_hover_border;
 }
 
 .edit-btn:hover {
-    background: rgba(120,174,237,0.1);
-    border-color: rgba(120,174,237,0.25);
+    background: alpha(@rolo_accent, 0.1);
+    border-color: alpha(@rolo_accent, 0.3);
 }
 
 /* Search entry: glass style */
 .sidebar-box searchentry {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: @rolo_card_bg;
+    border: 1px solid @rolo_card_border;
     border-radius: 8px;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    box-shadow: inset 0 1px 0 @rolo_highlight;
 }
 
 .sidebar-box searchentry:focus-within {
-    background: rgba(255,255,255,0.06);
-    border-color: rgba(53,132,228,0.4);
+    background: @rolo_card_bg_strong;
+    border-color: alpha(@rolo_accent, 0.5);
     box-shadow:
-        inset 0 1px 0 rgba(255,255,255,0.03),
-        0 0 0 2px rgba(53,132,228,0.15);
+        inset 0 1px 0 @rolo_highlight,
+        0 0 0 2px alpha(@rolo_accent, 0.2);
 }
 
 /* ══════════════════════════════════════════════
-   Text & color accents
+   Text & colour accents
    ══════════════════════════════════════════════ */
 
 /* Entry name in detail view */
 .entry-title {
-    color: #78aeed;
-    text-shadow: 0 0 20px rgba(53,132,228,0.3);
+    color: @rolo_accent_text;
+    text-shadow: 0 0 20px alpha(@rolo_glow, 0.3);
 }
 
 /* Sensitive field mask */
 .field-masked {
-    color: #555d6b;
+    color: @rolo_masked;
     font-style: italic;
     letter-spacing: 2px;
 }
 
-/* Revealed sensitive value - amber glow */
+/* Revealed sensitive value */
 .field-revealed-sensitive {
-    color: #f5c211;
-    text-shadow: 0 0 12px rgba(245,194,17,0.2);
+    color: @rolo_revealed;
+    text-shadow: 0 0 12px alpha(@rolo_glow, 0.15);
 }
 
 /* TOTP live code row (ROLO-0006) */
@@ -4900,12 +5098,16 @@ window.background {
     font-size: 1.25em;
     font-weight: bold;
     letter-spacing: 2px;
-    color: #5ca8ff;
+    color: @rolo_accent_text;
 }
 .totp-remaining {
     font-size: 0.85em;
-    color: #8b93a1;
+    color: @rolo_muted;
     min-width: 26px;
+}
+/* The countdown ring draws in its CSS colour (_draw_totp_ring). */
+.totp-ring {
+    color: @rolo_accent_text;
 }
 
 /* Copy button */
@@ -4915,80 +5117,81 @@ window.background {
 }
 
 .copy-btn:hover {
-    color: #78aeed;
-    background: rgba(120,174,237,0.1);
+    color: @rolo_accent_text;
+    background: alpha(@rolo_accent, 0.1);
 }
 
 /* Timestamp styling */
 .timestamp {
-    color: #484f58;
+    color: @rolo_dim;
     font-size: 0.85em;
 }
 
 /* Reveal button */
 .reveal-btn {
-    color: #f5c211;
+    color: @rolo_revealed;
 }
 
 /* Edit button */
 .edit-btn {
-    color: #78aeed;
+    color: @rolo_accent_text;
 }
 
 /* Count label */
 .count-label {
-    color: #78aeed;
+    color: @rolo_accent_text;
     font-weight: bold;
-    text-shadow: 0 0 16px rgba(53,132,228,0.2);
+    text-shadow: 0 0 16px alpha(@rolo_glow, 0.2);
 }
 
 /* Unlock dialog title */
 .unlock-title {
-    color: #78aeed;
+    color: @rolo_accent_text;
     font-size: 1.6em;
     font-weight: 800;
-    text-shadow: 0 0 24px rgba(53,132,228,0.35);
+    text-shadow: 0 0 24px alpha(@rolo_glow, 0.35);
 }
 
 /* Separator gets a subtle glow */
 separator {
     background: linear-gradient(90deg,
         transparent 0%,
-        rgba(53,132,228,0.25) 50%,
+        alpha(@rolo_accent, 0.3) 50%,
         transparent 100%);
     min-height: 1px;
 }
 
 /* Header bar: blend with gradient */
 headerbar {
-    background: rgba(13,17,23,0.85);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    background: @rolo_headerbar_bg;
+    border-bottom: 1px solid @rolo_headerbar_border;
+    box-shadow: 0 1px 4px @rolo_shadow_soft;
 }
 
 /* Suggested-action buttons (Create Vault, Unlock, Save, Import) */
 button.suggested-action {
-    background: linear-gradient(135deg, #2563b0 0%, #3584e4 100%);
-    border: 1px solid rgba(120,174,237,0.3);
+    background: linear-gradient(135deg, @rolo_accent_bg_dark 0%, @rolo_accent_bg 100%);
+    color: #ffffff;
+    border: 1px solid alpha(@rolo_accent, 0.3);
     box-shadow:
-        0 2px 8px rgba(53,132,228,0.3),
-        inset 0 1px 0 rgba(255,255,255,0.1);
+        0 2px 8px alpha(@rolo_glow, 0.3),
+        inset 0 1px 0 alpha(#ffffff, 0.1);
 }
 
 button.suggested-action:hover {
-    background: linear-gradient(135deg, #2d6fbf 0%, #4a94e8 100%);
+    background: linear-gradient(135deg, @rolo_accent_bg 0%, @rolo_accent_bg 100%);
     box-shadow:
-        0 4px 16px rgba(53,132,228,0.4),
-        inset 0 1px 0 rgba(255,255,255,0.12);
+        0 4px 16px alpha(@rolo_glow, 0.4),
+        inset 0 1px 0 alpha(#ffffff, 0.12);
 }
 
 /* Destructive button glow */
 button.destructive-action {
-    box-shadow: 0 2px 8px rgba(224,27,36,0.25);
+    box-shadow: 0 2px 8px @rolo_destructive_glow;
 }
 
 button.destructive-action:hover {
-    box-shadow: 0 4px 16px rgba(224,27,36,0.35);
+    box-shadow: 0 4px 16px @rolo_destructive_glow_strong;
 }
 
 /* Password entry rows: blend with glass */
@@ -4998,17 +5201,17 @@ row.entry {
 
 /* ── Field editor (Add/Edit dialog) ── */
 .field-editor-list {
-    background: rgba(255,255,255,0.03);
+    background: @rolo_notes_bg;
 }
 
 .field-editor-list row {
     background: transparent;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid @rolo_row_line;
     transition: background 150ms ease;
 }
 
 .field-editor-list row:hover {
-    background: rgba(255,255,255,0.02);
+    background: @rolo_hover_soft;
 }
 
 /* ── Category header rows in sidebar ── */
@@ -5017,7 +5220,7 @@ row.entry {
 }
 
 .category-header-row:hover {
-    background: rgba(255,255,255,0.02);
+    background: @rolo_hover_soft;
 }
 
 .navigation-sidebar .category-header-row:selected {
@@ -5027,16 +5230,16 @@ row.entry {
 }
 
 .category-header-label {
-    color: #6e7681;
+    color: @rolo_muted;
     font-size: 0.75em;
     font-weight: 800;
     letter-spacing: 1.5px;
 }
 
 .category-count {
-    background: rgba(255,255,255,0.06);
+    background: @rolo_count_bg;
     border-radius: 10px;
-    color: #6e7681;
+    color: @rolo_muted;
     font-size: 0.75em;
     font-weight: 600;
     min-width: 20px;
@@ -5044,9 +5247,9 @@ row.entry {
 }
 
 .category-drop-hover {
-    background: rgba(53,132,228,0.15);
+    background: alpha(@rolo_accent, 0.15);
     border-radius: 8px;
-    box-shadow: 0 0 8px rgba(53,132,228,0.3);
+    box-shadow: 0 0 8px alpha(@rolo_accent, 0.3);
 }
 """
 
@@ -5118,6 +5321,7 @@ class ShortcutsDialog(Adw.Dialog):
         ("<Control>l", "Lock vault"),
         ("Escape", "Clear search"),
         ("<Control>question", "Keyboard shortcuts"),
+        ("<Control>comma", "Preferences"),
     ]
 
     def __init__(self):
@@ -5135,10 +5339,116 @@ class ShortcutsDialog(Adw.Dialog):
         clamp.set_child(listbox)
 
 
+class ThemeManager:
+    """Owns the app's one stylesheet and redraws it when the theme, the accent or the desktop's
+    light/dark setting changes (ROLO-0015). Automatic follows the desktop live; Dark, Light and
+    High contrast force libadwaita's own widgets to match."""
+
+    def __init__(self, display):
+        self.provider = Gtk.CssProvider()
+        Gtk.StyleContext.add_provider_for_display(
+            display, self.provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.style = Adw.StyleManager.get_default()
+        conf = load_config()
+        self.theme = config_choice(conf, THEME_KEY, THEMES, DEFAULT_THEME)
+        self.accent = config_choice(conf, ACCENT_KEY, (ACCENT_SYSTEM, *ACCENT_PRESETS),
+                                    DEFAULT_ACCENT)
+        self.palette = ""
+        # Kept so a test can detach from the process-wide StyleManager again.
+        self.handlers = [self.style.connect("notify::dark", lambda *_: self._restyle())]
+        if self.follows_system_accent_supported():
+            self.handlers.append(
+                self.style.connect("notify::accent-color-rgba", lambda *_: self._restyle()))
+        self.apply()
+
+    def follows_system_accent_supported(self) -> bool:
+        """Whether the desktop hands over an accent colour at all. libadwaita before 1.6 has no
+        accent API, and a desktop without the portal setting reports no support."""
+        return (hasattr(self.style, "get_system_supports_accent_colors")
+                and self.style.get_system_supports_accent_colors())
+
+    def accent_hex(self) -> str:
+        if self.accent in ACCENT_PRESETS:
+            return ACCENT_PRESETS[self.accent]
+        if self.follows_system_accent_supported():
+            rgba = self.style.get_accent_color_rgba()
+            return _rgb_hex((rgba.red, rgba.green, rgba.blue))
+        return FALLBACK_ACCENT
+
+    def apply(self) -> None:
+        scheme = {"auto": Adw.ColorScheme.DEFAULT,
+                  "light": Adw.ColorScheme.FORCE_LIGHT}.get(self.theme, Adw.ColorScheme.FORCE_DARK)
+        if self.style.get_color_scheme() != scheme:
+            self.style.set_color_scheme(scheme)  # fires notify::dark when the result changes
+        self._restyle()
+
+    def _restyle(self) -> None:
+        self.palette = resolve_palette(self.theme, self.style.get_dark())
+        css_vars = (Gtk.get_major_version(), Gtk.get_minor_version()) >= (4, 16)
+        self.provider.load_from_string(
+            theme_css(self.palette, self.accent_hex(), css_vars))
+
+    def set_theme(self, theme: str) -> bool:
+        """Switch theme now and remember it. False when the config write failed."""
+        self.theme = theme
+        self.apply()
+        return save_config({THEME_KEY: theme})
+
+    def set_accent(self, accent: str) -> bool:
+        self.accent = accent
+        self._restyle()
+        return save_config({ACCENT_KEY: accent})
+
+
+class PreferencesDialog(Adw.PreferencesDialog):
+    """Appearance settings (ROLO-0015): the theme and the accent colour. Each change applies
+    at once and is saved to .rolodex.conf."""
+
+    ACCENT_CHOICES: ClassVar[list[tuple[str, str]]] = (
+        [(ACCENT_SYSTEM, "Follow desktop")] + [(k, k.capitalize()) for k in ACCENT_PRESETS])
+
+    def __init__(self, themes: ThemeManager):
+        super().__init__(title="Preferences")
+        self._themes = themes
+        page = Adw.PreferencesPage(title="Appearance", icon_name="preferences-desktop-symbolic")
+        group = Adw.PreferencesGroup(title="Appearance")
+
+        theme_keys = list(THEMES)
+        self.theme_row = Adw.ComboRow(
+            title="Theme", subtitle="Automatic follows your desktop's light or dark setting",
+            model=Gtk.StringList.new(list(THEMES.values())))
+        self.theme_row.set_selected(theme_keys.index(themes.theme))
+        self.theme_row.connect(
+            "notify::selected",
+            lambda row, _p: self._saved(themes.set_theme(theme_keys[row.get_selected()])))
+        group.add(self.theme_row)
+
+        accent_keys = [k for k, _ in self.ACCENT_CHOICES]
+        subtitle = ("" if themes.follows_system_accent_supported() else
+                    "Your desktop does not share an accent colour, so Follow desktop uses blue")
+        self.accent_row = Adw.ComboRow(
+            title="Accent colour", subtitle=subtitle,
+            model=Gtk.StringList.new([label for _, label in self.ACCENT_CHOICES]))
+        self.accent_row.set_selected(accent_keys.index(themes.accent))
+        self.accent_row.connect(
+            "notify::selected",
+            lambda row, _p: self._saved(themes.set_accent(accent_keys[row.get_selected()])))
+        group.add(self.accent_row)
+
+        page.add(group)
+        self.add(page)
+
+    def _saved(self, ok: bool) -> None:
+        if not ok:
+            self.add_toast(Adw.Toast(
+                title="Could not save this setting. It applies until Rolodex closes."))
+
+
 class RolodexApp(Adw.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
         self.vault_path = VAULT_FILE
+        self.themes = None
 
     def do_startup(self):
         Adw.Application.do_startup(self)
@@ -5150,13 +5460,7 @@ class RolodexApp(Adw.Application):
             # the cause (ROLO-0073); GTK itself reports the missing display when a window opens.
             print("Rolodex: no display available", file=sys.stderr)
             return
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_string(CUSTOM_CSS)
-        Gtk.StyleContext.add_provider_for_display(
-            display,
-            css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        )
+        self.themes = ThemeManager(display)
 
     def do_activate(self):
         # Single-instance app (FLAGS_NONE): a second launch delivers activate() to the running
