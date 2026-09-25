@@ -51,7 +51,7 @@ discovery conversation follows this release. 1.7.0 is also the second signed
 release, which is what proves the in-app updater end to end: it installs from
 1.6.0.
 
-- 📋 [ROLO-0017] **Screen-reader support: accessible names, roles, and relationships.**
+- ✅ [ROLO-0017] **Screen-reader support: accessible names, roles, and relationships.**
   Why: icon-only buttons (add, copy, rename, delete, drag handles) and masked fields need explicit accessible names/descriptions; masked values must not be announced as raw dots, and reveal state should be conveyed.
   Scope: set Gtk.Accessible names/descriptions and appropriate roles across the UI, ensure focus order and keyboard operability (pairs with ROLO-0007 shortcuts), and test end-to-end with Orca. Announce toasts and dialog headings.
   Groundwork 2026-09-21, no code yet.
@@ -78,6 +78,18 @@ release, which is what proves the in-app updater end to end: it installs from
   the widget tree and fail on any interactive control without an
   accessible name. No Orca run; Orca is not installed on this machine.
   This replaces the scope's 'test end-to-end with Orca'.
+  Resolved (2026-09-25): named the controls that had no spoken name -
+  the sidebar search box, the Add/Edit dialog's field label and value
+  boxes and its Notes box, and the new-category box. Masked values now
+  read "Hidden value" instead of eight bullets. Category headers carry
+  their name, count and expanded state; their arrow and the 2FA row's
+  icon are hidden from the reader as decorative. Toasts needed nothing:
+  libadwaita already announces them ("A toast appeared: ..."), confirmed
+  over AT-SPI. Verified by tests/test_widgets.py ROLO0017 tests, which
+  walk every window and dialog through GTK's test probes and were
+  cross-checked against a live AT-SPI dump. Each fix was reverted in turn
+  and reddened a test. Left over: the edit dialog's show-value eye,
+  which GTK cannot name; filed as ROLO-0091.
   **Layman:** Make the app work properly with screen readers that read the interface aloud.
   Kind: accessibility.
   Source: user-request-2026-07-04.
@@ -127,6 +139,20 @@ release, which is what proves the in-app updater end to end: it installs from
   **Layman:** Move data in and out using the spreadsheet format other password apps use.
   Kind: feature.
   Source: in-session-2026-07-04.
+
+- 📋 [ROLO-0091] **Make the edit dialog's show-value eye reachable by keyboard and screen reader.**
+  Why: FieldRow puts the peek toggle (ROLO-0021) inside the value box as
+  a Gtk.Entry secondary icon. GTK gives an entry icon no accessible name
+  and no keyboard focus. AT-SPI on 2026-09-25 read each one as an
+  unnamed "image", one per field row, in the Add/Edit dialog.
+  Scope: replace the entry icon with a real toggle button beside the
+  value box, named "Show value" / "Hide value", in the same shape
+  Adw.PasswordEntryRow uses. Keep the rule that peeking never changes the
+  Hide flag. Then drop the Gtk.Entry skip from _unnamed() in
+  tests/test_widgets.py so the test covers the new button.
+  **Layman:** The eye button that shows a hidden value while editing can only be clicked with a mouse, and a screen reader calls it just "image".
+  Kind: accessibility.
+  Source: in-session-2026-09-25 (ROLO-0017).
 
 ## Unscheduled
 

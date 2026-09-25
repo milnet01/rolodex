@@ -1648,8 +1648,9 @@ def sweep_stale_update_temps(target: str | None = None) -> int:
 
 
 def a11y_label(widget, text: str):
-    """Give an icon-only widget a name a screen reader can speak (ROLO-0053). A tooltip is not
-    one: it is exposed as a description, so the button itself was announced as nameless."""
+    """Give a widget with no visible name one a screen reader can speak (ROLO-0053). A tooltip
+    is not one: it is exposed as a description, so the button itself was announced as nameless.
+    Nor is an entry's placeholder, which is gone once the box holds text (ROLO-0017)."""
     widget.update_property([Gtk.AccessibleProperty.LABEL], [text])
     return widget
 
@@ -2097,9 +2098,11 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
         box.set_margin_start(8)
         box.set_margin_end(8)
 
-        # Disclosure arrow
+        # Disclosure arrow. A picture of the row's EXPANDED state, so a screen reader is told
+        # the state itself and skips the picture (ROLO-0017).
         arrow_icon = "pan-end-symbolic" if collapsed else "pan-down-symbolic"
-        self.arrow = Gtk.Image(icon_name=arrow_icon)
+        self.arrow = Gtk.Image(icon_name=arrow_icon,
+                               accessible_role=Gtk.AccessibleRole.PRESENTATION)
         self.arrow.add_css_class("dim-label")
         box.append(self.arrow)
 
@@ -2115,6 +2118,10 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
         box.append(count_label)
 
         self.set_child(box)
+        a11y_label(self, f"{display_name}, {count} {entries_noun(count)}")
+        # An int, not a bool: GTK reads this state as an int, and a Python bool arrives as a
+        # GValue it cannot read, so the state is dropped with only a console warning.
+        self.update_state([Gtk.AccessibleState.EXPANDED], [int(not collapsed)])
 
         # Drop target for dragging entries onto this category
         drop = Gtk.DropTarget(actions=Gdk.DragAction.MOVE)
@@ -2290,7 +2297,8 @@ class MainWindow(Adw.ApplicationWindow):
         left_box.add_css_class("sidebar-box")
 
         # Search
-        self.search_entry = Gtk.SearchEntry(placeholder_text="Search entries...")
+        self.search_entry = a11y_label(Gtk.SearchEntry(placeholder_text="Search entries..."),
+                                       "Search entries")
         self.search_entry.set_margin_top(8)
         self.search_entry.set_margin_start(8)
         self.search_entry.set_margin_end(8)
@@ -2722,6 +2730,8 @@ class MainWindow(Adw.ApplicationWindow):
             val_label.set_selectable(True)
             if is_sensitive and not self._revealed:
                 val_label.add_css_class("field-masked")
+                # Otherwise a screen reader spells out eight bullet characters (ROLO-0017).
+                a11y_label(val_label, "Hidden value")
             elif is_sensitive and self._revealed:
                 val_label.add_css_class("field-revealed-sensitive")
             row.add_suffix(val_label)
@@ -2826,11 +2836,12 @@ class MainWindow(Adw.ApplicationWindow):
         row = Adw.ActionRow()
         row.set_title("Code")
         row.add_css_class("totp-row")
-        # Decorative, and unnamed on purpose: the row's own "Code" title already says what
-        # this is. It exists so the row keeps its left edge with the field rows around it,
-        # which carry a type icon since ROLO-0016.
+        # Decorative, and hidden from screen readers on purpose: the row's own "Code" title
+        # already says what this is. It exists so the row keeps its left edge with the field
+        # rows around it, which carry a type icon since ROLO-0016.
         row.add_prefix(Gtk.Image(icon_name=FIELD_CATEGORY_CUES["credential"][0],
-                                 valign=Gtk.Align.CENTER))
+                                 valign=Gtk.Align.CENTER,
+                                 accessible_role=Gtk.AccessibleRole.PRESENTATION))
         if self._clock_synced is False:
             # RFC 6238 needs both sides to agree on the time. A drifted clock makes every code
             # wrong, and it looks like "the site rejected my code" (ROLO-0068).
@@ -3698,11 +3709,15 @@ class FieldRow(Gtk.ListBoxRow):
         handle.set_tooltip_text("Drag to reorder, or Ctrl+Up / Ctrl+Down")
         box.append(handle)
 
-        self.label_entry = Gtk.Entry(placeholder_text="Label", text=label, hexpand=True)
+        # A placeholder is not a name: once the box has text a screen reader has nothing to
+        # say what the box is for (ROLO-0017).
+        self.label_entry = a11y_label(
+            Gtk.Entry(placeholder_text="Label", text=label, hexpand=True), "Field label")
         self.label_entry.set_size_request(110, -1)
         box.append(self.label_entry)
 
-        self.value_entry = Gtk.Entry(placeholder_text="Value", text=value, hexpand=True)
+        self.value_entry = a11y_label(
+            Gtk.Entry(placeholder_text="Value", text=value, hexpand=True), "Field value")
         self.value_entry.set_size_request(160, -1)
         box.append(self.value_entry)
 
@@ -3964,7 +3979,7 @@ class AddEditDialog(Adw.Dialog):
 
         # Notes
         notes_group = Adw.PreferencesGroup(title="Notes")
-        self.notes_view = Gtk.TextView()
+        self.notes_view = a11y_label(Gtk.TextView(), "Notes")
         self.notes_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.notes_view.set_top_margin(8)
         self.notes_view.set_bottom_margin(8)
@@ -4513,7 +4528,8 @@ class ManageCategoriesDialog(Adw.Dialog):
 
         # Add new category row
         add_box = Gtk.Box(spacing=8)
-        self.new_cat_entry = Gtk.Entry(placeholder_text="New category name...", hexpand=True)
+        self.new_cat_entry = a11y_label(
+            Gtk.Entry(placeholder_text="New category name...", hexpand=True), "New category name")
         self.new_cat_entry.connect("activate", lambda e: self._add_category())
         add_box.append(self.new_cat_entry)
         add_btn = Gtk.Button(label="Add")

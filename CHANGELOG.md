@@ -9,6 +9,15 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Screen readers now name the controls they used to skip.** (ROLO-0017)
+  The search box, the edit dialog's field and notes boxes and the
+  new-category box are announced by name. Hidden values are read as
+  "Hidden value" rather than a string of bullets, and category headers
+  say whether they are expanded or collapsed. The edit dialog's
+  show-value eye is still unnamed (ROLO-0091).
+
 ## [1.6.0] - 2026-09-24
 
 ### Added

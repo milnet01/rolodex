@@ -542,6 +542,147 @@ def test_ROLO0016_the_category_icon_is_named_for_a_screen_reader(app, tmp_path, 
         assert name in seen
 
 
+def _unnamed(root):
+    """Every control under `root` a screen reader would announce with no name.
+
+    Uses GTK's own test probes rather than AT-SPI, so it runs under plain Xvfb with no
+    accessibility bus. The rules mirror what AT-SPI was measured to report on 2026-09-25:
+    an explicit label, a labelled-by relation, a tooltip on an image, or text inside a
+    button all yield a name. libadwaita's entry rows and the window controls name their own
+    parts and are not walked; neither are a Gtk.Entry's internal icons, which GTK gives no
+    way to name (ROLO-0091). An Adw.ActionRow IS walked: its prefixes and suffixes are ours.
+    """
+    from gi.repository import Gtk
+
+    R = Gtk.AccessibleRole
+    interactive = {R.BUTTON, R.TOGGLE_BUTTON, R.CHECKBOX, R.SWITCH, R.TEXT_BOX, R.SEARCH_BOX,
+                   R.SPIN_BUTTON, R.COMBO_BOX, R.SLIDER, R.LINK, R.RADIO, R.IMG}
+    from_content = {R.BUTTON, R.TOGGLE_BUTTON, R.CHECKBOX, R.LINK, R.RADIO}
+
+    def has_text(w):
+        c = w.get_first_child()
+        while c is not None:
+            if (isinstance(c, Gtk.Label) and c.get_text().strip()) or has_text(c):
+                return True
+            c = c.get_next_sibling()
+        return False
+
+    def named(w):
+        if (Gtk.test_accessible_has_property(w, Gtk.AccessibleProperty.LABEL)
+                or Gtk.test_accessible_has_relation(w, Gtk.AccessibleRelation.LABELLED_BY)):
+            return True
+        if w.get_accessible_role() == R.IMG and w.get_tooltip_text():
+            return True
+        if isinstance(w.get_parent(), (Gtk.MenuButton, Gtk.DropDown)):
+            return named(w.get_parent()) or has_text(w)
+        return w.get_accessible_role() in from_content and has_text(w)
+
+    found = []
+
+    def walk(w):
+        if w is not root and not w.get_visible():
+            return
+        if isinstance(w, (Adw.EntryRow, Gtk.WindowControls)) and w is not root:
+            return
+        if w.get_accessible_role() in interactive and not named(w):
+            parent = w.get_parent()
+            found.append(f"{type(w).__name__} in {type(parent).__name__ if parent else '-'}")
+        if isinstance(w, Gtk.Entry):
+            return
+        c = w.get_first_child()
+        while c is not None:
+            walk(c)
+            c = c.get_next_sibling()
+
+    walk(root.get_child() if isinstance(root, Adw.Dialog) else root)
+    return found
+
+
+def _a11y_window(app, tmp_path, monkeypatch):
+    monkeypatch.setattr(rolodex, "CONFIG_FILE", str(tmp_path / "conf"))
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+    vault["categories"] = ["Games"]
+    entry_id = rolodex.add_entry(vault, "Steam", [
+        {"label": "Username", "value": "bob", "sensitive": False},
+        {"label": "Password", "value": "hunter2", "sensitive": True},
+        {"label": "TOTP", "value": "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP",
+         "sensitive": True},
+    ], category="Games", notes="a note")
+    rolodex.add_entry(vault, "Wi-Fi", [])
+    win = rolodex.MainWindow(app, vault, salt, PW, path, key)
+    win._show_detail(entry_id)
+    return win, entry_id
+
+
+def test_ROLO0017_every_control_in_every_window_has_a_spoken_name(app, tmp_path, monkeypatch):
+    win, entry_id = _a11y_window(app, tmp_path, monkeypatch)
+    views = {
+        "main window": win,
+        "edit dialog": rolodex.AddEditDialog(win, "Edit", entry_id,
+                                             win.vault["entries"][entry_id]),
+        "add dialog": rolodex.AddEditDialog(win, "Add"),
+        "categories": rolodex.ManageCategoriesDialog(win),
+        "change password": rolodex.ChangePasswordDialog(win),
+        "restore": rolodex.RestorePasswordDialog(win),
+        "health": rolodex.PasswordHealthDialog(win),
+        "import": rolodex.ImportPreviewDialog(win, [{"name": "A", "fields": [], "notes": ""}],
+                                              "/x.txt"),
+        "unlock": rolodex.UnlockDialog(app, str(tmp_path / "v.vault"), False),
+        "create": rolodex.UnlockDialog(app, str(tmp_path / "new.vault"), True),
+    }
+    gaps = {name: _unnamed(view) for name, view in views.items()}
+    assert {name: g for name, g in gaps.items() if g} == {}
+
+
+def test_ROLO0017_a_masked_value_is_not_read_out_as_dots(app, tmp_path, monkeypatch):
+    from gi.repository import Gtk
+
+    win, entry_id = _a11y_window(app, tmp_path, monkeypatch)
+    seen = []
+    orig = rolodex.a11y_label
+    monkeypatch.setattr(rolodex, "a11y_label", lambda w, t: seen.append(t) or orig(w, t))
+    win._show_detail(entry_id)
+    # Password and TOTP are masked; Username is not.
+    assert seen.count("Hidden value") == 2
+    masked = [w for w in _labels(win.detail_box) if w.get_text() == rolodex.MASK]
+    assert masked and all(
+        Gtk.test_accessible_has_property(w, Gtk.AccessibleProperty.LABEL) for w in masked)
+
+    seen.clear()
+    win._revealed = True
+    win._show_detail(entry_id)
+    assert "Hidden value" not in seen
+
+
+def _labels(widget):
+    from gi.repository import Gtk
+
+    out = []
+
+    def walk(w):
+        if isinstance(w, Gtk.Label):
+            out.append(w)
+        c = w.get_first_child()
+        while c is not None:
+            walk(c)
+            c = c.get_next_sibling()
+
+    walk(widget)
+    return out
+
+
+def test_ROLO0017_category_header_says_whether_it_is_open(app, tmp_path, monkeypatch):
+    from gi.repository import Gtk
+
+    for collapsed in (False, True):
+        row = rolodex.CategoryHeaderRow("Games", 1, collapsed)
+        assert Gtk.test_accessible_has_state(row, Gtk.AccessibleState.EXPANDED)
+        assert Gtk.test_accessible_has_property(row, Gtk.AccessibleProperty.LABEL)
+        # The arrow repeats the row's state as a picture, so it is hidden from the reader.
+        assert row.arrow.get_accessible_role() == Gtk.AccessibleRole.PRESENTATION
+
+
 def test_ROLO0016_every_cue_icon_resolves_on_this_theme(app, tmp_path, monkeypatch):
     from gi.repository import Gdk, Gtk
 
