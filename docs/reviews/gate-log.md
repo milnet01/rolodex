@@ -2,9 +2,13 @@
 
 Genre: record
 
-One row per review run. A commit citing a gate cites a run id here. The
-gate-record hook checks the id is in this file, so the file exists from
-the first commit.
+One row per review run. A commit citing a gate cites a run id here.
+
+Nothing checks that a cited id is in this file. Adoption installed a
+commit-msg hook delegating to `~/.claude/hooks/gate-record`, which never
+existed there, so that check never ran. The hook was replaced on
+2026-09-25 with the skeleton's `.githooks/commit-msg`, which checks
+subject shape only.
 
 This index starts empty and is not back-filled. Rolodex's earlier reviews
 are recorded as `docs/review-<date>-<document>.md`, one dated record per

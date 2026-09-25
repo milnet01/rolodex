@@ -1,11 +1,87 @@
 #!/usr/bin/env bash
-# Delegates to the machine-wide gate-record hook. Warns and exits 0 where
-# that hook is absent, so a fresh clone on another machine is not blocked
-# by a hook it does not have.
+# commit-msg — enforces the mechanically decidable half of commits.md §1.1–1.3.
+#
+# Install:  git config core.hooksPath .githooks
+#
+# It checks SHAPE, never meaning. "One concern per commit" and "explain why,
+# not what" are not in here and cannot be — commits.md's What-checks-this
+# table records them as uncaught on purpose.
+#
+# Roadmap-aware by design (commits.md §1.2): a repo carrying a ROADMAP.md or
+# a .roadmap-counter must use an ID or a category prefix; a repo with neither
+# uses `<component>: `, because §1.1's ID mandate has nothing to bind to.
+
 set -u
-hook="${CLAUDE_HOOKS:-$HOME/.claude/hooks}/gate-record"
-if [ ! -x "$hook" ]; then
-  echo "commit-msg: gate-record not found at $hook — NOTHING WAS CHECKED" >&2
-  exit 0
+msg_file="$1"
+subject=$(head -1 "$msg_file")
+
+# Ignore merges, reverts, fixups and comment-only aborts.
+case "$subject" in
+    Merge\ *|Revert\ *|fixup!\ *|squash!\ *|\#*|"") exit 0 ;;
+esac
+
+fail() {
+    echo "commit-msg: $1" >&2
+    echo "  subject: $subject" >&2
+    echo "  rule:    ~/.claude/standards/commits.md §$2" >&2
+    exit 1
+}
+
+# --- §1.3 subject line constraints -------------------------------------
+# Length is counted in characters, not bytes — an em dash is one character
+# and three bytes, and counting bytes would reject conforming subjects.
+#
+# NOT `wc -m`, which counts characters only where the LOCALE says so and
+# counts bytes under LC_ALL=C (CFG-0142). Hooks inherit the environment of
+# whatever invoked git — a CI runner, a cron job, a sudo shell with a reset
+# environment — so the C locale is not hypothetical. Measured: the standard's
+# own release example measured 29 here and 31 under LC_ALL=C.
+#
+# Deleting UTF-8 continuation bytes (0x80-0xBF) leaves one byte per character,
+# so `wc -c` then counts characters in ANY locale. `LC_ALL=C` on the tr is what
+# keeps the byte range meaning bytes.
+len=$(printf '%s' "$subject" | LC_ALL=C tr -d '\200-\277' | LC_ALL=C wc -c)
+[ "$len" -le 72 ] || fail "subject is $len characters; the limit is 72" "1.3"
+
+case "$subject" in
+    *.) fail "subject ends with a period" "1.3" ;;
+esac
+
+# --- §1.1 / §1.2 prefix ------------------------------------------------
+# Written long-hand on purpose: `[ a ] || [ b ] && c` parses as
+# `([ a ] || [ b ]) && c`, which is right here and right by accident.
+has_roadmap=no
+if [ -f ROADMAP.md ] || [ -f .roadmap-counter ]; then
+    has_roadmap=yes
 fi
-exec "$hook" "$@"
+
+id_form='^[A-Z][A-Z0-9]*-[0-9]+: .'
+release_form='^[0-9]+\.[0-9]+\.[0-9]+: .'
+category_form='^(chore|docs|fix): .'
+component_form='^[a-z][a-z0-9]*(-[a-z0-9]+)*( \+ [a-z][a-z0-9-]*)*: .'
+
+if printf '%s' "$subject" | grep -qE "$id_form"; then
+    # §1.3 — don't repeat the ID in the description.
+    #
+    # Whole-token, not substring (CFG-0110). `case "$rest" in *"$id"*)`
+    # rejected `ANTS-2: unrelated to ANTS-21`, because ANTS-2 is a substring
+    # of ANTS-21 — so a subject naming a DIFFERENT item whose id merely
+    # starts the same way was refused. Only one direction fired, which is
+    # what made it read as a real §1.3 violation. Variable-width id schemes
+    # hit it at item 11; fixed-width ones (CFG-NNNN) never do.
+    id=${subject%%:*}
+    rest=${subject#*: }
+    if printf '%s' "$rest" | grep -qE "(^|[^A-Za-z0-9-])$id([^A-Za-z0-9-]|\$)"; then
+        fail "the ID is repeated in the description" "1.3"
+    fi
+elif printf '%s' "$subject" | grep -qE "$release_form|$category_form"; then
+    :
+elif [ "$has_roadmap" = no ] && printf '%s' "$subject" | grep -qE "$component_form"; then
+    :
+elif [ "$has_roadmap" = yes ]; then
+    fail "no ID or category prefix; this repo has a roadmap, so use '<ID>: ' or one of chore:/docs:/fix:/X.Y.Z:" "1.1"
+else
+    fail "no prefix; this repo has no roadmap, so use '<component>: '" "1.2"
+fi
+
+exit 0
