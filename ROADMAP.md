@@ -111,6 +111,12 @@ release, which is what proves the in-app updater end to end: it installs from
   against colourblindness simulations. Accent colour follows the
   desktop's accent by default; Preferences offers a small preset list as
   an override. No free colour picker.
+  Decision (user, 2026-09-25, second round): the choices live in a new
+  Preferences window (Appearance: Theme, Accent) reached from the main
+  menu. High contrast is one look, white on black, not following the
+  desktop's light/dark. Accent presets are Blue, Teal, Green, Orange,
+  Pink, Purple and Slate, plus Follow desktop as the default; red and
+  yellow are left out. Light keeps the glass feel in light colours.
   **Layman:** Let people pick from several looks (colour schemes) instead of the one fixed dark theme.
   Kind: ux.
   Source: user-request-2026-07-04.
