@@ -74,6 +74,10 @@ release, which is what proves the in-app updater end to end: it installs from
   Conventions list would arm the CLAUDE.md rule 14 gate, and INV-19 is the
   rule's one home. If a later session wants it in CLAUDE.md, that is its
   own gated change.
+  Decision (user, 2026-09-25): verify with automated tests that walk
+  the widget tree and fail on any interactive control without an
+  accessible name. No Orca run; Orca is not installed on this machine.
+  This replaces the scope's 'test end-to-end with Orca'.
   **Layman:** Make the app work properly with screen readers that read the interface aloud.
   Kind: accessibility.
   Source: user-request-2026-07-04.
@@ -90,6 +94,11 @@ release, which is what proves the in-app updater end to end: it installs from
   field categories, and the icon set in FIELD_CATEGORY_CUES is drawn by
   whatever icon theme the desktop supplies, so a theme change can alter
   the shapes without touching this code.
+  Decision (user, 2026-09-25): themes are Auto (default), Dark
+  (today's glass look), Light and High contrast. Each palette is checked
+  against colourblindness simulations. Accent colour follows the
+  desktop's accent by default; Preferences offers a small preset list as
+  an override. No free colour picker.
   **Layman:** Let people pick from several looks (colour schemes) instead of the one fixed dark theme.
   Kind: ux.
   Source: user-request-2026-07-04.
@@ -111,6 +120,10 @@ release, which is what proves the in-app updater end to end: it installs from
 - 📋 [ROLO-0012] **CSV import and export for interoperability with other managers.**
   Why: the current importer only understands one bespoke text layout; CSV eases migration from other tools.
   Scope: a CSV parser/writer alongside parse_text_file, reusing the ImportPreviewDialog. Warn loudly that CSV export is plaintext (same gating as the existing export).
+  Decision (user, 2026-09-25): import auto-detects the header row of
+  Bitwarden, KeePassXC, Chrome/Edge/Brave, Firefox and 1Password CSV
+  exports. An unrecognised header falls back to a column-mapping step.
+  Export writes Rolodex's own column layout.
   **Layman:** Move data in and out using the spreadsheet format other password apps use.
   Kind: feature.
   Source: in-session-2026-07-04.
