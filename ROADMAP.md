@@ -185,6 +185,10 @@ release, which is what proves the in-app updater end to end: it installs from
   absolute paths, with one sentence per picture for the screen reader,
   via SendMessage to the session named ants-projects-hub-website-*, or
   session_message if it has gone.
+  Progress (2026-10-02): the website now carries a 33-second demo video
+  recorded on the 1.6.0 dark look. Also owed when 1.7.0 ships: a short
+  plain-text description of the themes and the Preferences window, plus
+  at least one themes screenshot.
   **Layman:** After the new themes are released, retake the pictures on the project website so they show the current look.
   Kind: chore.
   Source: in-session-2026-09-25 (ants-projects-hub-website session).
