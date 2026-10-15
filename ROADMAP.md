@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=94 -->
+<!-- ants-roadmap-id-high-water: ROLO=95 -->
 
 # Rolodex Roadmap
 
@@ -215,6 +215,20 @@ release, which is what proves the in-app updater end to end: it installs from
   **Layman:** A field named "2FA seed" gets the grey 'other' colour instead of the key colour.
   Kind: enhancement.
   Source: in-session-2026-09-25 (ROLO-0015 screenshots).
+
+- 📋 [ROLO-0095] **Record trailer clips of the released app for the website's YouTube trailer.**
+  Why: the website session asked every app for trailer footage; the user said yes.
+  Scope: after 1.7.0 ships, so themes are in. 3 to 6 clips of released
+  features with `demoreel record -s 1920x1080 --cursor`, demo data only,
+  plus notes.md (hook lines, tagline, captions, feature lines, platforms,
+  no sound). Put both in /mnt/Games/Trailers/incoming/rolodex/ and message
+  ants-projects-hub-website. Brief:
+  ~/.local/share/claude-handoff/ants-projects-hub-website-trailers-2026-10-10.md
+  (shared; do not delete). Style: /mnt/Games/Trailers/slipcase-sample.mp4.
+  Method: memory note demo-video-method (in-process GLib-timer tour).
+  **Layman:** Short video clips of Rolodex in use, with made-up data, for a trailer on the website.
+  Kind: marketing.
+  Source: user-request-2026-10-15 (ants-projects-hub-website msg 570).
 
 ## Unscheduled
 
