@@ -3,8 +3,6 @@
 Genre: record
 Status: active
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## What this is
 
 Rolodex is a single-file GTK4/Adwaita desktop app (`rolodex.py`) that stores
@@ -108,8 +106,6 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
 - `Backups/` — a user-maintained folder for backup copies (git-ignored). The app never writes
   here automatically; its Backup action just defaults the save-dialog filename to
   `contacts_backup_<timestamp>.vault` at a location the user picks.
-- The import file picker opens in the user's home directory (`GLib.get_home_dir()`); there is
-  no hardcoded import path.
 
 ## Conventions
 
@@ -121,14 +117,14 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   windows open on the user's real screen, and a stopped Xvfb goes unnoticed. Do NOT reach for
   `GDK_BACKEND=broadway`: `Gtk.init_check()` returns **True** under it and window construction
   then raises `RuntimeError: Gtk couldn't be initialized`, so the probe says the display works
-  and every later step fails for a reason that looks like a product defect. A whole
-  verify-delivery run was thrown away to that once. With a real `DISPLAY`, `MainWindow` can be
-  constructed directly against a throwaway vault and its handlers driven in-process, which is
-  how the end-to-end feature checks were done — `contacts.vault` is never involved.
+  and every later step fails for a reason that looks like a product defect. With a real
+  `DISPLAY`, `MainWindow` can be constructed directly against a throwaway vault and its
+  handlers driven in-process — `contacts.vault` is never involved.
 - **For screenshots, run `scripts/demo-screenshots.py <scene> [theme] [accent]` under
   `demoreel shot`.** It builds a vault of made-up entries in a temporary folder, so neither
   `contacts.vault` nor `.rolodex.conf` is touched. Starting `rolodex.py` itself opens the real
-  vault.
+  vault. Check behaviour by printing widget state in-process first; a screenshot is the
+  costliest thing a session reads, so take one only to judge how something looks.
 - **The live TOTP code renders grouped: `"543 878"`, not `"543878"`.** A check asserting six
   contiguous digits fails against a working feature. Strip spaces before comparing.
 - **Never derive the key on a save path.** `MainWindow._key` holds the key derived at unlock,
@@ -158,15 +154,13 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   `(sys.platform, platform.machine())`, not on platform alone: an Intel Mac must not be offered
   the arm64 binary. Windows is deliberately absent (deferred) — `os.replace` cannot swap a
   locked `.exe` and the relaunch needs `/bin/sh`.
-- **The release-signing public key in `rolodex.py` is real as of ROLO-0041 (2026-09-21), and
-  is not a routine thing to change.** Every binary already shipped trusts this key and nothing
-  else, so replacing it makes those installs refuse every later update, and losing the private
-  half does the same with no recovery. The private half lives only as the GitHub Actions secret
-  `ROLODEX_SIGNING_KEY` and in the maintainer's backup — never commit it, and generate a pair
-  only with `scripts/gen-signing-key.py`.
-  `test_INV11_shipped_key_is_a_real_key_and_not_the_placeholder` pins the constant against a
-  revert to the old 32-zero placeholder, which would silently put the updater back to failing
-  closed: able to offer an update and never install one.
+- **The release-signing public key in `rolodex.py` is not a routine thing to change.** Every
+  binary already shipped trusts this key and nothing else, so replacing it makes those
+  installs refuse every later update, and losing the private half does the same with no
+  recovery. The private half lives only as the GitHub Actions secret `ROLODEX_SIGNING_KEY` and
+  in the maintainer's backup — never commit it, and generate a pair only with
+  `scripts/gen-signing-key.py`. `test_INV11_shipped_key_is_a_real_key_and_not_the_placeholder`
+  pins the constant.
 - **Lint scope is `ruff check rolodex.py tests/`, never `ruff check .`** — a bare `.` also
   sweeps `build/`, `dist/`, `out/` and `build_pyi/` and reports findings CI never sees.
   The rule set is declared in `ruff.toml` (`E4, E7, E9, F`) precisely because `ci.yml`
@@ -184,9 +178,7 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   local run returns green for a pipeline that will fail. A docs-only push runs its `--docs`
   mode, a markdown link check. That holds only while no leg reads a document
   (`~/.claude/standards/local-gate.md` § 6.1).
-- This directory sits under `/mnt/Games`, whose project `CLAUDE.md` requires
-  `SUDO_ASKPASS=/usr/libexec/ssh/ksshaskpass sudo -A -p "..."` for any privileged command —
-  never bare `sudo`.
+- Privileged commands follow `/mnt/Games/CLAUDE.md` (never bare `sudo`).
 
 ---
 
