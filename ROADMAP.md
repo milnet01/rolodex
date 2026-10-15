@@ -129,9 +129,14 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: ux.
   Source: user-request-2026-07-04.
 
-- 📋 [ROLO-0024] **Adaptive layout for narrow windows using libadwaita breakpoints.**
+- ✅ [ROLO-0024] **Adaptive layout for narrow windows using libadwaita breakpoints.**
   Why: the fixed two-pane Gtk.Paned doesn't collapse; on a narrow window the sidebar and detail fight for space.
   Scope: migrate to Adw.NavigationSplitView with an Adw.Breakpoint so the sidebar and detail become a single navigable stack below a width threshold. Presentational restructure of MainWindow.
+  Resolved (2026-10-15): Adw.NavigationSplitView with an Adw.Breakpoint at
+  max-width 560sp; minimum window 360x400. Activating a row opens the
+  entry page; a blank detail pane and Ctrl+F return to the list. Checked
+  on Xvfb at 390 and 890 px wide, and by click-through screenshots
+  (scripts/demo-screenshots.py narrow, narrow-detail).
   **Layman:** Make the app usable when the window is small or on a phone-sized screen.
   Kind: enhancement.
   Source: in-session-2026-07-04.

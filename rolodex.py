@@ -2502,13 +2502,6 @@ class MainWindow(Adw.ApplicationWindow):
             self.add_action(action)
             app.set_accels_for_action(f"win.{name}", accels)
 
-        # --- Paned: sidebar | detail ---
-        paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
-        paned.add_css_class("main-paned")
-        paned.set_shrink_start_child(False)
-        paned.set_shrink_end_child(False)
-        paned.set_position(260)
-
         # ---- Left sidebar ----
         left_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         left_box.add_css_class("sidebar-box")
@@ -2557,8 +2550,6 @@ class MainWindow(Adw.ApplicationWindow):
         scroll.set_child(self.listbox)
         left_box.append(scroll)
 
-        paned.set_start_child(left_box)
-
         # ---- Right detail pane ----
         self.detail_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         self.detail_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -2578,14 +2569,42 @@ class MainWindow(Adw.ApplicationWindow):
         self.detail_stack.add_named(self.detail_scroll, "detail")
         self.detail_stack.set_visible_child_name("empty")
 
-        paned.set_end_child(self.detail_stack)
+        # --- Split view: sidebar | detail (ROLO-0024) ---
+        # Each page carries its own header bar, so a narrow window can show one page at a
+        # time and the detail page gets a back button. The app's buttons sit over the list.
+        sidebar_view = Adw.ToolbarView()
+        sidebar_view.add_top_bar(header)
+        sidebar_view.set_content(left_box)
+        detail_view = Adw.ToolbarView()
+        detail_header = Adw.HeaderBar()
+        detail_header.set_show_title(False)  # the entry's name is the page's own heading
+        detail_view.add_top_bar(detail_header)
+        detail_view.set_content(self.detail_stack)
+
+        self.split_view = Adw.NavigationSplitView()
+        self.split_view.add_css_class("main-split")
+        self.split_view.set_min_sidebar_width(240)
+        self.split_view.set_max_sidebar_width(320)
+        self.split_view.set_sidebar_width_fraction(0.3)
+        self.split_view.set_sidebar(Adw.NavigationPage(title="Rolodex", child=sidebar_view))
+        self.split_view.set_content(Adw.NavigationPage(title="Entry", child=detail_view))
+        # Collapsed, a blank detail page is a dead end: whatever blanked it (a delete, a
+        # filter, a lock) also returns to the list. Wide, show-content changes nothing.
+        self.detail_stack.connect("notify::visible-child-name", self._on_detail_page_changed)
+
+        # Below this width the two panes become two pages. The signals rather than a property
+        # setter, so a test can apply the breakpoint without resizing a real window.
+        self.set_size_request(360, 400)
+        self._narrow_breakpoint = Adw.Breakpoint.new(
+            Adw.BreakpointCondition.parse("max-width: 560sp"))
+        self._narrow_breakpoint.connect("apply", lambda _b: self.split_view.set_collapsed(True))
+        self._narrow_breakpoint.connect("unapply",
+                                        lambda _b: self.split_view.set_collapsed(False))
+        self.add_breakpoint(self._narrow_breakpoint)
 
         # --- Assemble with toast overlay ---
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        main_box.append(header)
-        main_box.append(paned)
         self._toast_overlay = Adw.ToastOverlay()
-        self._toast_overlay.set_child(main_box)
+        self._toast_overlay.set_child(self.split_view)
         self.set_content(self._toast_overlay)
 
         # The SILENT startup check (ROLO-0037, INV-1). This is the path the
@@ -2876,8 +2895,26 @@ class MainWindow(Adw.ApplicationWindow):
         self._revealed = False
         self._show_detail(row.entry_id)
 
+    def _clear_focused_label_selection(self):
+        focus = self.get_focus()
+        if isinstance(focus, Gtk.Label):
+            focus.select_region(0, 0)
+        return GLib.SOURCE_REMOVE
+
+    def _on_detail_page_changed(self, stack, _pspec):
+        if stack.get_visible_child_name() == "empty":
+            self.split_view.set_show_content(False)
+
     def _on_row_activated(self, listbox, row):
-        if isinstance(row, CategoryHeaderRow):
+        if isinstance(row, EntryRow):
+            # Activation (a click or Enter), not selection: the list re-selects the current
+            # entry after every rebuild, and arrow keys select, and neither should leave the
+            # list on a narrow window.
+            self.split_view.set_show_content(True)
+            # Opening the page focuses its first focusable widget, the selectable name, and a
+            # label selects all its text on focus. Keep the focus, drop the highlight.
+            GLib.idle_add(self._clear_focused_label_selection)
+        elif isinstance(row, CategoryHeaderRow):
             cat = row.category_name
             if cat in self._collapsed_categories:
                 self._collapsed_categories.discard(cat)
@@ -3384,6 +3421,7 @@ class MainWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _focus_search(self, *_args):
+        self.split_view.set_show_content(False)  # on a narrow window the box is on the list
         self.search_entry.grab_focus()
 
     def _copy_secret(self, *_args):
@@ -4951,7 +4989,7 @@ CUSTOM_CSS = """
    Gradient backgrounds
    ══════════════════════════════════════════════ */
 
-.main-paned {
+.main-split {
     background-image: linear-gradient(160deg, @rolo_bg_1 0%, @rolo_bg_2 35%, @rolo_bg_3 65%, @rolo_bg_1 100%);
 }
 

@@ -78,6 +78,10 @@ version and extend this function rather than assuming fields exist.
 - Decryption (unlock, restore) runs on a background `threading.Thread`, marshalling results
   back with `GLib.idle_add` so the 600k-iteration KDF doesn't freeze the UI. Preserve that
   when adding any password-checking flow.
+- The sidebar and detail sit in an `Adw.NavigationSplitView` that a breakpoint collapses
+  into two pages on a narrow window (ROLO-0024). Activating an entry row opens the detail
+  page; selecting one does not, because `_refresh_list()` re-selects the current entry after
+  every rebuild. A detail pane switched to "empty" returns to the list.
 - Drag-and-drop is used in two places: entries → category headers (sidebar), and reordering
   fields/categories inside dialogs (`Gtk.DragSource`/`Gtk.DropTarget` with typed content).
 - TOTP live codes (ROLO-0006): `parse_totp_field()` (pure layer) decides which fields get a

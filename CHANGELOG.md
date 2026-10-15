@@ -11,6 +11,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **The window works when it is narrow** (ROLO-0024)
+  Below about 560 pixels wide, the list and the entry become two pages.
+  Click an entry to open it; the back arrow returns to the list. The
+  window can now be made as narrow as 360 pixels.
+
 - **Themes and accent colours, chosen in a new Preferences window (Ctrl+,).** (ROLO-0015)
   Automatic (the default) follows the desktop's light or dark setting as it
   changes. Dark is the familiar glass look; Light is the same look in

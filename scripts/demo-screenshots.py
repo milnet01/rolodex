@@ -7,7 +7,8 @@ temporary directory that is removed on exit. Run it under a private display, e.g
     demoreel shot -o docs/screenshots/detail.png -s 1280x800 -- \
         python3 scripts/demo-screenshots.py detail
 
-Scenes: detail (an entry with a live 2FA code), health, edit, unlock, preferences.
+Scenes: detail (an entry with a live 2FA code), health, edit, unlock, preferences, and
+narrow and narrow-detail, the list and the entry page of a phone-width window (ROLO-0024).
 Optional second and third arguments pick the theme and the accent (ROLO-0015), e.g.
 `detail light teal`.
 """
@@ -72,7 +73,8 @@ def main():
     accent = sys.argv[3] if len(sys.argv) > 3 else rolodex.DEFAULT_ACCENT
     tmp = tempfile.mkdtemp(prefix="rolodex-demo-")
     rolodex.CONFIG_FILE = os.path.join(tmp, ".rolodex.conf")
-    rolodex.save_config({"window_width": 1280, "window_height": 800,
+    narrow = scene.startswith("narrow")
+    rolodex.save_config({"window_width": 400 if narrow else 1280, "window_height": 800,
                          rolodex.UPDATE_ENABLED_KEY: False,
                          rolodex.THEME_KEY: theme, rolodex.ACCENT_KEY: accent})
     vault_path = os.path.join(tmp, "demo.vault")
@@ -90,6 +92,10 @@ def main():
             win = self.props.active_window
             first = next(i for i, e in vault["entries"].items() if e["name"] == "Fastmail")
             win._refresh_list(select_id=first)
+            if scene == "narrow-detail":
+                row = next(r for r in win.listbox
+                           if isinstance(r, rolodex.EntryRow) and r.entry_id == first)
+                GLib.timeout_add(500, lambda: row.activate() and False)  # once, not repeating
             if scene == "health":
                 GLib.timeout_add(500, lambda: rolodex.PasswordHealthDialog(win).present(win))
             elif scene == "edit":

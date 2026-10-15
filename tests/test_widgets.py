@@ -771,3 +771,48 @@ def test_ROLO0015_the_dialog_opens_on_the_saved_choices(make_themes):
 def test_ROLO0015_a_hand_edited_bad_setting_falls_back(make_themes):
     tm = make_themes(theme="neon", accent="red")
     assert (tm.theme, tm.accent) == ("auto", "system")
+
+
+# --- ROLO-0024: the list and the detail collapse into pages on a narrow window -------------
+
+
+def test_ROLO0024_narrow_window_collapses_into_pages(app, tmp_path, monkeypatch):
+    from gi.repository import Adw
+
+    win = _window_with(app, tmp_path, monkeypatch, [])
+    assert isinstance(win.split_view, Adw.NavigationSplitView)
+    # The window may be made narrow enough for the breakpoint to matter.
+    assert 0 < win.get_size_request()[0] <= 360
+    assert win.split_view.get_min_sidebar_width() <= win.get_size_request()[0]
+    win.split_view.set_collapsed(True)  # what the breakpoint does below its width
+
+    # Activating an entry (click or Enter) opens its page; arrow-key selection alone does not,
+    # and neither does the re-select a save or a search does after rebuilding the list.
+    row = next(r for r in win.listbox if isinstance(r, rolodex.EntryRow))
+    win.listbox.select_row(row)
+    assert not win.split_view.get_show_content()
+    win._refresh_list()
+    assert not win.split_view.get_show_content()
+    row = next(r for r in win.listbox if isinstance(r, rolodex.EntryRow))
+    row.activate()
+    assert win.split_view.get_show_content()
+
+    # An empty detail pane (entry deleted, filtered out, locked) returns to the list.
+    win.listbox.unselect_all()
+    assert not win.split_view.get_show_content()
+
+    # Ctrl+F goes back to the list, where the search box is.
+    row = next(r for r in win.listbox if isinstance(r, rolodex.EntryRow))
+    row.activate()
+    win._focus_search()
+    assert not win.split_view.get_show_content()
+
+
+def test_ROLO0024_a_breakpoint_collapses_the_split_view(app, tmp_path, monkeypatch):
+    win = _window_with(app, tmp_path, monkeypatch, [])
+    bp = win._narrow_breakpoint
+    assert "max-width" in bp.get_condition().to_string()
+    # Applying the breakpoint is what collapses it; GTK does this when the width crosses.
+    assert not win.split_view.get_collapsed()
+    bp.emit("apply")
+    assert win.split_view.get_collapsed()
