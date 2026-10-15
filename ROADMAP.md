@@ -224,7 +224,8 @@ release, which is what proves the in-app updater end to end: it installs from
   no sound). Put both in /mnt/Games/Trailers/incoming/rolodex/ and message
   ants-projects-hub-website. Brief:
   ~/.local/share/claude-handoff/ants-projects-hub-website-trailers-2026-10-10.md
-  (shared; do not delete). Style: /mnt/Games/Trailers/slipcase-sample.mp4.
+  (shared; do not delete). Style: the finished trailers in /mnt/Games/Trailers/, such as
+  slipcase-trailer.mp4 (the brief's slipcase-sample.mp4 is gone).
   Method: memory note demo-video-method (in-process GLib-timer tour).
   **Layman:** Short video clips of Rolodex in use, with made-up data, for a trailer on the website.
   Kind: marketing.
