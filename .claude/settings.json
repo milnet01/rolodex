@@ -5,15 +5,7 @@
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
         "hooks": [
-          { "type": "command", "command": "$HOME/.claude/hooks/no-hand-edit" },
           { "type": "command", "command": "$HOME/.claude/hooks/git-discard-guard" }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "$HOME/.claude/hooks/agent-cost" }
         ]
       }
     ]
