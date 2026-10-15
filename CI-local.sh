@@ -28,9 +28,36 @@
 # github.ref is then refs/tags/v... -- a manual run launched against a tag does sign and
 # publish. Watch it with:  gh run watch
 #
-# Usage: ./CI-local.sh
+# Usage: ./CI-local.sh          the full gate
+#        ./CI-local.sh --docs   documentation-only pushes (the pre-push hook picks it)
+#
+# --docs runs one check: every relative link and anchor in the tracked markdown resolves. It
+# drops the three legs above because none of them reads a document: ruff and mypy are scoped
+# to rolodex.py and tests/, no test opens a .md file, and packaging/rolodex.spec bundles none.
+# Where the link checker is missing it fails closed and runs the full gate instead.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+if [[ ${1:-} == --docs ]]; then
+    checker="$HOME/.claude/tools/check-doc.py"
+    if [[ -f $checker ]]; then
+        echo "==> [docs] links and anchors in tracked markdown"
+        # The checker's own exit code is not the verdict: it exits 1 on advisory classes this
+        # gate does not enforce, and 3 when a check it has no config for is skipped. Its JSON
+        # is; output that does not parse fails the parse below, so a crash cannot pass.
+        # shellcheck disable=SC2046  # one argument per tracked file is the intent
+        report=$(python3 "$checker" --json $(git ls-files '*.md') 2>/dev/null) || true
+        printf '%s' "$report" | python3 -c '
+import json, sys
+links = [f for f in json.load(sys.stdin)["findings"] if f["class"] == "link"]
+for f in links:
+    print("%s:%s: %s" % (f["file"], f["line"], f["message"]))
+sys.exit(1 if links else 0)'
+        echo "Documentation checks passed (lint, tests and build skipped: none reads a .md)."
+        exit 0
+    fi
+    echo "$checker not found -- running the full gate instead." >&2
+fi
 
 echo "==> [1/3] ruff (lint) and mypy (types) — same invocations as ci.yml"
 ruff check rolodex.py tests/

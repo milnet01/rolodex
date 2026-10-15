@@ -170,12 +170,16 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   a codebase that hasn't changed. Widening that set is ROLO-0038, not a drive-by.
 - **The pre-push gate needs two `git config` keys per clone, and says nothing if unset.**
   `git config ants.gate.command ./CI-local.sh` and
-  `git config ants.gate.docsGlob '*.md:docs/**:LICENSE:.github/ISSUE_TEMPLATE/**'`.
+  `git config ants.gate.docsGlob '*.md|docs/**|LICENSE|.github/ISSUE_TEMPLATE/**'`.
+  The separator is `|`; with `:` the list is one pattern that matches nothing, and every
+  docs push runs the full gate.
   `core.hooksPath` is a third, set to `.githooks` so the delegating hooks run.
   All three are local git config, so they do not survive a fresh clone and an unset gate is
   indistinguishable from a passing one — the hook warns, then pushes anyway. `CI-local.sh`
   mirrors `ci.yml` step for step (ruff → pytest → Linux build); keep them in lockstep or the
-  local run returns green for a pipeline that will fail.
+  local run returns green for a pipeline that will fail. A docs-only push runs its `--docs`
+  mode, a markdown link check. That holds only while no leg reads a document
+  (`~/.claude/standards/local-gate.md` § 6.1).
 - This directory sits under `/mnt/Games`, whose project `CLAUDE.md` requires
   `SUDO_ASKPASS=/usr/libexec/ssh/ksshaskpass sudo -A -p "..."` for any privileged command —
   never bare `sudo`.
