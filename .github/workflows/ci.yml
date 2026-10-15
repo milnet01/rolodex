@@ -25,6 +25,11 @@ jobs:
   lint-and-test:
     name: Lint (ruff) + test (pytest)
     runs-on: ubuntu-latest
+    # Runs take about 40s. Ten minutes leaves room for a slow apt mirror and stops a hung
+    # GTK test, which would otherwise hold the runner for GitHub's six-hour default.
+    timeout-minutes: 10
+    # Cache declined by measurement (2026-10-15, run 38696043478): apt takes ~18s, mostly
+    # unpacking, which a download cache cannot skip; pip downloads take ~1.5s.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
