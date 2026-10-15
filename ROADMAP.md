@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=95 -->
+<!-- ants-roadmap-id-high-water: ROLO=96 -->
 
 # Rolodex Roadmap
 
@@ -235,6 +235,21 @@ release, which is what proves the in-app updater end to end: it installs from
   **Layman:** Short video clips of Rolodex in use, with made-up data, for a trailer on the website.
   Kind: marketing.
   Source: user-request-2026-10-15 (ants-projects-hub-website msg 570).
+
+- 📋 [ROLO-0096] **Replace the dead pre-commit delegator with the skeleton's own pre-commit hook.**
+  Why: .githooks/pre-commit delegates to ~/.claude/hooks/pre-commit, which
+  was retired on purpose (CFG-0493, ~/.claude 14da31f, 2026-09-27). So
+  every commit prints "NOTHING WAS CHECKED". Rolodex is the last repo
+  still delegating to it.
+  Scope: copy ~/.claude/skeleton/files/.githooks/pre-commit, a
+  self-contained hook. It blocks on broken markdown links and on deleted
+  text that is still cited elsewhere. Before adopting it, replay it over
+  recent document commits (ROADMAP.md is generated; check it does not
+  block a roadmap_log commit). If it misfires, remove the delegator
+  instead. claude-config recommends the copy.
+  **Layman:** Every commit warns that nothing was checked; swap in a hook that checks document links again.
+  Kind: chore.
+  Source: claude-config reply 2026-10-15 (CFG-0493).
 
 ## Unscheduled
 
