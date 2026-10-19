@@ -45,7 +45,7 @@ Released 2026-09-24 as v1.6.0: the first signed release. Every binary carries a 
   Kind: security.
   Source: in-session-2026-09-21.
 
-## 1.7.0 — Accessibility and layout
+## 2.0.0 — Accessibility, layout and Argon2id
 
 The accessibility and UX batch the user chose on 2026-09-21. ROLO-0036's
 discovery conversation follows this release. 1.7.0 is also the second signed
@@ -184,6 +184,10 @@ release, which is what proves the in-app updater end to end: it installs from
   get_process_id() matches the first process's pid; its name is just
   "python3". Print get_role_name() and get_name() for SHOWING nodes. An
   Adw.Dialog has no children until presented, so present it first.
+  Note (2026-10-19): docs/specs/entries-and-fields.md INV-9 says "An eye
+  icon inside the value box reveals it while editing". Moving it to a
+  button beside the box changes that line, so amend INV-9 and run
+  review-contract (rule 14) before the code.
   **Layman:** The eye button that shows a hidden value while editing can only be clicked with a mouse, and a screen reader calls it just "image".
   Kind: accessibility.
   Source: in-session-2026-09-25 (ROLO-0017).
@@ -310,6 +314,20 @@ release, which is what proves the in-app updater end to end: it installs from
   Filed: ROLO-0098 (fingerprint taken after the unlock read). The spec
   is ready to build from; the last loop's one fix was read by no lane,
   so implementation is its next reviewer.
+  Decided (user, 2026-10-19, superseding "ship in 1.7.0"): the release is
+  2.0.0, because docs/versioning-standards.md calls a magic/KDF change
+  that old builds cannot open MAJOR. The release planned as 1.7.0 is now
+  2.0.0. CHANGELOG still owes a plain-words line: once 2.0.0 opens a
+  vault, 1.6 and older cannot.
+  Build from docs/specs/vault-format-and-crypto.md INV-20 to INV-26 (gate
+  closed at its cap, 2026-10-19; loop-log rows 3-4). Its opening
+  paragraph gives the search for every forward clause. Not yet written:
+  any code. Docs to move WITH the code (they describe VLT1/PBKDF2 today):
+  project CLAUDE.md (Encryption layer, "Never derive the key on a save
+  path"), SECURITY.md, DESIGN.md, README.md (PBKDF2 sentence),
+  docs/security-standards.md rule 4, docs/specs/master-password.md INV-6,
+  docs/coding-standards.md ("600k-iteration derive"). Once built, delete
+  the spec's "INV-20 to INV-26 are forward" paragraph.
 
 - ✅ [ROLO-0097] **Hide fields labelled as a seed phrase by default.**
   Why: SENSITIVE_KEYWORDS has no "seed", so a "Seed phrase" or
@@ -341,6 +359,25 @@ release, which is what proves the in-app updater end to end: it installs from
   **Layman:** A field called "Seed phrase" (a crypto wallet's recovery words) shows in plain text unless you tick Hide yourself.
   Kind: security.
   Source: in-session-2026-10-19 (found while shipping ROLO-0094).
+
+- 📋 [ROLO-0098] **Take the vault fingerprint when unlock reads the file, not when the window opens.**
+  vault-format-and-crypto.md INV-19 says the fingerprint check is what
+  covers a vault in a synced folder. But MainWindow.__init__ takes
+  the first fingerprint after the unlock thread has read and
+  decrypted the file. A change landing between that read and the
+  window opening is adopted as the baseline, so the session's first
+  save overwrites it silently. That race exists today. ROLO-0005's
+  INV-25 rewrite at unlock sits inside the same gap and does not
+  change the outcome, but Argon2id (two derivations for a stale
+  file) widens the gap.
+  Fix direction, for whoever takes it: take the fingerprint before
+  the read in the unlock path, hand it to MainWindow, and have the
+  INV-25 rewrite skip itself, as it does on an OSError, when the
+  file changed in between. This is a design choice the spec leaves
+  open; it was filed rather than invented during the review.
+  **Layman:** If a sync tool changes the vault file in the second or so while Rolodex is unlocking it, Rolodex can later save over that change without warning.
+  Kind: review-fix.
+  Source: review-contract 2026-10-19 on vault-format-and-crypto.md (out-of-radius finding, one lane).
 
 ## Unscheduled
 
@@ -450,25 +487,6 @@ Wanted work not yet promised to any release.
   **Layman:** The local pre-push check can pass code that GitHub's check then rejects for a type error.
   Kind: fix.
   Source: in-session-2026-09-24 (cut-release 1.6.0).
-
-- 📋 [ROLO-0098] **Take the vault fingerprint when unlock reads the file, not when the window opens.**
-  vault-format-and-crypto.md INV-19 says the fingerprint check is what
-  covers a vault in a synced folder. But MainWindow.__init__ takes
-  the first fingerprint after the unlock thread has read and
-  decrypted the file. A change landing between that read and the
-  window opening is adopted as the baseline, so the session's first
-  save overwrites it silently. That race exists today. ROLO-0005's
-  INV-25 rewrite at unlock sits inside the same gap and does not
-  change the outcome, but Argon2id (two derivations for a stale
-  file) widens the gap.
-  Fix direction, for whoever takes it: take the fingerprint before
-  the read in the unlock path, hand it to MainWindow, and have the
-  INV-25 rewrite skip itself, as it does on an OSError, when the
-  file changed in between. This is a design choice the spec leaves
-  open; it was filed rather than invented during the review.
-  **Layman:** If a sync tool changes the vault file in the second or so while Rolodex is unlocking it, Rolodex can later save over that change without warning.
-  Kind: review-fix.
-  Source: review-contract 2026-10-19 on vault-format-and-crypto.md (out-of-radius finding, one lane).
 
 ## High priority
 
