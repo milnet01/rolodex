@@ -12,16 +12,21 @@ An invariant below naming `save_vault`, `load_vault` or `create_vault` describes
 implemented in the corresponding `_with_key` sibling and inherited by the wrapper, which only
 delegates. INV-13 is the one place that distinction changes what a caller must do.
 
+INV-20 to INV-26 are forward: ROLO-0005 adds them, and they describe no shipped code until it
+ships. They add the `VLT2` format, keyed by Argon2id, and the upgrade of a `VLT1` vault at
+unlock. Decisions behind them (user, 2026-10-19): upgrade right after unlock; builds 1.6 and
+older failing to open a `VLT2` vault is accepted.
+
 ## Behaviour
 
 ### File format
 
-- **INV-1** A vault file is exactly `MAGIC (4 bytes, b"VLT1")` + `salt (16 bytes)` +
-  `Fernet token (remaining bytes)`, in that order.
+- **INV-1** A `VLT1` vault file is exactly `MAGIC (4 bytes, b"VLT1")` + `salt (16 bytes)` +
+  `Fernet token (remaining bytes)`, in that order. `VLT2` is INV-20.
 - **INV-2** `load_vault_with_key` reads the first 4 bytes and raises `ValueError("Not a valid vault
-  file")` if they are not a magic it recognises — today `b"VLT1"` alone. A successor format joins
-  that set rather than replacing the check, so INV-5's new magic does not make this invariant
-  reject the files it mandates. It then requires exactly
+  file")` if they are not a magic it recognises — `b"VLT1"` and `b"VLT2"` — nor a newer member
+  of their family (INV-21). A successor format joins that set rather than replacing the check.
+  It then requires the rest of that magic's header — for `VLT1`, exactly
   16 salt bytes and raises `ValueError("Vault file is truncated or corrupt")` if fewer remain —
   also before deriving, because `derive_key` accepts a short salt silently and the vault would
   then fail as `InvalidToken`, which INV-8's unlock path renders as "Wrong password." Reporting
@@ -31,19 +36,16 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
 
 ### Key derivation
 
-- **INV-4** The encryption key is `base64.urlsafe_b64encode(PBKDF2HMAC(SHA256, length=32,
-  salt, iterations=600_000).derive(password_utf8))`.
-- **INV-5** `ITERATIONS` is 600,000 and is treated as a floor — it may increase, never decrease.
-  An increase is a **format change**, because INV-1's header records no iteration count: an
-  existing vault re-read at a higher count fails as `InvalidToken`, indistinguishable from a
-  wrong password. It therefore needs a **new magic**: `VLT1` implies 600,000 — there is no field
-  in that header to read it from — and the new format records its count so later raises can read
-  it. ROLO-0005 is the item that would introduce it, and it must settle two things this document
-  deliberately leaves open: the successor magic's shape, and what a build predating it does on
-  meeting one — a recognisable family would let today's loader raise INV-12's "upgrade Rolodex"
-  error instead of "Not a valid vault file".
-- **INV-6** The salt passed to `derive_key` is the exact 16 bytes read from (or written to)
-  the file header for that vault.
+- **INV-4** A `VLT1` vault's encryption key is `base64.urlsafe_b64encode(PBKDF2HMAC(SHA256, length=32,
+  salt, iterations=600_000).derive(password_utf8))`. `derive_key_pbkdf2` computes it, and only
+  the `VLT1` reader calls it. A `VLT2` vault's key is INV-22.
+- **INV-5** `ITERATIONS` is 600,000 and is fixed: `VLT1` implies it, because that header has no
+  field to record a count, and an existing `VLT1` vault re-read at another count fails as
+  `InvalidToken`, indistinguishable from a wrong password. Nothing writes `VLT1` any more
+  (INV-24), so stronger key derivation comes from `VLT2`'s recorded parameters (INV-22), never
+  from changing this constant.
+- **INV-6** The salt passed to the key derivation is the exact 16 bytes read from (or written
+  to) the file header for that vault, in either format.
 
 ### Encryption / decryption
 
@@ -75,7 +77,7 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
 ### Creation & migration
 
 - **INV-11** `create_vault` generates a fresh 16-byte `os.urandom` salt and writes an empty
-  v2 vault `{"version": 2, "categories": [], "entries": {}}`. It raises `FileExistsError`,
+  v2 vault, in the `VLT2` format with the current parameters, `{"version": 2, "categories": [], "entries": {}}`. It raises `FileExistsError`,
   writing nothing, when a file already exists at the path (ROLO-0044).
 - **INV-12** `migrate_vault` refuses before it migrates. A vault that is not a dict, or whose
   `entries` is not a dict, raises `ValueError("Vault contents are not a valid vault")`. A vault
@@ -94,7 +96,9 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
   cannot take one, for two different reasons: a vault's salt lives inside the file being opened,
   and a new vault's salt does not exist until `create_vault_with_key` mints it. Both therefore
   take a password, derive once, and **return** the key alongside the data:
-  `(vault, salt, key)` and `(vault_data, salt, key)`. `save_vault`, `load_vault` and
+  `(vault, salt, key)` and `(vault_data, salt, key)`. The pair `load_vault_with_key` returns
+  is always a current-format pair, which may not be the file's own (INV-24); for a stale file
+  that costs a second derivation, once. `save_vault`, `load_vault` and
   `create_vault` remain, keeping their original signatures and return shapes, so no existing
   caller changed. An
   open session holds the key for its current `(password, salt)` pair and re-derives only where
@@ -119,6 +123,64 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
   the link resolves to, and the link survives (ROLO-0078). The write needs permission to
   create a file in that directory, not only to write the vault file itself.
 
+### Argon2id and the `VLT2` format (ROLO-0005)
+
+- **INV-20** A `VLT2` vault file is exactly `b"VLT2"` + `memory_cost` + `iterations` + `lanes` +
+  `salt (16 bytes)` + `Fernet token (remaining bytes)`, in that order. Each of the three
+  parameters is a 4-byte big-endian unsigned integer; `memory_cost` is in KiB. The 32-byte
+  header is in the clear, and its parameters are no more secret than the salt (INV-3). Broken
+  by: a writer that orders or sizes the fields differently, which a reader built to this
+  layout then decrypts under the wrong salt or parameters.
+- **INV-21** Every vault magic is `b"VLT"` followed by one ASCII digit. A magic of that shape
+  whose digit is above the newest this build writes raises `VaultTooNewError`, a `ValueError`
+  subclass, with the message "This vault was made by a newer version of Rolodex. Update Rolodex
+  to open it." Any other unrecognised 4 bytes still raise "Not a valid vault file" (INV-2).
+  `VaultTooNewError` is not a damaged file, so the unlock screen shows it without the restore
+  and start-fresh options it offers for an unreadable vault, and the restore dialog and
+  `adopt_vault_file` report it the same way. Builds 1.6 and older predate this rule and call a
+  `VLT2` file "Not a valid vault file"; that is accepted. Broken by: a `b"VLT9"` file reported
+  as not a vault, or one that opens the unlock screen's recovery options.
+- **INV-22** A `VLT2` vault's key is `base64.urlsafe_b64encode(Argon2id(salt, length=32,
+  iterations, lanes, memory_cost).derive(password_utf8))`, using the parameters its own header
+  records. `derive_key(password, salt)` derives with the current parameters:
+  `ARGON2_MEMORY_KIB = 262_144` (256 MiB), `ARGON2_ITERATIONS = 3` and `ARGON2_LANES = 4`.
+  Those are a floor. They may rise and never fall, and raising them is not a format change,
+  because every `VLT2` header records the values it was written with. Argon2id comes from the
+  `cryptography` package already required, so this adds no dependency. Broken by: a reader
+  that derives a `VLT2` key from the constants instead of the header, which opens no vault
+  written before a raise.
+- **INV-23** Before deriving, the `VLT2` reader checks the header. Fewer than the 28 bytes
+  after the magic raises "Vault file is truncated or corrupt", as INV-2 does for `VLT1`. So
+  does `lanes` or `iterations` of zero, or `memory_cost` below `8 × lanes`, which Argon2id
+  itself rejects. A value above its cap raises `VaultTooNewError`: `memory_cost` above
+  `ARGON2_MAX_MEMORY_KIB = 4_194_304` (4 GiB), `iterations` above `ARGON2_MAX_ITERATIONS = 64`,
+  or `lanes` above `ARGON2_MAX_LANES = 64`. So a damaged header can never make an unlock
+  allocate unbounded memory or run without end, and a later build that raises past a cap is
+  reported as newer rather than as corrupt. Broken by: a header with `memory_cost` of
+  `0xFFFFFFFF` reaching `Argon2id`.
+- **INV-24** `save_vault_with_key` always writes `VLT2` with the current parameters. So the key
+  a session holds must always belong to those parameters, and `load_vault_with_key` makes it
+  so. When the file is current — `VLT2` with exactly the current parameters — it returns the
+  file's salt and key. Otherwise — `VLT1`, or `VLT2` with other parameters — it derives the
+  file's own key to decrypt, then mints a fresh `os.urandom(16)` salt and derives a current
+  key, and returns that pair. *Other* includes higher parameters from a newer build; this build
+  then writes its own, which are never below its floor, and the newer build raises them again
+  at its next unlock. Broken by: a session that unlocked a `VLT1` vault and whose first save
+  writes a vault the same password does not open.
+- **INV-25** Unlocking upgrades the file. `unlock_vault(password, path)` in the pure layer
+  calls `load_vault_with_key` and, when the file was not current, writes the decrypted vault
+  back with `save_vault_with_key` and the returned pair before returning `(vault, salt, key)`.
+  It writes the vault as it decrypted, before `migrate_vault`. The unlock dialog's background
+  thread calls it while holding `VaultLock` (INV-18), so the window's fingerprint (INV-19) is
+  taken after the rewrite. An `OSError` from that write is not an unlock failure: the vault
+  opens, the file keeps its old format, and the session's first save writes `VLT2`. The restore
+  path calls `load_vault_with_key` and never `unlock_vault`, so a backup file it reads is never
+  rewritten. Broken by: a `VLT1` vault whose first bytes are still `VLT1` after a successful
+  unlock into a writable folder.
+- **INV-26** `adopt_vault_file` accepts any header that passes INV-2, INV-21 and INV-23, and
+  copies the bytes verbatim. It does not upgrade; the unlock that follows does. Broken by: a
+  `VLT2` backup refused at the unlock screen's restore option.
+
 ### Concurrent writers
 
 - **INV-18** A session holds an exclusive, non-blocking advisory lock (`VaultLock`) on a
@@ -140,10 +202,11 @@ delegates. INV-13 is the one place that distinction changes what a caller must d
   Its handler writes through `_write_vault` directly rather than through `_save`, so the
   write is ordered before the new credentials are adopted and a failed write leaves the session
   on the old pair — see `master-password.md`.
-- Future KDF upgrade (Argon2id) is roadmap ROLO-0005, and INV-5 governs the mechanism: a new
-  magic whose cleartext header records the algorithm and its parameters, which the loader reads
-  to choose a KDF. `migrate_vault` cannot do that — it sees only the decrypted dict, never the
-  header — so its part is the post-decryption re-wrap alone.
+- The KDF upgrade (ROLO-0005) lives in the header, not in `migrate_vault`, which sees only the
+  decrypted dict. INV-24 and INV-25 carry it.
+- Measured 2026-10-19 on the maintainer's desktop, one derivation each: Argon2id at the INV-22
+  parameters took 0.215 s, and PBKDF2 at 600,000 iterations took 0.066 s. Refute by timing
+  `derive_key` and `derive_key_pbkdf2` on the same machine.
 
 ## 12. Cold-eyes loop log
 

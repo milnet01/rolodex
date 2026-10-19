@@ -251,6 +251,39 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: chore.
   Source: claude-config reply 2026-10-15 (CFG-0493).
 
+- 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
+  Why: Argon2id is memory-hard and resists GPU/ASIC cracking better than PBKDF2.
+  Scope: add an argon2 KDF path, record the algorithm + parameters in the vault header, bump the format version, and re-wrap the vault on next save. migrate_vault gains a KDF-upgrade branch. Requires the argon2-cffi dependency — weigh against the one-file/minimal-deps goal.
+  **Layman:** Upgrade the password-scrambling to a newer, tougher method, converting old vaults automatically.
+  Kind: security.
+  Source: in-session-2026-07-04.
+  Progress (2026-09-02): review-contract loop 2 on vault-format-and-crypto.md
+  surfaced two decisions this item must settle, and deliberately did NOT settle
+  them in the spec -- they are design choices, not corrections.
+
+  1. The successor magic's SHAPE. INV-5 requires a new magic but pins nothing. Two
+     implementers picking `ARG1` and `VLT2` produce headers today's loader cannot
+     tell apart from garbage.
+  2. What a build PREDATING the new format does on meeting one. INV-2 currently
+     raises "Not a valid vault file", so a vault written by a newer Rolodex is
+     reported as not a vault at all -- the same class of misreport INV-2 and
+     INV-12 each spend a sentence forbidding. A recognisable family (a shared
+     prefix with a version digit, say) would let the old loader raise INV-12's
+     "upgrade Rolodex" error instead.
+
+  INV-2 was amended in that loop to reject "a magic it does not recognise" rather
+  than "not VLT1", so a successor joins the recognised set instead of being
+  rejected by the invariant that mandates it. The shape itself remains open.
+
+  Also noted, not filed: this item's Scope line says "bump the format version",
+  where INV-5 requires a NEW MAGIC. The `version` field lives inside the encrypted
+  JSON, so it cannot be read before choosing a KDF. Two lanes raised it
+  independently; the spec is the correct side.
+  Decided (user, 2026-10-19): convert a vault to Argon2id right after a
+  successful unlock; builds 1.6 and older failing to open a converted
+  vault is acceptable; ship in 1.7.0. No new dependency: cryptography
+  >=44 ships Argon2id (installed here: 47.0.0).
+
 ## Unscheduled
 
 Wanted work not yet promised to any release.
@@ -295,35 +328,6 @@ Wanted work not yet promised to any release.
   **Layman:** The security side has real, judgeable goals. The "simple to use" half of the promise has none, so nothing can tell us whether we delivered it.
   Kind: doc.
   Source: adopt-project-run-2026-08-14 (from ~/.claude).
-
-- 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
-  Why: Argon2id is memory-hard and resists GPU/ASIC cracking better than PBKDF2.
-  Scope: add an argon2 KDF path, record the algorithm + parameters in the vault header, bump the format version, and re-wrap the vault on next save. migrate_vault gains a KDF-upgrade branch. Requires the argon2-cffi dependency — weigh against the one-file/minimal-deps goal.
-  **Layman:** Upgrade the password-scrambling to a newer, tougher method, converting old vaults automatically.
-  Kind: security.
-  Source: in-session-2026-07-04.
-  Progress (2026-09-02): review-contract loop 2 on vault-format-and-crypto.md
-  surfaced two decisions this item must settle, and deliberately did NOT settle
-  them in the spec -- they are design choices, not corrections.
-
-  1. The successor magic's SHAPE. INV-5 requires a new magic but pins nothing. Two
-     implementers picking `ARG1` and `VLT2` produce headers today's loader cannot
-     tell apart from garbage.
-  2. What a build PREDATING the new format does on meeting one. INV-2 currently
-     raises "Not a valid vault file", so a vault written by a newer Rolodex is
-     reported as not a vault at all -- the same class of misreport INV-2 and
-     INV-12 each spend a sentence forbidding. A recognisable family (a shared
-     prefix with a version digit, say) would let the old loader raise INV-12's
-     "upgrade Rolodex" error instead.
-
-  INV-2 was amended in that loop to reject "a magic it does not recognise" rather
-  than "not VLT1", so a successor joins the recognised set instead of being
-  rejected by the invariant that mandates it. The shape itself remains open.
-
-  Also noted, not filed: this item's Scope line says "bump the format version",
-  where INV-5 requires a NEW MAGIC. The `version` field lives inside the encrypted
-  JSON, so it cannot be read before choosing a KDF. Two lanes raised it
-  independently; the spec is the correct side.
 
 - 📋 [ROLO-0042] **Extend in-app auto-update to Windows.**
   Deferred from ROLO-0037 (its scope decision S4), and refused up front rather
