@@ -2641,12 +2641,39 @@ class MainWindow(Adw.ApplicationWindow):
         # List box in a scrolled window
         scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         self.listbox = Gtk.ListBox()
-        self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        # MULTIPLE (ROLO-0025): a plain click still selects one entry; Ctrl-click, Shift-click
+        # and Ctrl+A select several, for the bulk bar below.
+        self.listbox.set_selection_mode(Gtk.SelectionMode.MULTIPLE)
         self.listbox.add_css_class("navigation-sidebar")
-        self.listbox.connect("row-selected", self._on_row_selected)
+        self.listbox.connect("selected-rows-changed", self._on_selected_rows_changed)
         self.listbox.connect("row-activated", self._on_row_activated)
         scroll.set_child(self.listbox)
         left_box.append(scroll)
+
+        # Bulk actions (ROLO-0025), shown while two or more entries are selected. Text buttons,
+        # not icons: the frozen build bundles no icon theme (see FIELD_CATEGORY_CUES).
+        # Two rows -- the count and Clear, then the actions -- so the bar fits the narrowest
+        # sidebar; on one row it was wider than the sidebar's minimum width.
+        self.bulk_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_start=8,
+                                margin_end=8, margin_top=4, margin_bottom=8, visible=False)
+        bulk_top = Gtk.Box(spacing=6)
+        self.bulk_label = Gtk.Label(xalign=0, hexpand=True)
+        bulk_top.append(self.bulk_label)
+        bulk_clear_btn = Gtk.Button(label="Clear")
+        a11y_label(bulk_clear_btn, "Clear selection")
+        bulk_clear_btn.connect("clicked", lambda _b: self.listbox.unselect_all())
+        bulk_top.append(bulk_clear_btn)
+        self.bulk_bar.append(bulk_top)
+        bulk_actions = Gtk.Box(spacing=6)
+        self.bulk_move_btn = Gtk.Button(label="Move to\u2026")
+        self.bulk_move_btn.connect("clicked", self._on_bulk_move)
+        bulk_actions.append(self.bulk_move_btn)
+        bulk_delete_btn = Gtk.Button(label="Delete")
+        bulk_delete_btn.add_css_class("destructive-action")
+        bulk_delete_btn.connect("clicked", self._on_bulk_delete)
+        bulk_actions.append(bulk_delete_btn)
+        self.bulk_bar.append(bulk_actions)
+        left_box.append(self.bulk_bar)
 
         # ---- Right detail pane ----
         self.detail_scroll = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
@@ -2654,12 +2681,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.detail_scroll.set_child(self.detail_box)
 
         # Placeholder when nothing selected
-        self.placeholder = Adw.StatusPage(
-            title="Select an entry",
-            description="Choose an entry from the list, or add a new one.",
-            icon_name="contact-new-symbolic",
-        )
+        self.placeholder = Adw.StatusPage(icon_name="contact-new-symbolic")
         self.placeholder.set_vexpand(True)
+        self._sync_bulk_bar(0)  # also sets the placeholder's text
 
         # Stack: placeholder vs detail
         self.detail_stack = Gtk.Stack()
@@ -2942,8 +2966,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.count_label.set_text(f"{total} {entries_noun(total)}")
 
         # Rebuild finished: from here the select_row() calls below are deliberate, so the
-        # handler must see them.
+        # handler must see them. The rebuild dropped any multi-selection, so drop its bar too.
         self._rebuilding = False
+        self._sync_bulk_bar(0)
         if select_row:
             self.listbox.select_row(select_row)
         elif self._current_entry_id:
@@ -2980,18 +3005,37 @@ class MainWindow(Adw.ApplicationWindow):
             self._refresh_list()
         return GLib.SOURCE_REMOVE
 
-    def _on_row_selected(self, listbox, row):
+    def _selected_entry_ids(self):
+        return [r.entry_id for r in self.listbox.get_selected_rows() if isinstance(r, EntryRow)]
+
+    def _on_selected_rows_changed(self, listbox):
         if self._rebuilding:
             return  # a teardown/rebuild artefact, not a user action
-        if row is None:
+        if self.vault is None:
+            return  # locked: the window is closing
+        ids = self._selected_entry_ids()
+        self._sync_bulk_bar(len(ids))
+        if len(ids) == 1:
+            self._current_entry_id = ids[0]
+            self._revealed = False
+            self._show_detail(ids[0])
+        else:
+            # None selected, or several: no single entry to show.
             self._current_entry_id = None
             self.detail_stack.set_visible_child_name("empty")
-            return
-        if isinstance(row, CategoryHeaderRow):
-            return
-        self._current_entry_id = row.entry_id
-        self._revealed = False
-        self._show_detail(row.entry_id)
+
+    def _sync_bulk_bar(self, n):
+        """Show the bulk bar for two or more selected entries, and say so in the empty pane."""
+        multi = n >= 2
+        self.bulk_bar.set_visible(multi)
+        self.bulk_label.set_text(f"{n} selected" if multi else "")
+        self.bulk_move_btn.set_visible(bool(self.vault.get("categories")))
+        if multi:
+            self.placeholder.set_title(f"{n} entries selected")
+            self.placeholder.set_description("Move or delete them with the buttons below the list.")
+        else:
+            self.placeholder.set_title("Select an entry")
+            self.placeholder.set_description("Choose an entry from the list, or add a new one.")
 
     def _clear_focused_label_selection(self):
         focus = self.get_focus()
@@ -3004,7 +3048,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.split_view.set_show_content(False)
 
     def _on_row_activated(self, listbox, row):
-        if isinstance(row, EntryRow):
+        # Ctrl- and Shift-click activate as well as select; adding to a selection must not open
+        # one entry's page on a narrow window (ROLO-0025).
+        if isinstance(row, EntryRow) and len(self._selected_entry_ids()) <= 1:
             # Activation (a click or Enter), not selection: the list re-selects the current
             # entry after every rebuild, and arrow keys select, and neither should leave the
             # list on a narrow window.
@@ -3630,6 +3676,46 @@ class MainWindow(Adw.ApplicationWindow):
         dialog.connect("response", self._on_delete_response, entry_id)
         dialog.present(self)
 
+    def _on_bulk_delete(self, _btn):
+        ids = self._selected_entry_ids()
+        if len(ids) < 2:
+            return
+        names = [f'"{self.vault["entries"][eid]["name"]}"' for eid in ids]
+        shown = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
+        dialog = Adw.AlertDialog(
+            heading=f"Delete {len(ids)} entries?",
+            body=f"Delete {shown}? This cannot be undone.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("delete", "Delete")
+        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_bulk_delete_response, ids)
+        dialog.present(self)
+
+    def _on_bulk_delete_response(self, dialog, response, entry_ids):
+        if response != "delete" or self.vault is None:
+            return
+        gone = [eid for eid in entry_ids if eid in self.vault["entries"]]
+        for eid in gone:
+            delete_entry(self.vault, eid)
+        self._save()
+        self._current_entry_id = None
+        self.detail_stack.set_visible_child_name("empty")
+        self._refresh_list()
+        self._toast(f"{len(gone)} {entries_noun(len(gone))} deleted")
+
+    def _on_bulk_move(self, btn):
+        ids = self._selected_entry_ids()
+        if len(ids) < 2:
+            return
+        self._category_menu(btn, None, lambda cat: self._bulk_move_to(ids, cat)).popup()
+
+    def _bulk_move_to(self, entry_ids, category):
+        n = self._move_entries_to_category(entry_ids, category)
+        self._toast(f"Moved {n} {entries_noun(n)} to {category or 'Uncategorised'}")
+
     def _on_delete_response(self, dialog, response, entry_id):
         if response == "delete":
             delete_entry(self.vault, entry_id)
@@ -3960,13 +4046,22 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _move_entry_to_category(self, entry_id, category):
         """Move an entry to a category ('' = Uncategorised). Saves vault."""
-        if entry_id in self.vault["entries"]:
-            self.vault["entries"][entry_id]["category"] = category
-            self.vault["entries"][entry_id]["modified"] = now_iso()
-            self._save()
-            self._refresh_list()
-            if self._current_entry_id == entry_id:
-                self._show_detail(entry_id)
+        self._move_entries_to_category([entry_id], category)
+
+    def _move_entries_to_category(self, entry_ids, category):
+        """Move entries to a category with one save, returning how many moved (ROLO-0025)."""
+        moved = [eid for eid in entry_ids if eid in self.vault["entries"]]
+        if not moved:
+            return 0
+        stamp = now_iso()
+        for eid in moved:
+            self.vault["entries"][eid]["category"] = category
+            self.vault["entries"][eid]["modified"] = stamp
+        self._save()
+        self._refresh_list()
+        if self._current_entry_id in moved:
+            self._show_detail(self._current_entry_id)
+        return len(moved)
 
     def _move_entry_to_category_idle(self, entry_id, category):
         if self.vault is not None:  # locked between the drop and this callback
@@ -3989,10 +4084,9 @@ class MainWindow(Adw.ApplicationWindow):
         entry = self.vault["entries"].get(entry_row.entry_id)
         if not entry:
             return
-        current_cat = entry.get("category", "")
-
-        popover = Gtk.Popover()
-        popover.set_parent(entry_row)
+        popover = self._category_menu(
+            entry_row, entry.get("category", ""),
+            lambda cat: self._move_entry_to_category(entry_row.entry_id, cat))
         rect = Gdk.Rectangle()
         rect.x = int(x)
         rect.y = int(y)
@@ -4000,7 +4094,17 @@ class MainWindow(Adw.ApplicationWindow):
         rect.height = 1
         popover.set_pointing_to(rect)
         popover.set_has_arrow(False)
+        # Also unparent if the row is disposed first: _refresh_list() can rebuild the sidebar
+        # from another source (the idle lock, the search debounce) while this menu is open,
+        # destroying the parent row out from under a live popover child.
+        entry_row.connect("destroy", lambda _r, p=popover: p.unparent() if p.get_parent() else None)
+        popover.popup()
 
+    def _category_menu(self, parent, current_cat, on_pick):
+        """A "Move to..." popover on *parent* listing Uncategorised and every category except
+        *current_cat* (None lists them all). Picking one closes it and calls on_pick(category)."""
+        popover = Gtk.Popover()
+        popover.set_parent(parent)
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         header = Gtk.Label(label="Move to...", xalign=0)
         header.add_css_class("heading")
@@ -4011,31 +4115,21 @@ class MainWindow(Adw.ApplicationWindow):
         vbox.append(header)
         vbox.append(Gtk.Separator())
 
-        def make_move_handler(eid, cat, pop):
+        def make_handler(cat):
             def handler(_btn):
-                pop.popdown()
-                self._move_entry_to_category(eid, cat)
+                popover.popdown()
+                on_pick(cat)
             return handler
 
-        if current_cat != "":
-            btn = Gtk.Button(label="Uncategorised")
-            btn.add_css_class("flat")
-            btn.connect("clicked", make_move_handler(entry_row.entry_id, "", popover))
-            vbox.append(btn)
-        for cat in categories:
+        for cat, label in [("", "Uncategorised")] + [(c, c) for c in self.vault["categories"]]:
             if cat != current_cat:
-                btn = Gtk.Button(label=cat)
+                btn = Gtk.Button(label=label)
                 btn.add_css_class("flat")
-                btn.connect("clicked", make_move_handler(entry_row.entry_id, cat, popover))
+                btn.connect("clicked", make_handler(cat))
                 vbox.append(btn)
-
         popover.set_child(vbox)
         popover.connect("closed", lambda p: p.unparent())
-        # Also unparent if the row is disposed first: _refresh_list() can rebuild the sidebar
-        # from another source (the idle lock, the search debounce) while this menu is open,
-        # destroying the parent row out from under a live popover child.
-        entry_row.connect("destroy", lambda _r, p=popover: p.unparent() if p.get_parent() else None)
-        popover.popup()
+        return popover
 
     # ------------------------------------------------------------------
     # Utility
@@ -5456,6 +5550,7 @@ class ShortcutsDialog(Adw.Dialog):
         ("<Control><Shift>c", "Copy password / secret"),
         ("<Control>l", "Lock vault"),
         ("Escape", "Clear search"),
+        ("<Control>a", "Select every entry in the list"),
         ("<Control>question", "Keyboard shortcuts"),
         ("<Control>comma", "Preferences"),
     ]

@@ -37,7 +37,7 @@ Timestamped artifacts use `%Y%m%d_%H%M%S` so they sort chronologically by name.
 - **Constants:** `UPPER_SNAKE_CASE` at module scope (`VAULT_FILE`, `ITERATIONS`, `MAGIC`).
 - **Internal/private methods & attributes:** single leading underscore (`_save`,
   `_refresh_list`, `_current_entry_id`). GTK signal handlers are named `_on_<event>`
-  (`_on_add`, `_on_row_selected`, `_on_drop`).
+  (`_on_add`, `_on_selected_rows_changed`, `_on_drop`).
 - **Vault schema keys:** lowercase snake_case strings. Top-level: `version`, `categories`,
   `entries`. Per-entry: `name`, `category`, `fields`, `notes`, `created`, `modified`.
   Per-field: `label`, `value`, `sensitive`. These are a serialization contract — renaming one

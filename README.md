@@ -18,7 +18,8 @@ data never leaves your machine. It runs on Linux, Windows, and macOS.
   AES via Fernet, with the key derived from your password using PBKDF2-HMAC-SHA256 at 600,000
   rounds and a random per-vault salt.)*
 - **Organise into categories.** Group entries (Email, Banking, Games…), collapse the sections
-  you're not using, and drag entries from one category to another.
+  you're not using, and drag entries from one category to another. Ctrl-click or Shift-click
+  several entries to move or delete them together.
 - **Find anything fast.** Search as you type across names, fields, and notes.
 - **Secrets stay hidden.** Passwords and keys are masked behind dots and reveal only when you
   ask. Rolodex recognises sensitive-looking fields on its own.

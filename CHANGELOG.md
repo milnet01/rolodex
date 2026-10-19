@@ -11,6 +11,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Select several entries to move or delete them together.** (ROLO-0025)
+  Ctrl-click, Shift-click, or Ctrl+A in the list selects more than one
+  entry. A bar under the list then offers Move to…,
+  Delete (asked once for all of them) and Clear.
+
 - **The window works when it is narrow** (ROLO-0024)
   Below about 560 pixels wide, the list and the entry become two pages.
   Click an entry to open it; the back arrow returns to the list. The

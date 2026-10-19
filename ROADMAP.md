@@ -141,9 +141,16 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: enhancement.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0025] **Multi-select entries for bulk delete and bulk move-to-category.**
+- ✅ [ROLO-0025] **Multi-select entries for bulk delete and bulk move-to-category.**
   Why: every operation is one-entry-at-a-time; tidying a large vault is tedious.
   Scope: a selection mode in the sidebar (checkboxes / Ctrl-click) with a bulk action bar for delete (single confirm) and move-to-category. Interacts with _refresh_list selection handling — best sequenced after ROLO-0018.
+  Shipped 2026-10-19: the sidebar list is SelectionMode.MULTIPLE
+  (Ctrl-click, Shift-click, Ctrl+A). Two or more selected entries show a
+  two-row bulk bar (count + Clear; Move to… + Delete). Delete confirms
+  once and saves once; move saves once. The bar's minimum width measured
+  193 px with 120 selected, inside the 240 px sidebar minimum (one row
+  measured 335). Selection is dropped by any list rebuild. Four widget
+  tests failed on the old code; removing the activation guard fails one.
   **Layman:** Select several entries at once to delete or re-file them together.
   Kind: feature.
   Source: in-session-2026-07-04.

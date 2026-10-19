@@ -816,3 +816,68 @@ def test_ROLO0024_a_breakpoint_collapses_the_split_view(app, tmp_path, monkeypat
     assert not win.split_view.get_collapsed()
     bp.emit("apply")
     assert win.split_view.get_collapsed()
+
+
+# --- ROLO-0025: select several entries to delete or re-file them together -----------------
+
+
+def _select_all_entries(win):
+    win.listbox.emit("select-all")  # what Ctrl+A does in the list
+    return win._selected_entry_ids()
+
+
+def test_ROLO0025_selecting_several_shows_the_bulk_bar(app, tmp_path, monkeypatch):
+    win = _window_with(app, tmp_path, monkeypatch, ["Games"])
+    assert not win.bulk_bar.get_visible()
+    # Ctrl+A selects the entries and never the category headers.
+    assert len(_select_all_entries(win)) == 2
+    assert win.bulk_bar.get_visible()
+    assert win.bulk_label.get_text() == "2 selected"
+    assert win.detail_stack.get_visible_child_name() == "empty"
+    assert win.placeholder.get_title() == "2 entries selected"
+    assert _unnamed(win.bulk_bar) == []
+    # Adding to a selection activates the row too; that must not open one entry's page.
+    win.split_view.set_collapsed(True)
+    next(r for r in win.listbox if isinstance(r, rolodex.EntryRow)).activate()
+    assert not win.split_view.get_show_content()
+
+    win.listbox.unselect_all()
+    assert not win.bulk_bar.get_visible()
+    assert win.placeholder.get_title() == "Select an entry"
+
+
+def test_ROLO0025_one_selected_entry_still_shows_its_detail(app, tmp_path, monkeypatch):
+    win = _window_with(app, tmp_path, monkeypatch, [])
+    row = next(r for r in win.listbox if isinstance(r, rolodex.EntryRow))
+    win.listbox.select_row(row)
+    assert win._current_entry_id == row.entry_id
+    assert win.detail_stack.get_visible_child_name() == "detail"
+    assert not win.bulk_bar.get_visible()
+
+
+def test_ROLO0025_bulk_delete_removes_every_selected_entry_and_saves(app, tmp_path,
+                                                                     monkeypatch):
+    win = _window_with(app, tmp_path, monkeypatch, [])
+    ids = _select_all_entries(win)
+    win._on_bulk_delete_response(None, "cancel", ids)
+    assert len(win.vault["entries"]) == 2
+    win._on_bulk_delete_response(None, "delete", ids)
+    assert win.vault["entries"] == {}
+    assert not win.bulk_bar.get_visible()
+    on_disk, _salt = rolodex.load_vault(PW, win.vault_path)
+    assert on_disk["entries"] == {}
+
+
+def test_ROLO0025_bulk_move_files_every_selected_entry_and_saves(app, tmp_path, monkeypatch):
+    win = _window_with(app, tmp_path, monkeypatch, ["Games"])
+    ids = _select_all_entries(win)
+    win._bulk_move_to(ids, "Games")
+    assert {win.vault["entries"][e]["category"] for e in ids} == {"Games"}
+    on_disk, _salt = rolodex.load_vault(PW, win.vault_path)
+    assert {on_disk["entries"][e]["category"] for e in ids} == {"Games"}
+    # The menu offers Uncategorised and every category when moving a mixed selection.
+    menu = win._category_menu(win.bulk_move_btn, None, lambda _c: None)
+    labels = [b.get_label() for b in menu.get_child() if hasattr(b, "get_label")
+              and isinstance(b, rolodex.Gtk.Button)]
+    assert labels == ["Uncategorised", "Games"]
+    menu.unparent()

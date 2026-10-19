@@ -8,7 +8,8 @@ temporary directory that is removed on exit. Run it under a private display, e.g
         python3 scripts/demo-screenshots.py detail
 
 Scenes: detail (an entry with a live 2FA code), health, edit, unlock, preferences, and
-narrow and narrow-detail, the list and the entry page of a phone-width window (ROLO-0024).
+narrow and narrow-detail, the list and the entry page of a phone-width window (ROLO-0024),
+and select and narrow-select, every entry selected with the bulk bar showing (ROLO-0025).
 Optional second and third arguments pick the theme and the accent (ROLO-0015), e.g.
 `detail light teal`.
 """
@@ -96,6 +97,8 @@ def main():
                 row = next(r for r in win.listbox
                            if isinstance(r, rolodex.EntryRow) and r.entry_id == first)
                 GLib.timeout_add(500, lambda: row.activate() and False)  # once, not repeating
+            if scene.endswith("select"):  # select and narrow-select: several entries (ROLO-0025)
+                GLib.timeout_add(500, lambda: win.listbox.emit("select-all") and False)
             if scene == "health":
                 GLib.timeout_add(500, lambda: rolodex.PasswordHealthDialog(win).present(win))
             elif scene == "edit":
