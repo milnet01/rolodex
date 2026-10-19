@@ -61,8 +61,8 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
   selects a backup file and enters **that backup's** master password.
 - **INV-12** Decryption runs off the UI thread; a wrong password shows "Wrong password for this
   backup." and does not alter the current vault.
-- **INV-13** On success the restored vault is migrated, becomes the live vault with its own salt
-  and password, and is immediately re-saved to `contacts.vault` (so the app's file now uses the
+- **INV-13** On success the restored vault is migrated, becomes the live vault with its
+  password, and is immediately re-saved to `contacts.vault` (so the app's file now uses the
   backup's password). The detail pane clears and a count toast is shown.
 
 ## Plaintext export
