@@ -259,6 +259,14 @@ def test_password_strength_tiers():
     assert rolodex.password_strength("Abcdefgh1234!xyz") == 4  # 16 chars, 4 classes
 
 
+def test_ROLO0093_common_passwords_rate_weak():
+    # Length and variety alone rated these Fair or better.
+    for pw in ("password1", "Qwerty123!", "Football2024", "iloveyou!!"):
+        assert rolodex.password_strength(pw) == 1, pw
+    # A common word inside a longer secret is not the whole password.
+    assert rolodex.password_strength("Xk#9-dragon2024!") == 4
+
+
 def _sensitive(label, value):
     return {"label": label, "value": value, "sensitive": True}
 

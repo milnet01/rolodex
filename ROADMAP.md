@@ -199,12 +199,17 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: chore.
   Source: in-session-2026-09-25 (ants-projects-hub-website session).
 
-- 📋 [ROLO-0093] **Rate passwords on a common-passwords list as weak in Password Health.**
+- ✅ [ROLO-0093] **Rate passwords on a common-passwords list as weak in Password Health.**
   Why: password_strength() scores only length and character-class
   variety, as its docstring says, so "password1" and "qwerty123" rate 2
   (Fair). Not a bug in that contract; a gap in it.
   Scope: a common-passwords check in password_strength(); the user said yes on 2026-10-15.
   Decided (2026-10-15): the user said yes. Scheduled for 1.7.0.
+  Shipped 2026-10-19: COMMON_PASSWORDS embeds the first 1000 lines of
+  SecLists' 10k-most-common.txt (MIT). is_common_password() matches
+  whole or with trailing digits/symbols stripped, case-insensitive;
+  password_strength() returns 1 on a match. Leetspeak ("p@ssw0rd") is not
+  normalised. Test failed before (password1 rated 2) and passes after.
   **Layman:** Password Health calls "password1" merely fair; it should know that is one of the most-guessed passwords.
   Kind: enhancement.
   Source: in-session-2026-09-25 (ROLO-0015 screenshots).

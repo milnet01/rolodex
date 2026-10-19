@@ -35,6 +35,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **Password Health rates common passwords as Weak.** (ROLO-0093)
+  "password1", "Qwerty123!" and the rest of the thousand most-guessed
+  passwords, with or without digits and symbols on the end, used to rate
+  Fair or better on length and variety alone.
+
 - **Fields named for two-factor codes now get the key colour and icon.** (ROLO-0094)
   A label containing "seed", "2FA", "TOTP" or "OTP" was drawn as an
   uncategorised field; it is now drawn as a key.
