@@ -1,12 +1,121 @@
 #!/usr/bin/env bash
-# Delegates to the machine-wide pre-commit hook: the genre, declaration,
-# dead-name, roadmap-id and document checks. Warns and exits 0 where that
-# hook is absent, so a fresh clone on a machine without the workflow is
-# not blocked by a hook it does not have.
+# pre-commit — the mechanically decidable half of documentation.md §9.0, run
+# over the staged markdown so "check while writing" stops being a wish.
+#
+# Two blocking classes, no advisory channel. The missing advisory channel is
+# deliberate and is the more important half of this file: a warning nobody
+# acts on is worse than no check, because it shares a channel with the blocks
+# and teaches its reader to skip both. If you add a check here, it blocks; if
+# it cannot justify blocking, it does not belong.
+#
+#   BROKEN LINK  a markdown link to a repo file that does not exist.
+#   SURVIVOR     text this change deletes that still exists elsewhere — you
+#                have fixed one copy of a rule stated more than once.
+#
+# The survivor class is the one worth understanding. It needs no convention to
+# detect, because the text just deleted is ground truth about what its author
+# believes is wrong; everything else is a search. Measured on the repository
+# this skeleton comes from, over its 35 most recent document commits: it fires
+# on three, and its first real catch was a code snippet a standard had just
+# relabelled as unsafe while two other files went on prescribing it.
+#
+# ONE EXCLUSION, and it is not optional: text the same change re-adds
+# elsewhere is a MOVE, not a survivor. It is asked of each copy found, so a
+# copy in a file nothing touched still blocks.
+#
+# `docs/` is out of scope throughout — a dated record describes the tree as it
+# was, and is not a claim about now.
+#
+# NOT PORTED: the source repository also extracts backticked repo-relative
+# paths and checks those. That form was never measured outside it, and an
+# unmeasured check is how the advisory channel above died. Add it here only
+# after running it over your own corpus and counting what it finds.
+#
+# Install: git config core.hooksPath .githooks
+
 set -u
-hook="${CLAUDE_HOOKS:-$HOME/.claude/hooks}/pre-commit"
-if [ ! -x "$hook" ]; then
-  echo "pre-commit: no hook at $hook — NOTHING WAS CHECKED" >&2
-  exit 0
+cd "$(git rev-parse --show-toplevel)" || exit 0
+
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$' || true)
+[ -n "$staged" ] || exit 0
+
+fails=0
+
+for f in $staged; do
+    [ -f "$f" ] || continue
+    case "$f" in docs/*) continue ;; esac
+    dir=$(dirname "$f")
+
+    # --- broken markdown links ------------------------------------------
+    # Placeholders are skipped: a template path like `foo-<UTC>/` truncates
+    # to something that looks real and does not resolve.
+    grep -oE '\]\(\.{0,2}/?[A-Za-z0-9._/<>{},-]+\)' "$f" 2>/dev/null |
+    sed -E 's/^\]\(//; s/\)$//' | sed 's/[.,;:]$//' | sort -u |
+    while read -r p; do
+        [ -n "$p" ] || continue
+        case "$p" in
+            *'<'*|*'>'*|*'{{'*|*'*'*|http*|'#'*) continue ;;
+            *-) continue ;;
+        esac
+        [ -e "$p" ] || [ -e "$dir/$p" ] && continue
+        # A dated line was true when written and is not a claim about now.
+        grep -F -- "$p" "$f" | grep -qE '20[0-9]{2}-[0-9]{2}-[0-9]{2}' && continue
+        printf 'BLOCK link %s -> %s\n' "$f" "$p"
+    done > /tmp/.pc-link.$$ 2>/dev/null
+
+    # --- surviving copies of deleted text --------------------------------
+    # 45 characters: shorter fragments match everywhere and say nothing.
+    # `^-` minus the literal header, never `^-[^-]`: that reads as "skip the
+    # `--- a/file` header" and means "skip every markdown bullet", because git
+    # emits a deleted `- text` line as `-- text`. A roadmap is entirely
+    # bullets, and a rule stated twice is usually a bullet both times, which
+    # is the exact case this check is for. The added side is excluded the same
+    # way for symmetry.
+    added=$(git diff --cached -- "$f" | grep -E '^\+' | grep -v -e '^+++ ' |
+            sed 's/^+//; s/^[[:space:]]*//; s/[[:space:]]*$//')
+    git diff --cached -- "$f" | grep -E '^-' | grep -v -e '^--- ' |
+    sed 's/^-//; s/^[[:space:]]*//; s/[[:space:]]*$//' |
+    while IFS= read -r gone; do
+        [ ${#gone} -ge 45 ] || continue
+        printf '%s\n' "$added" | grep -qF -- "$gone" && continue
+        git grep -n -F -- "$gone" -- '*.md' ':!docs/' 2>/dev/null |
+        while IFS= read -r hit; do
+            hf=${hit%%:*}
+            [ "$hf" = "$f" ] && continue
+            # A copy in a file this same change ADDED the text to is where
+            # the text went (CFG-0733). Asked per copy, not of the whole
+            # change: a move would otherwise clear every other copy too.
+            git diff --cached -- "$hf" | grep -E '^\+' | grep -v -e '^+++ ' |
+                sed 's/^+//; s/^[[:space:]]*//; s/[[:space:]]*$//' |
+                grep -qF -- "$gone" && continue
+            printf 'BLOCK survivor %s -> %s\n' "$f" "$hit"
+        done
+    done >> /tmp/.pc-link.$$ 2>/dev/null
+
+    if [ -s /tmp/.pc-link.$$ ]; then
+        cut -c1-200 /tmp/.pc-link.$$ >&2
+        fails=$((fails + $(wc -l < /tmp/.pc-link.$$)))
+    fi
+    rm -f /tmp/.pc-link.$$
+done
+
+if [ "$fails" -gt 0 ]; then
+    cat >&2 <<'MSG'
+
+pre-commit: blocked.
+  rule: ~/.claude/standards/documentation.md §9.0
+
+  LINK     -- a staged document links to a file that does not exist. Fix the
+              link, or -- if the path is PRESCRIBED rather than asserted (a
+              template naming where a file will go) -- widen this hook's
+              scope, do not bypass it.
+
+  SURVIVOR -- text this change deleted still exists at the location shown.
+              Fix the other copy, or make it a pointer to the one home. If
+              the two are genuinely different claims that happen to share
+              wording, say so in the commit message and use --no-verify.
+MSG
+    exit 1
 fi
-exec "$hook" "$@"
+
+exit 0

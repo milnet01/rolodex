@@ -236,7 +236,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: marketing.
   Source: user-request-2026-10-15 (ants-projects-hub-website msg 570).
 
-- 📋 [ROLO-0096] **Replace the dead pre-commit delegator with the skeleton's own pre-commit hook.**
+- ✅ [ROLO-0096] **Replace the dead pre-commit delegator with the skeleton's own pre-commit hook.**
   Why: .githooks/pre-commit delegates to ~/.claude/hooks/pre-commit, which
   was retired on purpose (CFG-0493, ~/.claude 14da31f, 2026-09-27). So
   every commit prints "NOTHING WAS CHECKED". Rolodex is the last repo
@@ -247,6 +247,10 @@ release, which is what proves the in-app updater end to end: it installs from
   recent document commits (ROADMAP.md is generated; check it does not
   block a roadmap_log commit). If it misfires, remove the delegator
   instead. claude-config recommends the copy.
+  Shipped 2026-10-19: .githooks/pre-commit is now a verbatim copy of the
+  skeleton hook. Replayed over the 40 most recent commits touching
+  markdown, roadmap_log commits included: none blocked. Control: a staged
+  README link to a missing file blocked with rc=1.
   **Layman:** Every commit warns that nothing was checked; swap in a hook that checks document links again.
   Kind: chore.
   Source: claude-config reply 2026-10-15 (CFG-0493).
