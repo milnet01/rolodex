@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=96 -->
+<!-- ants-roadmap-id-high-water: ROLO=97 -->
 
 # Rolodex Roadmap
 
@@ -290,6 +290,20 @@ release, which is what proves the in-app updater end to end: it installs from
   successful unlock; builds 1.6 and older failing to open a converted
   vault is acceptable; ship in 1.7.0. No new dependency: cryptography
   >=44 ships Argon2id (installed here: 47.0.0).
+
+- 📋 [ROLO-0097] **Hide fields labelled as a seed phrase by default.**
+  Why: SENSITIVE_KEYWORDS has no "seed", so a "Seed phrase" or
+  "Recovery seed" field is stored non-sensitive and shown in cleartext.
+  field_is_sensitive() only rescues a value that parses as a TOTP seed,
+  which a wallet's recovery words never do. Checked 2026-10-19:
+  field_category("Seed phrase") is now "key" (ROLO-0094) but the field
+  is not masked.
+  Scope: add "seed" (and weigh "recovery", "mnemonic") to
+  SENSITIVE_KEYWORDS; docs/specs/entries-and-fields.md lists the set, so
+  the spec line moves with it and rule 14 applies.
+  **Layman:** A field called "Seed phrase" (a crypto wallet's recovery words) shows in plain text unless you tick Hide yourself.
+  Kind: security.
+  Source: in-session-2026-10-19 (found while shipping ROLO-0094).
 
 ## Unscheduled
 

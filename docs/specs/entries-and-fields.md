@@ -41,7 +41,9 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
 ### Sensitive masking
 
 - **INV-9** A label is auto-classified sensitive when it contains any `SENSITIVE_KEYWORDS`
-  token (password, pass, secret, key, token, pin, authenticator), case-insensitive. In the
+  token (password, pass, secret, key, token, pin, authenticator, seed, mnemonic),
+  case-insensitive. `seed` and `mnemonic` (ROLO-0097) cover a wallet's recovery phrase, which
+  no TOTP parse recognises; an unrelated label containing either is masked, the safe error. In the
   editor, editing a label to contain a keyword auto-checks "Hide" — one-way: removing the keyword
   leaves the checkbox as-is, and the user un-checks it manually. A field marked "Hide" renders
   masked in the editor by default. An eye icon inside the value box reveals it while editing
