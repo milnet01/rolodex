@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=97 -->
+<!-- ants-roadmap-id-high-water: ROLO=98 -->
 
 # Rolodex Roadmap
 
@@ -302,6 +302,14 @@ release, which is what proves the in-app updater end to end: it installs from
   successful unlock; builds 1.6 and older failing to open a converted
   vault is acceptable; ship in 1.7.0. No new dependency: cryptography
   >=44 ships Argon2id (installed here: 47.0.0).
+  Gate (2026-10-19): review-contract on vault-format-and-crypto.md,
+  genre spec, cap 2 reached, calm. Loop-log rows 3 and 4. Fixed: INV-25
+  names _read_vault and its current flag; the forward-clause search in
+  the opening paragraph; master-password.md INV-7a excepts
+  VaultTooNewError; import-export-backup.md INV-13 drops "its own salt".
+  Filed: ROLO-0098 (fingerprint taken after the unlock read). The spec
+  is ready to build from; the last loop's one fix was read by no lane,
+  so implementation is its next reviewer.
 
 - 📋 [ROLO-0097] **Hide fields labelled as a seed phrase by default.**
   Why: SENSITIVE_KEYWORDS has no "seed", so a "Seed phrase" or
@@ -433,6 +441,25 @@ Wanted work not yet promised to any release.
   **Layman:** The local pre-push check can pass code that GitHub's check then rejects for a type error.
   Kind: fix.
   Source: in-session-2026-09-24 (cut-release 1.6.0).
+
+- 📋 [ROLO-0098] **Take the vault fingerprint when unlock reads the file, not when the window opens.**
+  vault-format-and-crypto.md INV-19 says the fingerprint check is what
+  covers a vault in a synced folder. But MainWindow.__init__ takes
+  the first fingerprint after the unlock thread has read and
+  decrypted the file. A change landing between that read and the
+  window opening is adopted as the baseline, so the session's first
+  save overwrites it silently. That race exists today. ROLO-0005's
+  INV-25 rewrite at unlock sits inside the same gap and does not
+  change the outcome, but Argon2id (two derivations for a stale
+  file) widens the gap.
+  Fix direction, for whoever takes it: take the fingerprint before
+  the read in the unlock path, hand it to MainWindow, and have the
+  INV-25 rewrite skip itself, as it does on an OSError, when the
+  file changed in between. This is a design choice the spec leaves
+  open; it was filed rather than invented during the review.
+  **Layman:** If a sync tool changes the vault file in the second or so while Rolodex is unlocking it, Rolodex can later save over that change without warning.
+  Kind: review-fix.
+  Source: review-contract 2026-10-19 on vault-format-and-crypto.md (out-of-radius finding, one lane).
 
 ## High priority
 

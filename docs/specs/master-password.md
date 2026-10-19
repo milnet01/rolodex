@@ -26,7 +26,8 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
   ASCII dots) and is disabled while it runs, so the 600k-iteration KDF never freezes the UI.
 - **INV-7** A wrong password (`InvalidToken`) shows "Wrong password.", re-enables the button,
   and refocuses the password field. Other errors show their message.
-- **INV-7a** A load that fails with `ValueError` — bad magic, a truncated salt, contents that are
+- **INV-7a** A load that fails with `ValueError`, other than `VaultTooNewError`
+  (`vault-format-and-crypto.md` INV-21, ROLO-0005) — bad magic, a truncated salt, contents that are
   not a vault — also reveals "Restore from Backup…" and "Start a New Vault…". A wrong password
   never reveals them. Restore installs a chosen vault file after checking its header; Start
   creates a new vault. Both first rename the unreadable file to `<vault>.unreadable-<time>`
