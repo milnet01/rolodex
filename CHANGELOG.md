@@ -40,6 +40,11 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **Seed phrases are always hidden.** (ROLO-0097)
+  A field whose name contains "seed" or "mnemonic" — a crypto wallet's
+  recovery words — is masked like a password, including fields saved
+  before this release. The Reveal button still shows it.
+
 - **Password Health rates common passwords as Weak.** (ROLO-0093)
   "password1", "Qwerty123!" and the rest of the thousand most-guessed
   passwords, with or without digits and symbols on the end, used to rate

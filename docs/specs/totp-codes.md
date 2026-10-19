@@ -68,7 +68,8 @@ code derived from it, and the live "Code" row in the detail pane. Pure layer:
   `parse_totp_field` recognises the field. The two keyword sets do not agree —
   `SENSITIVE_KEYWORDS` and `TOTP_LABEL_KEYWORDS` overlap only on `authenticator` — so without
   this a field labelled `2FA`, `TOTP`, `OTP` or `One-time` was stored non-sensitive and then
-  rendered in permanent cleartext beside the live code derived from it.
+  rendered in permanent cleartext beside the live code derived from it. A seed-phrase label is a
+  third case (`entries-and-fields.md` INV-10).
 - **INV-16** This is checked **at render as well as at save**, so entries already sitting in a
   vault are masked too, not only newly edited ones.
 

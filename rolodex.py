@@ -64,7 +64,7 @@ VAULT_FILE = os.path.join(APP_DIR, "contacts.vault")
 CONFIG_FILE = os.path.join(APP_DIR, ".rolodex.conf")
 MAGIC = b"VLT1"
 ITERATIONS = 600_000
-SENSITIVE_KEYWORDS = {"password", "pass", "secret", "key", "token", "pin", "authenticator"}
+SENSITIVE_KEYWORDS = {"password", "pass", "secret", "key", "token", "pin", "authenticator", "seed", "mnemonic"}
 MIN_PASSWORD_LENGTH = 12
 MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
 
@@ -571,11 +571,17 @@ def parse_totp_field(label: str, value: str) -> dict | None:
     return {"secret": secret, "digits": 6, "period": 30, "algorithm": "sha1"}
 
 
+# ROLO-0097: a wallet's recovery phrase. No TOTP parse recognises one, and a field saved before
+# these words were masking keywords holds sensitive=False, so the label decides at render too.
+ALWAYS_HIDDEN_KEYWORDS = {"seed", "mnemonic"}
+
+
 # Password health (ROLO-0008) — all analysis runs in-process over the decrypted vault.
 def field_is_sensitive(field: dict) -> bool:
     """Whether a stored field must be masked in the UI.
 
-    The stored `sensitive` flag OR a recognised TOTP seed. The two keyword sets do not agree --
+    The stored `sensitive` flag OR a seed-phrase label (ALWAYS_HIDDEN_KEYWORDS) OR a recognised
+    TOTP seed. The two keyword sets do not agree --
     SENSITIVE_KEYWORDS and TOTP_LABEL_KEYWORDS overlap only on "authenticator" -- so a field
     labelled "2FA", "TOTP", "OTP" or "One-time" was stored non-sensitive and then rendered in
     permanent cleartext beside the live code derived from it. Routing through parse_totp_field
@@ -585,7 +591,10 @@ def field_is_sensitive(field: dict) -> bool:
     """
     if field.get("sensitive"):
         return True
-    return parse_totp_field(field.get("label", ""), field.get("value", "")) is not None
+    label = field.get("label", "")
+    if any(kw in label.lower() for kw in ALWAYS_HIDDEN_KEYWORDS):
+        return True
+    return parse_totp_field(label, field.get("value", "")) is not None
 
 
 # ROLO-0093: the most-guessed passwords, which length and variety alone rate Fair or better
@@ -4559,10 +4568,10 @@ class AddEditDialog(Adw.Dialog):
                 fields.append({
                     "label": label or "Unlabeled",
                     "value": value,
-                    # A recognised TOTP seed is stored sensitive whatever the checkbox says --
-                    # see field_is_sensitive() for why the label keywords cannot decide this.
-                    "sensitive": row.sens_check.get_active()
-                    or parse_totp_field(label, value) is not None,
+                    # A recognised TOTP seed, or a seed phrase, is stored sensitive whatever the
+                    # checkbox says -- see field_is_sensitive() and ALWAYS_HIDDEN_KEYWORDS.
+                    "sensitive": field_is_sensitive({"label": label, "value": value,
+                                                     "sensitive": row.sens_check.get_active()}),
                 })
 
         buf = self.notes_view.get_buffer()

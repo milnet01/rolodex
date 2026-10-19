@@ -311,7 +311,7 @@ release, which is what proves the in-app updater end to end: it installs from
   is ready to build from; the last loop's one fix was read by no lane,
   so implementation is its next reviewer.
 
-- 📋 [ROLO-0097] **Hide fields labelled as a seed phrase by default.**
+- ✅ [ROLO-0097] **Hide fields labelled as a seed phrase by default.**
   Why: SENSITIVE_KEYWORDS has no "seed", so a "Seed phrase" or
   "Recovery seed" field is stored non-sensitive and shown in cleartext.
   field_is_sensitive() only rescues a value that parses as a TOTP seed,
@@ -329,6 +329,15 @@ release, which is what proves the in-app updater end to end: it installs from
   an existing "Seed phrase" in cleartext. Re-deriving at render (the
   TOTP precedent, totp-codes.md INV-15/16) would override INV-10's
   user un-tick. Log: docs/reviews/entries-and-fields-loop-log.md.
+  Decided (user, 2026-10-19): always hide them. A field whose label
+  contains seed or mnemonic is masked at render, as a TOTP field is,
+  whatever its stored flag, so fields already in a vault are covered.
+  The cost accepted: the Hide box cannot keep such a field visible; the
+  reveal button still shows it.
+  Shipped 2026-10-19: SENSITIVE_KEYWORDS gains seed and mnemonic;
+  ALWAYS_HIDDEN_KEYWORDS makes field_is_sensitive() mask those labels at
+  render and the editor store them hidden. Two tests failed before and
+  pass after. entries-and-fields.md lost its "lead the code" sentence.
   **Layman:** A field called "Seed phrase" (a crypto wallet's recovery words) shows in plain text unless you tick Hide yourself.
   Kind: security.
   Source: in-session-2026-10-19 (found while shipping ROLO-0094).

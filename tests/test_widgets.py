@@ -155,6 +155,19 @@ def test_ROLO0059_add_edit_dialog_wipes_field_values_on_save():
     assert [r.value_entry.get_text() for r in dlg._get_field_rows()] == ["", ""]
 
 
+def test_ROLO0097_the_editor_stores_a_seed_phrase_hidden_even_when_unticked():
+    win = FakeMainWindow()
+    dlg = rolodex.AddEditDialog(win, "Add")
+    dlg.name_entry.set_text("Wallet")
+    row = dlg._get_field_rows()[0]
+    row.label_entry.set_text("Seed phrase")
+    row.value_entry.set_text("abandon ability able about")
+    row.sens_check.set_active(False)
+    dlg._on_save(None)
+    assert win.added[1][0] == {"label": "Seed phrase", "value": "abandon ability able about",
+                               "sensitive": True}
+
+
 def test_ROLO0059_add_edit_dialog_wipes_field_values_when_closed_without_saving():
     """Closing an editor over an existing entry left every secret it had loaded sitting in
     the row buffers. This is the not-dirty close; the discard-confirm path closes through

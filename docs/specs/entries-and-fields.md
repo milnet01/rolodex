@@ -9,7 +9,6 @@ Retroactive spec for the entry data model and the add/edit/delete/detail flows
 `AddEditDialog`, `FieldRow`, `MainWindow._show_detail`, `_move_entry_to_category`, and related
 handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bullet count, the
 `field_category` names) are current values; `rolodex.py` is authoritative if they change.
-The exception is INV-9's `seed` and `mnemonic`, which lead the code until ROLO-0097 ships.
 
 ## Behaviour
 
@@ -52,8 +51,12 @@ The exception is INV-9's `seed` and `mnemonic`, which lead the code until ROLO-0
   (ROLO-0021); that peek is view-only, never changes the "Hide" flag, and is reset whenever the
   checkbox is toggled.
 - **INV-10** The "Hide" checkbox is the source of truth for `sensitive` on save — the user can
-  override the auto-detection either way, except that a field `parse_totp_field` recognises is
-  always stored and shown masked (`totp-codes.md` INV-15, INV-16).
+  override the auto-detection either way, except that two kinds of field are always stored and
+  shown masked: one `parse_totp_field` recognises (`totp-codes.md` INV-15, INV-16), and one whose
+  label contains a word in `ALWAYS_HIDDEN_KEYWORDS` (`seed`, `mnemonic`; ROLO-0097, the user's
+  decision of 2026-10-19). Both go through `field_is_sensitive`, at save and at render, so a
+  field stored with `sensitive: false` before ROLO-0097 is masked too. The "Hide" box cannot keep
+  such a field visible; *Reveal sensitive* still shows it.
 - **INV-11** In the detail view a sensitive field shows the mask string (8 bullets) until
   *Reveal sensitive* is toggled; non-sensitive fields always show their value.
 - **INV-12** Reveal is a single window-level toggle (`self._revealed`), not stored per entry; it

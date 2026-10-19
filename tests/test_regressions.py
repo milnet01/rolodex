@@ -207,6 +207,15 @@ def test_field_is_sensitive_masks_a_totp_seed_regardless_of_the_stored_flag():
     assert rolodex.field_is_sensitive(ordinary) is False
 
 
+def test_ROLO0097_a_seed_phrase_stored_unhidden_still_renders_masked():
+    """A wallet's recovery words parse as no TOTP seed, and a field saved before "seed" was a
+    masking keyword holds sensitive=False -- so only the label can mask it at render."""
+    words = "abandon ability able about above absent absorb abstract absurd abuse access accident"
+    for label in ("Seed phrase", "Recovery mnemonic"):
+        assert rolodex.is_sensitive_label(label)
+        assert rolodex.field_is_sensitive({"label": label, "value": words, "sensitive": False})
+
+
 # --- generate_password: small lengths are not biased to declaration order ------------------
 
 
