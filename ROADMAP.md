@@ -306,6 +306,14 @@ release, which is what proves the in-app updater end to end: it installs from
   Scope: add "seed" (and weigh "recovery", "mnemonic") to
   SENSITIVE_KEYWORDS; docs/specs/entries-and-fields.md lists the set, so
   the spec line moves with it and rule 14 applies.
+  review-contract 2026-10-19 on entries-and-fields.md: capped at
+  2 loops, spec ready to implement. Open decision before coding:
+  does the new keyword reach fields ALREADY stored with sensitive
+  false? migrate_vault only fills a missing flag and the detail view
+  reads the stored flag, so changing SENSITIVE_KEYWORDS alone leaves
+  an existing "Seed phrase" in cleartext. Re-deriving at render (the
+  TOTP precedent, totp-codes.md INV-15/16) would override INV-10's
+  user un-tick. Log: docs/reviews/entries-and-fields-loop-log.md.
   **Layman:** A field called "Seed phrase" (a crypto wallet's recovery words) shows in plain text unless you tick Hide yourself.
   Kind: security.
   Source: in-session-2026-10-19 (found while shipping ROLO-0094).

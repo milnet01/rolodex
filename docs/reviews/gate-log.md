@@ -19,3 +19,4 @@ carry.
 
 | Run | Date | Subject | Genre | Pass | Lanes | Kept | Dismissed | Outcome |
 |---|---|---|---|---|---|---|---|---|
+| review-contract-2026-10-19-entries-and-fields | 2026-10-19 | `docs/specs/entries-and-fields.md` (ROLO-0097) | spec | 2 loops (capped) | 2 per loop, headless | 6 (5 fixed, 1 surfaced) | 0 | Calm cap; one question to the user on ROLO-0097. Rows in `entries-and-fields-loop-log.md` |

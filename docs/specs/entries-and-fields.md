@@ -9,6 +9,7 @@ Retroactive spec for the entry data model and the add/edit/delete/detail flows
 `AddEditDialog`, `FieldRow`, `MainWindow._show_detail`, `_move_entry_to_category`, and related
 handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bullet count, the
 `field_category` names) are current values; `rolodex.py` is authoritative if they change.
+The exception is INV-9's `seed` and `mnemonic`, which lead the code until ROLO-0097 ships.
 
 ## Behaviour
 
@@ -77,10 +78,10 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
   removed, the vault saved, the detail pane cleared, and the list refreshed.
 - **INV-18** Values placed into a Pango-markup sink are escaped with `GLib.markup_escape_text`
   — specifically the field label in the detail `Adw.ActionRow` title and the entry name in the
-  import-preview `Adw.ActionRow` title, and every toast, which `MainWindow._toast` escapes once
-  because `Adw.Toast` reads its title as markup. Plain `Gtk.Label` sinks (the detail-view entry name,
-  field values, notes body, and timestamps) are not markup and receive their text verbatim, so
-  no escaping is needed there.
+  import-preview `Adw.ActionRow` title, and every message `MainWindow._toast` shows, which it
+  escapes once because `Adw.Toast` reads its title as markup. Plain `Gtk.Label` sinks (the
+  detail-view entry name, field values, notes body, and timestamps) are not markup and receive
+  their text verbatim, so no escaping is needed there.
 - **INV-19** Every detail-view field row carries a type icon before its label, one per
   `field_category` value, named for a screen reader from `FIELD_CATEGORY_CUES` (ROLO-0016).
   It is the non-colour half of the cue: the border colour alone fails WCAG 1.4.1. Two
