@@ -35,6 +35,10 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **Fields named for two-factor codes now get the key colour and icon.** (ROLO-0094)
+  A label containing "seed", "2FA", "TOTP" or "OTP" was drawn as an
+  uncategorised field; it is now drawn as a key.
+
 - **Dark theme: timestamps, category headings and masked values are brighter.** (ROLO-0015)
   They sat between about 2:1 and 4:1 against the background; they now meet the 4.5:1
   readability guideline. The field border colours are now solid and were

@@ -424,6 +424,12 @@ def test_field_category_classifies_by_first_match():
     assert rolodex.field_category("Colour") == "other"
 
 
+def test_ROLO0094_two_factor_seed_labels_are_key_fields():
+    # These drew the grey "other" strip and icon before ROLO-0094.
+    for label in ("2FA seed", "TOTP", "Seed phrase", "2fa backup codes"):
+        assert rolodex.field_category(label) == "key", label
+
+
 def test_field_category_first_match_wins():
     # "password" (credential, bucket 0) is checked before "token" (key, bucket 1).
     assert rolodex.field_category("Password reset token") == "credential"

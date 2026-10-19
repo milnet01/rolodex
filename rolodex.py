@@ -380,7 +380,7 @@ def is_sensitive_label(label: str) -> bool:
 # Field category classification — order matters (first match wins)
 FIELD_CATEGORIES = [
     ("credential", {"password", "pass", "pin", "authenticator", "guard"}),
-    ("key",        {"key", "token", "secret"}),
+    ("key",        {"key", "token", "secret", "seed", "2fa", "totp", "otp"}),  # ROLO-0094
     ("identity",   {"username", "user", "email", "mail", "account", "id", "gamertag", "tag"}),
     ("url",        {"url", "website", "link", "domain", "http"}),
     ("date",       {"date", "expires", "expiry", "plus", "subscription", "renewal", "expire"}),

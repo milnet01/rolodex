@@ -209,7 +209,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: enhancement.
   Source: in-session-2026-09-25 (ROLO-0015 screenshots).
 
-- 📋 [ROLO-0094] **Classify 2FA-seed labels as a key field, not other.**
+- ✅ [ROLO-0094] **Classify 2FA-seed labels as a key field, not other.**
   Why: FIELD_CATEGORIES has no "seed", "2fa", "totp" or "otp"
   keyword, so field_category("2FA seed") is "other" and the row draws
   the grey strip and the uncategorised icon (seen in AT-SPI as
@@ -217,6 +217,9 @@ release, which is what proves the in-app updater end to end: it installs from
   Scope: add the keywords; the user said yes on 2026-10-15.
   Adds keywords under docs/specs/entries-and-fields.md INV-13.
   Decided (2026-10-15): the user said yes. Scheduled for 1.7.0.
+  Shipped 2026-10-19: FIELD_CATEGORIES "key" gains seed, 2fa, totp and
+  otp. Test test_ROLO0094_two_factor_seed_labels_are_key_fields failed
+  before the change ('other' == 'key') and passes after.
   **Layman:** A field named "2FA seed" gets the grey 'other' colour instead of the key colour.
   Kind: enhancement.
   Source: in-session-2026-09-25 (ROLO-0015 screenshots).
