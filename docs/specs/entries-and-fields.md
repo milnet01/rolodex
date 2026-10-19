@@ -45,12 +45,14 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
   case-insensitive. `seed` and `mnemonic` (ROLO-0097) cover a wallet's recovery phrase, which
   no TOTP parse recognises; an unrelated label containing either is masked, the safe error. In the
   editor, editing a label to contain a keyword auto-checks "Hide" — one-way: removing the keyword
-  leaves the checkbox as-is, and the user un-checks it manually. A field marked "Hide" renders
-  masked in the editor by default. An eye icon inside the value box reveals it while editing
+  leaves the checkbox as-is, and the user un-checks it manually. Once the user toggles "Hide" by
+  hand, later label edits no longer change it (`FieldRow._sens_user_set`). A field marked
+  "Hide" renders masked in the editor by default. An eye icon inside the value box reveals it while editing
   (ROLO-0021); that peek is view-only, never changes the "Hide" flag, and is reset whenever the
   checkbox is toggled.
 - **INV-10** The "Hide" checkbox is the source of truth for `sensitive` on save — the user can
-  override the auto-detection either way.
+  override the auto-detection either way, except that a field `parse_totp_field` recognises is
+  always stored and shown masked (`totp-codes.md` INV-15, INV-16).
 - **INV-11** In the detail view a sensitive field shows the mask string (8 bullets) until
   *Reveal sensitive* is toggled; non-sensitive fields always show their value.
 - **INV-12** Reveal is a single window-level toggle (`self._revealed`), not stored per entry; it
@@ -75,7 +77,8 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
   removed, the vault saved, the detail pane cleared, and the list refreshed.
 - **INV-18** Values placed into a Pango-markup sink are escaped with `GLib.markup_escape_text`
   — specifically the field label in the detail `Adw.ActionRow` title and the entry name in the
-  import-preview `Adw.ActionRow` title. Plain `Gtk.Label` sinks (the detail-view entry name,
+  import-preview `Adw.ActionRow` title, and every toast, which `MainWindow._toast` escapes once
+  because `Adw.Toast` reads its title as markup. Plain `Gtk.Label` sinks (the detail-view entry name,
   field values, notes body, and timestamps) are not markup and receive their text verbatim, so
   no escaping is needed there.
 - **INV-19** Every detail-view field row carries a type icon before its label, one per
