@@ -4528,22 +4528,14 @@ class AddEditDialog(Adw.Dialog):
         rows = move_item(current, dragged_row, target_row)
 
         # Rebuild listbox in new order
-        for r in list(self._get_field_rows()):
+        for r in current:
             self.fields_listbox.remove(r)
         for r in rows:
             self.fields_listbox.append(r)
 
     def _get_field_rows(self) -> list:
         """Return all FieldRow children in current order."""
-        rows = []
-        idx = 0
-        while True:
-            row = self.fields_listbox.get_row_at_index(idx)
-            if row is None:
-                break
-            rows.append(row)
-            idx += 1
-        return rows
+        return list(self.fields_listbox)
 
     def _on_save(self, btn):
         name = self.name_entry.get_text().strip()
@@ -5092,7 +5084,7 @@ class ManageCategoriesDialog(Adw.Dialog):
         count = len(groups.get(row.cat_name, []))
         body = f'Delete category "{row.cat_name}"?'
         if count:
-            body += f"\n{count} entries will be moved to Uncategorised."
+            body += f"\n{count} {entries_noun(count)} will be moved to Uncategorised."
 
         dialog = Adw.AlertDialog(heading="Delete category", body=body)
         dialog.add_response("cancel", "Cancel")
