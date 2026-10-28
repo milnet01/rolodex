@@ -931,11 +931,7 @@ def entries_by_category(vault: dict) -> dict[str, list[tuple[str, dict]]]:
     Uncategorised entries are under key ''."""
     groups: dict[str, list] = {}
     for eid, entry in vault["entries"].items():
-        cat = entry.get("category", "")
-        # Treat orphaned category references as uncategorised
-        if cat and cat not in vault["categories"]:
-            cat = ""
-        groups.setdefault(cat, []).append((eid, entry))
+        groups.setdefault(entry_category(vault, entry), []).append((eid, entry))
     for lst in groups.values():
         lst.sort(key=lambda x: x[1]["name"].lower())
     return groups
@@ -2917,85 +2913,55 @@ class MainWindow(Adw.ApplicationWindow):
         self._rebuilding = True
         clear_container(self.listbox)
 
-        select_row = None
+        rows: dict[str, EntryRow] = {}  # entry id -> its row, for the re-selection below
         total = len(self.vault["entries"])
 
         if query or cat_filter is not None:
             # Search or a category filter active: flat list, no grouping
             entries = search_entries(self.vault, query, category=cat_filter)
-            for eid, entry in entries:
-                row = EntryRow(eid, entry["name"])
-                self._attach_entry_context_menu(row)
-                self.listbox.append(row)
-                if eid == select_id:
-                    select_row = row
+            self._append_entry_rows(entries, rows)
             self.count_label.set_text(f"{len(entries)} of {total} {entries_noun(total)}")
 
         elif categories:
             # Grouped view
             groups = entries_by_category(self.vault)
-            for cat_name in categories:
+            # Uncategorised last, and only when it has entries
+            sections = [*categories, ""] if groups.get("") else categories
+            for cat_name in sections:
                 cat_entries = groups.get(cat_name, [])
                 collapsed = cat_name in self._collapsed_categories
-                header = CategoryHeaderRow(cat_name, len(cat_entries), collapsed)
-                self.listbox.append(header)
+                self.listbox.append(CategoryHeaderRow(cat_name, len(cat_entries), collapsed))
                 if not collapsed:
-                    for eid, entry in cat_entries:
-                        row = EntryRow(eid, entry["name"])
-                        self._attach_entry_context_menu(row)
-                        self.listbox.append(row)
-                        if eid == select_id:
-                            select_row = row
-
-            # Uncategorised last
-            uncat = groups.get("", [])
-            if uncat:
-                collapsed = "" in self._collapsed_categories
-                header = CategoryHeaderRow("", len(uncat), collapsed)
-                self.listbox.append(header)
-                if not collapsed:
-                    for eid, entry in uncat:
-                        row = EntryRow(eid, entry["name"])
-                        self._attach_entry_context_menu(row)
-                        self.listbox.append(row)
-                        if eid == select_id:
-                            select_row = row
+                    self._append_entry_rows(cat_entries, rows)
 
             self.count_label.set_text(f"{total} {entries_noun(total)}")
 
         else:
             # No categories: flat list (backward-compatible)
-            entries = list_entries(self.vault)
-            for eid, entry in entries:
-                row = EntryRow(eid, entry["name"])
-                self._attach_entry_context_menu(row)
-                self.listbox.append(row)
-                if eid == select_id:
-                    select_row = row
+            self._append_entry_rows(list_entries(self.vault), rows)
             self.count_label.set_text(f"{total} {entries_noun(total)}")
 
         # Rebuild finished: from here the select_row() calls below are deliberate, so the
         # handler must see them. The rebuild dropped any multi-selection, so drop its bar too.
         self._rebuilding = False
         self._sync_bulk_bar(0)
+        select_row = rows.get(select_id) or rows.get(self._current_entry_id)
         if select_row:
             self.listbox.select_row(select_row)
         elif self._current_entry_id:
-            # Try to re-select current entry
-            idx = 0
-            while True:
-                row = self.listbox.get_row_at_index(idx)
-                if row is None:
-                    break
-                if isinstance(row, EntryRow) and row.entry_id == self._current_entry_id:
-                    self.listbox.select_row(row)
-                    return
-                idx += 1
             # Entry filtered out or inside a collapsed category. Blank the detail pane but KEEP
             # _current_entry_id, so clearing the search or expanding the category re-selects it
             # (search.md INV-7). Clearing it here is what broke that: typing until the selected
             # entry dropped out of the results discarded the selection permanently.
             self.detail_stack.set_visible_child_name("empty")
+
+    def _append_entry_rows(self, entries, rows):
+        """Append one EntryRow per (id, entry) to the sidebar, recording each in *rows*."""
+        for eid, entry in entries:
+            row = EntryRow(eid, entry["name"])
+            self._attach_entry_context_menu(row)
+            self.listbox.append(row)
+            rows[eid] = row
 
     def _on_search_changed(self, entry):
         # Debounce (ROLO-0018): restart a short timer on each keystroke so the (relatively
