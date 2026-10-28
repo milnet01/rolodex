@@ -3640,16 +3640,19 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_delete(self, btn, entry_id):
         entry = self.vault["entries"][entry_id]
-        dialog = Adw.AlertDialog(
-            heading="Delete entry?",
-            body=f'Delete "{entry["name"]}"? This cannot be undone.',
-        )
+        self._confirm_delete("Delete entry?", f'Delete "{entry["name"]}"? This cannot be undone.',
+                             self._on_delete_response, entry_id)
+
+    def _confirm_delete(self, heading, body, on_response, payload):
+        """Ask before deleting; *on_response* gets (dialog, response, payload). Cancel is the
+        default and the close response, so Escape or Enter never deletes."""
+        dialog = Adw.AlertDialog(heading=heading, body=body)
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("delete", "Delete")
         dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
-        dialog.connect("response", self._on_delete_response, entry_id)
+        dialog.connect("response", on_response, payload)
         dialog.present(self)
 
     def _on_bulk_delete(self, _btn):
@@ -3658,17 +3661,8 @@ class MainWindow(Adw.ApplicationWindow):
             return
         names = [f'"{self.vault["entries"][eid]["name"]}"' for eid in ids]
         shown = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
-        dialog = Adw.AlertDialog(
-            heading=f"Delete {len(ids)} entries?",
-            body=f"Delete {shown}? This cannot be undone.",
-        )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("delete", "Delete")
-        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_default_response("cancel")
-        dialog.set_close_response("cancel")
-        dialog.connect("response", self._on_bulk_delete_response, ids)
-        dialog.present(self)
+        self._confirm_delete(f"Delete {len(ids)} entries?", f"Delete {shown}? This cannot be undone.",
+                             self._on_bulk_delete_response, ids)
 
     def _on_bulk_delete_response(self, dialog, response, entry_ids):
         if response != "delete" or self.vault is None:
