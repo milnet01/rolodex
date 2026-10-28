@@ -849,14 +849,38 @@ def test_ROLO0025_selecting_several_shows_the_bulk_bar(app, tmp_path, monkeypatc
     assert win.detail_stack.get_visible_child_name() == "empty"
     assert win.placeholder.get_title() == "2 entries selected"
     assert _unnamed(win.bulk_bar) == []
-    # Adding to a selection activates the row too; that must not open one entry's page.
+    # Ctrl-clicking adds to a selection and activates the row too; that must not open one
+    # entry's page on a narrow window.
     win.split_view.set_collapsed(True)
-    next(r for r in win.listbox if isinstance(r, rolodex.EntryRow)).activate()
+    row = next(r for r in win.listbox if isinstance(r, rolodex.EntryRow))
+    win._note_click(row, rolodex.Gdk.ModifierType.CONTROL_MASK)
+    win.listbox.unselect_row(row)  # what the list does to a Ctrl-clicked selected row ...
+    row.activate()  # ... before activating it, which re-adds it
+    assert len(win._selected_entry_ids()) == 1  # the Ctrl-click toggled it off
     assert not win.split_view.get_show_content()
+    win.listbox.emit("select-all")
 
     win.listbox.unselect_all()
     assert not win.bulk_bar.get_visible()
     assert win.placeholder.get_title() == "Select an entry"
+
+
+def test_ROLO0025_a_plain_click_on_a_second_entry_replaces_the_selection(app, tmp_path,
+                                                                        monkeypatch):
+    # GtkListBox's single-click activation only ADDS in MULTIPLE mode, so clicking one entry
+    # and then another left both selected and the detail pane blank.
+    win = _window_with(app, tmp_path, monkeypatch, [])
+    first, second = [r for r in win.listbox if isinstance(r, rolodex.EntryRow)][:2]
+    for row in (first, second):
+        win._note_click(row, rolodex.Gdk.ModifierType(0))
+        row.activate()  # what a plain click does
+        assert win._selected_entry_ids() == [row.entry_id]
+        assert win._current_entry_id == row.entry_id
+        assert win.detail_stack.get_visible_child_name() == "detail"
+    # Shift-click selects the range from the last plain click.
+    win._note_click(first, rolodex.Gdk.ModifierType.SHIFT_MASK)
+    first.activate()
+    assert sorted(win._selected_entry_ids()) == sorted([first.entry_id, second.entry_id])
 
 
 def test_ROLO0025_one_selected_entry_still_shows_its_detail(app, tmp_path, monkeypatch):

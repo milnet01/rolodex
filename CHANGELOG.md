@@ -59,6 +59,13 @@ All notable changes to Rolodex are documented here. The format is based on
   readability guideline. The field border colours are now solid and were
   retuned so no two merge for colourblind readers.
 
+### Fixed
+
+- **Clicking a second entry in the list selects it instead of both.** Since ROLO-0025 a plain
+  click only added the clicked entry to the selection, so the earlier one stayed highlighted
+  and the detail pane went blank. A plain click now selects just that entry, Ctrl-click
+  toggles one, and Shift-click selects a range.
+
 ## [1.6.0] - 2026-09-24
 
 ### Added
