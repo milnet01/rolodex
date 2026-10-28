@@ -2652,6 +2652,15 @@ class MainWindow(Adw.ApplicationWindow):
         self.listbox.add_css_class("navigation-sidebar")
         self.listbox.connect("selected-rows-changed", self._on_selected_rows_changed)
         self.listbox.connect("row-activated", self._on_row_activated)
+        # GTK's single-click activation only ever ADDS the clicked row in MULTIPLE mode and
+        # ignores Ctrl and Shift, so _apply_click_selection redoes the selection the click
+        # meant. CAPTURE, so the modifiers are noted before the list's own gesture acts.
+        self._pending_click = None
+        self._select_anchor = None  # entry id a Shift-click extends from
+        click = Gtk.GestureClick(button=Gdk.BUTTON_PRIMARY)
+        click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click.connect("pressed", self._on_list_pressed)
+        self.listbox.add_controller(click)
         scroll.set_child(self.listbox)
         left_box.append(scroll)
 
@@ -2945,7 +2954,7 @@ class MainWindow(Adw.ApplicationWindow):
         # handler must see them. The rebuild dropped any multi-selection, so drop its bar too.
         self._rebuilding = False
         self._sync_bulk_bar(0)
-        select_row = rows.get(select_id) or rows.get(self._current_entry_id)
+        select_row = rows.get(select_id or "") or rows.get(self._current_entry_id or "")
         if select_row:
             self.listbox.select_row(select_row)
         elif self._current_entry_id:
@@ -3022,10 +3031,52 @@ class MainWindow(Adw.ApplicationWindow):
         if stack.get_visible_child_name() == "empty":
             self.split_view.set_show_content(False)
 
+    def _on_list_pressed(self, gesture, _n_press, _x, y):
+        self._note_click(self.listbox.get_row_at_y(int(y)), gesture.get_current_event_state())
+
+    def _note_click(self, row, state):
+        """Record a primary click on *row*: its modifiers, and whether the row was selected
+        before the list's own handling of the click changed that."""
+        self._pending_click = (row, state, row is not None and row.is_selected())
+
+    def _apply_click_selection(self, row):
+        """Make the selection what the activating click or Enter meant (ROLO-0025).
+
+        GtkListBox's single-click path calls select_and_activate, which in MULTIPLE mode only
+        adds the row: a plain click on a second entry left both selected, and with two selected
+        the detail pane goes blank. Plain selects just this row, Ctrl toggles it, Shift selects
+        the range from the last plain or Ctrl click. Activation without a noted click (Enter)
+        counts as plain. Returns True for a plain activation, the only kind that opens the entry.
+        """
+        click, self._pending_click = self._pending_click, None
+        state, was_selected = Gdk.ModifierType(0), False
+        if click is not None and click[0] is row:
+            state, was_selected = click[1], click[2]
+        entry_rows = [r for r in self.listbox if isinstance(r, EntryRow)]
+        anchor = next((r for r in entry_rows if r.entry_id == self._select_anchor), None)
+        if state & Gdk.ModifierType.SHIFT_MASK and anchor is not None:
+            lo, hi = sorted((entry_rows.index(anchor), entry_rows.index(row)))
+            keep = entry_rows[lo:hi + 1]
+        elif state & Gdk.ModifierType.CONTROL_MASK:
+            self._select_anchor = row.entry_id
+            if was_selected:
+                self.listbox.unselect_row(row)
+            return False
+        else:
+            self._select_anchor = row.entry_id
+            keep = [row]
+        for r in self.listbox.get_selected_rows():
+            if r not in keep:
+                self.listbox.unselect_row(r)
+        for r in keep:
+            if not r.is_selected():
+                self.listbox.select_row(r)
+        return len(keep) == 1 and keep[0] is row
+
     def _on_row_activated(self, listbox, row):
-        # Ctrl- and Shift-click activate as well as select; adding to a selection must not open
+        # Ctrl- and Shift-click activate as well as select; changing a selection must not open
         # one entry's page on a narrow window (ROLO-0025).
-        if isinstance(row, EntryRow) and len(self._selected_entry_ids()) <= 1:
+        if isinstance(row, EntryRow) and self._apply_click_selection(row):
             # Activation (a click or Enter), not selection: the list re-selects the current
             # entry after every rebuild, and arrow keys select, and neither should leave the
             # list on a narrow window.
