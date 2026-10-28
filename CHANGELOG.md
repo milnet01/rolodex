@@ -67,6 +67,8 @@ All notable changes to Rolodex are documented here. The format is based on
   toggles one, and Shift-click selects a range.
 - **A plaintext export that cannot be written now says so.** A read-only folder or a full disk
   made the export fail silently, with no file and no message.
+- **Password Health shows entries whose name contains `&` or `<`.** Such a name, like
+  "AT&T", was read as markup and its row was drawn with no title.
 
 ## [1.6.0] - 2026-09-24
 

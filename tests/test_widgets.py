@@ -918,3 +918,25 @@ def test_ROLO0025_bulk_move_files_every_selected_entry_and_saves(app, tmp_path, 
               and isinstance(b, rolodex.Gtk.Button)]
     assert labels == ["Uncategorised", "Games"]
     menu.unparent()
+
+
+def test_password_health_escapes_markup_in_entry_names(app, tmp_path, monkeypatch):
+    # Adw.ActionRow titles are Pango markup: an unescaped "AT&T" failed to parse and the row
+    # showed no title at all.
+    win = _window_with(app, tmp_path, monkeypatch, [])
+    rolodex.add_entry(win.vault, "AT&T <work>",
+                      [{"label": "PIN & code", "value": "1234", "sensitive": True}])
+    dialog = rolodex.PasswordHealthDialog(win)
+
+    def rows(w):
+        child = w.get_first_child()
+        while child is not None:
+            if isinstance(child, rolodex.Adw.ActionRow):
+                yield child
+            yield from rows(child)
+            child = child.get_next_sibling()
+
+    row = next(r for r in rows(dialog.get_child()) if "AT" in r.get_title())
+    assert row.get_title() == "AT&amp;T &lt;work&gt;"
+    # libadwaita 1.5 hands back the subtitle as rendered, later versions as stored.
+    assert row.get_subtitle() in ("PIN & code", "PIN &amp; code")

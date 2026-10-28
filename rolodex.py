@@ -4668,7 +4668,7 @@ class ImportPreviewDialog(Adw.Dialog):
             row.set_title(GLib.markup_escape_text(entry["name"]))
             field_count = len(entry["fields"])
             notes_flag = " +notes" if entry.get("notes") else ""
-            subtitle = f"{field_count} fields{notes_flag}"
+            subtitle = f"{field_count} field{'' if field_count == 1 else 's'}{notes_flag}"
             if is_dup:
                 subtitle += "  (duplicate name — tick to import it anyway)"
             row.set_subtitle(subtitle)
@@ -5516,7 +5516,10 @@ class PasswordHealthDialog(Adw.Dialog):
             listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
             listbox.add_css_class("boxed-list")
             for f in findings:
-                row = Adw.ActionRow(title=f["entry_name"], subtitle=f["label"])
+                # Row titles are Pango markup, so a name like "AT&T" must be escaped or the
+                # row renders blank -- as the detail pane and import preview already do.
+                row = Adw.ActionRow(title=GLib.markup_escape_text(f["entry_name"]),
+                                    subtitle=GLib.markup_escape_text(f["label"]))
                 chips = Gtk.Box(spacing=6, valign=Gtk.Align.CENTER)
                 strength_chip = Gtk.Label(label=f["strength_label"])
                 strength_chip.add_css_class("caption")
