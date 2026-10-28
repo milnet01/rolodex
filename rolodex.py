@@ -2012,6 +2012,24 @@ def clear_container(container) -> None:
         child = nxt
 
 
+def make_file_dialog(title, filter_name, *, pattern=None, mime_type=None):
+    """A Gtk.FileDialog offering one named filter (a glob *pattern* or a *mime_type*), then
+    "All files" so a misnamed file can still be picked."""
+    chooser = Gtk.FileDialog()
+    chooser.set_title(title)
+    filters = Gio.ListStore.new(Gtk.FileFilter)
+    for name, glob, mime in ((filter_name, pattern, mime_type), ("All files", "*", None)):
+        file_filter = Gtk.FileFilter()
+        file_filter.set_name(name)
+        if glob:
+            file_filter.add_pattern(glob)
+        if mime:
+            file_filter.add_mime_type(mime)
+        filters.append(file_filter)
+    chooser.set_filters(filters)
+    return chooser
+
+
 def make_dialog_scaffold(dialog, title, *, width=None, height=None,
                          clamp_max=500, margin=16, scrolled=False):
     """Build the common Adw.Dialog shell: ToolbarView + HeaderBar + (optional scroll) + Clamp.
@@ -2281,18 +2299,8 @@ class UnlockDialog(Gtk.Window):
         self.close()
 
     def _on_restore_backup(self, *_args):
-        chooser = Gtk.FileDialog()
-        chooser.set_title("Choose a Rolodex vault or backup")
-        vault_filter = Gtk.FileFilter()
-        vault_filter.set_name("Rolodex vaults")
-        vault_filter.add_pattern("*.vault")
-        all_filter = Gtk.FileFilter()
-        all_filter.set_name("All files")
-        all_filter.add_pattern("*")
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(vault_filter)
-        filters.append(all_filter)
-        chooser.set_filters(filters)
+        chooser = make_file_dialog("Choose a Rolodex vault or backup", "Rolodex vaults",
+                                   pattern="*.vault")
         backups = os.path.join(os.path.dirname(os.path.abspath(self.vault_path)), "Backups")
         start = backups if os.path.isdir(backups) else GLib.get_home_dir()
         if start:
@@ -3781,18 +3789,7 @@ class MainWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _on_import(self, *_args):
-        chooser = Gtk.FileDialog()
-        chooser.set_title("Import from text file")
-        txt_filter = Gtk.FileFilter()
-        txt_filter.set_name("Text files")
-        txt_filter.add_mime_type("text/plain")
-        all_filter = Gtk.FileFilter()
-        all_filter.set_name("All files")
-        all_filter.add_pattern("*")
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(txt_filter)
-        filters.append(all_filter)
-        chooser.set_filters(filters)
+        chooser = make_file_dialog("Import from text file", "Text files", mime_type="text/plain")
 
         # Start the picker in the user's home directory
         home = GLib.get_home_dir()
@@ -3905,18 +3902,7 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_restore_confirmed(self, dialog, response):
         if response != "restore":
             return
-        chooser = Gtk.FileDialog()
-        chooser.set_title("Select vault backup")
-        vault_filter = Gtk.FileFilter()
-        vault_filter.set_name("Vault files")
-        vault_filter.add_pattern("*.vault")
-        all_filter = Gtk.FileFilter()
-        all_filter.set_name("All files")
-        all_filter.add_pattern("*")
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(vault_filter)
-        filters.append(all_filter)
-        chooser.set_filters(filters)
+        chooser = make_file_dialog("Select vault backup", "Vault files", pattern="*.vault")
         chooser.open(self, None, self._on_restore_file_chosen)
 
     def _on_restore_file_chosen(self, chooser, result):
