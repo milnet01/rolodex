@@ -3092,8 +3092,10 @@ class MainWindow(Adw.ApplicationWindow):
             row.add_prefix(a11y_label(Gtk.Image(icon_name=cue_icon, valign=Gtk.Align.CENTER,
                                                 tooltip_text=cue_name), cue_name))
 
-            # Value display
-            is_sensitive = field_is_sensitive(field)
+            # Value display. A recognised 2FA seed is always sensitive, so parse it once here and
+            # let field_is_sensitive's own TOTP parse run only for fields that are not seeds.
+            totp_cfg = parse_totp_field(field["label"], field["value"])
+            is_sensitive = totp_cfg is not None or field_is_sensitive(field)
             if is_sensitive and not self._revealed:
                 display = MASK
             else:
@@ -3121,7 +3123,6 @@ class MainWindow(Adw.ApplicationWindow):
             fields_group.append(row)
 
             # ROLO-0006: a 2FA seed gets a live-code row right beneath it.
-            totp_cfg = parse_totp_field(field["label"], field["value"])
             if totp_cfg:
                 fields_group.append(self._build_totp_row(totp_cfg))
 
