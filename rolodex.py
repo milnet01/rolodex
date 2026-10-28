@@ -15,6 +15,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.parse
 import uuid
@@ -2212,7 +2213,6 @@ class UnlockDialog(Gtk.Window):
             # and nothing saying why (ROLO-0070).
             self.btn.set_sensitive(False)
             self.btn.set_label("Creating...")
-            import threading
             threading.Thread(target=self._try_create, args=(pw,), daemon=True).start()
         else:
             if not self._take_lock():
@@ -2220,7 +2220,6 @@ class UnlockDialog(Gtk.Window):
             self.btn.set_sensitive(False)
             self.btn.set_label("Unlocking...")
             # Run decryption in a thread so the UI doesn't freeze
-            import threading
             threading.Thread(target=self._try_unlock, args=(pw,), daemon=True).start()
 
     def _try_unlock(self, pw):
@@ -2259,7 +2258,12 @@ class UnlockDialog(Gtk.Window):
             GLib.idle_add(self._create_fail, str(e))
 
     def _create_ok(self, vault, salt, pw, key):
-        self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
+        # Guarded for the same reason as _unlock_ok: an exception here, in an idle callback with
+        # the button disabled, would leave the screen stuck on "Creating...".
+        try:
+            self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
+        except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
+            return self._create_fail(f"The vault was created but could not be opened: {exc}")
         self._wipe_password_entries()
         self.close()
         return False
@@ -2515,7 +2519,6 @@ class MainWindow(Adw.ApplicationWindow):
         # main thread. None until known, and None where it cannot be known -- only an explicit
         # False puts a warning on the code rows.
         self._clock_synced = None
-        import threading
 
         threading.Thread(target=self._check_clock, daemon=True).start()
 
@@ -3455,7 +3458,6 @@ class MainWindow(Adw.ApplicationWindow):
     def _start_silent_update_check(self):
         """Kick off the startup check on a background thread. Returns False so the GLib
         timeout does not repeat."""
-        import threading
 
         self._silent_check_id = 0  # this source removes itself via the False return below
         if self._update_busy:
@@ -3497,7 +3499,6 @@ class MainWindow(Adw.ApplicationWindow):
             return
         if self._update_busy:
             return  # a check, an offer or a download is already running (ROLO-0051)
-        import threading
 
         self._set_update_busy(True)
         self._toast("Checking for updates...")
@@ -3523,7 +3524,6 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _start_update_download(self, info):
         """Download and verify on a background thread, then install (INV-8/INV-15)."""
-        import threading
 
         self._toast(f"Downloading Rolodex {info.version}...")
         threading.Thread(target=self._update_worker, args=(info,), daemon=True).start()
@@ -4833,7 +4833,6 @@ class RestorePasswordDialog(Adw.Dialog):
         self._unlock_btn.set_sensitive(False)
         self._unlock_btn.set_label("Decrypting...")
 
-        import threading
         threading.Thread(
             target=self._try_unlock, args=(pw,), daemon=True
         ).start()
