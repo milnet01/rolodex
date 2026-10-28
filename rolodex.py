@@ -3699,19 +3699,22 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_delete(self, btn, entry_id):
         entry = self.vault["entries"][entry_id]
-        self._confirm_delete("Delete entry?", f'Delete "{entry["name"]}"? This cannot be undone.',
-                             self._on_delete_response, entry_id)
+        self._confirm_destructive("Delete entry?",
+                                  f'Delete "{entry["name"]}"? This cannot be undone.',
+                                  "Delete", self._on_delete_response, entry_id)
 
-    def _confirm_delete(self, heading, body, on_response, payload):
-        """Ask before deleting; *on_response* gets (dialog, response, payload). Cancel is the
-        default and the close response, so Escape or Enter never deletes."""
+    def _confirm_destructive(self, heading, body, action_label, on_response, *payload):
+        """Ask before an action that cannot be undone. *on_response* gets (dialog, response,
+        *payload), where response is "cancel" or *action_label* lower-cased. Cancel is the
+        default and the close response, so Escape or Enter never goes ahead."""
         dialog = Adw.AlertDialog(heading=heading, body=body)
+        action = action_label.lower()
         dialog.add_response("cancel", "Cancel")
-        dialog.add_response("delete", "Delete")
-        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.add_response(action, action_label)
+        dialog.set_response_appearance(action, Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
-        dialog.connect("response", on_response, payload)
+        dialog.connect("response", on_response, *payload)
         dialog.present(self)
 
     def _on_bulk_delete(self, _btn):
@@ -3720,8 +3723,9 @@ class MainWindow(Adw.ApplicationWindow):
             return
         names = [f'"{self.vault["entries"][eid]["name"]}"' for eid in ids]
         shown = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
-        self._confirm_delete(f"Delete {len(ids)} entries?", f"Delete {shown}? This cannot be undone.",
-                             self._on_bulk_delete_response, ids)
+        self._confirm_destructive(f"Delete {len(ids)} entries?",
+                                  f"Delete {shown}? This cannot be undone.",
+                                  "Delete", self._on_bulk_delete_response, ids)
 
     def _on_bulk_delete_response(self, dialog, response, entry_ids):
         if response != "delete" or self.vault is None:
@@ -3851,8 +3855,10 @@ class MainWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _on_backup(self, *_args):
-        # Save latest state first
-        self._save()
+        # Save latest state first. A failed save has already said why; backing up the older
+        # file on disk would then quietly miss the change the user just made.
+        if not self._save():
+            return
 
         save_dialog = Gtk.FileDialog()
         save_dialog.set_title("Backup vault to...")
@@ -3887,17 +3893,12 @@ class MainWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _on_restore(self, *_args):
-        dialog = Adw.AlertDialog(
-            heading="Restore from backup",
-            body="This will replace all current entries with the backup contents. You will need to enter the backup's master password.",
+        self._confirm_destructive(
+            "Restore from backup",
+            "This will replace all current entries with the backup contents. You will need to "
+            "enter the backup's master password.",
+            "Restore", self._on_restore_confirmed,
         )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("restore", "Restore")
-        dialog.set_response_appearance("restore", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_default_response("cancel")
-        dialog.set_close_response("cancel")
-        dialog.connect("response", self._on_restore_confirmed)
-        dialog.present(self)
 
     def _on_restore_confirmed(self, dialog, response):
         if response != "restore":
@@ -3948,24 +3949,16 @@ class MainWindow(Adw.ApplicationWindow):
         self.detail_stack.set_visible_child_name("empty")
         self._refresh_list()
         count = len(self.vault["entries"])
-        self._toast(f"Restored {count} entries from backup")
+        self._toast(f"Restored {count} {entries_noun(count)} from backup")
 
     # ------------------------------------------------------------------
     # Export (decrypted plaintext)
     # ------------------------------------------------------------------
 
     def _on_export(self, *_args):
-        dialog = Adw.AlertDialog(
-            heading="Export decrypted backup",
-            body="This will export all entries in plaintext. Continue?",
-        )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("export", "Export")
-        dialog.set_response_appearance("export", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_default_response("cancel")
-        dialog.set_close_response("cancel")
-        dialog.connect("response", self._on_export_confirmed)
-        dialog.present(self)
+        self._confirm_destructive("Export decrypted backup",
+                                  "This will export all entries in plaintext. Continue?",
+                                  "Export", self._on_export_confirmed)
 
     def _on_export_confirmed(self, dialog, response):
         if response != "export":
@@ -4003,9 +3996,14 @@ class MainWindow(Adw.ApplicationWindow):
             lines.append("")
 
         content = "\n".join(lines)
-        write_private_file(filepath, content.encode("utf-8"))
+        try:
+            write_private_file(filepath, content.encode("utf-8"))
+        except OSError as e:
+            # Uncaught, this escaped into the GTK callback: no file and no message.
+            self._show_message("Export Error", str(e))
+            return
 
-        self._toast(f"Exported {len(entries)} entries")
+        self._toast(f"Exported {len(entries)} {entries_noun(len(entries))}")
 
     # ------------------------------------------------------------------
     # Change password

@@ -65,6 +65,8 @@ All notable changes to Rolodex are documented here. The format is based on
   click only added the clicked entry to the selection, so the earlier one stayed highlighted
   and the detail pane went blank. A plain click now selects just that entry, Ctrl-click
   toggles one, and Shift-click selects a range.
+- **A plaintext export that cannot be written now says so.** A read-only folder or a full disk
+  made the export fail silently, with no file and no message.
 
 ## [1.6.0] - 2026-09-24
 
