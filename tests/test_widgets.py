@@ -858,8 +858,9 @@ def test_ROLO0025_selecting_several_shows_the_bulk_bar(app, tmp_path, monkeypatc
     row.activate()  # ... before activating it, which re-adds it
     assert len(win._selected_entry_ids()) == 1  # the Ctrl-click toggled it off
     assert not win.split_view.get_show_content()
-    win.listbox.emit("select-all")
-
+    # Select several again, or the bar is already hidden and the check below proves nothing.
+    assert len(_select_all_entries(win)) == 2
+    assert win.bulk_bar.get_visible()
     win.listbox.unselect_all()
     assert not win.bulk_bar.get_visible()
     assert win.placeholder.get_title() == "Select an entry"
