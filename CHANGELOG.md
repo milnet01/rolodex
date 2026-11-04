@@ -40,6 +40,13 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Changed
 
+- **Your vault is protected by a stronger, slower-to-crack password scramble.** (ROLO-0005)
+  The key is now made with Argon2id, which needs 256 MB of memory per guess, so guessing
+  passwords on graphics cards is far costlier. An existing vault converts the first time you
+  unlock it; nothing else changes for you. **Once Rolodex 2.0.0 has opened a vault, Rolodex
+  1.6 and older cannot open it** — keep an old backup if you might go back. A vault from a
+  newer Rolodex now says "Update Rolodex" instead of "Not a valid vault file".
+
 - **Seed phrases are always hidden.** (ROLO-0097)
   A field whose name contains "seed" or "mnemonic" — a crypto wallet's
   recovery words — is masked like a password, including fields saved

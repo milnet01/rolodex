@@ -20,7 +20,7 @@ When a change touches these areas, update the docs in the *same* commit:
 
 The lists above name the main homes of each fact, not every copy. Before committing a
 crypto or permissions change, search for the fact itself and update every hit, e.g.
-`grep -rlE '0600|600,000|600k|ITERATIONS' --include=*.md .`; for a schema change, search for
+`grep -rlE '0600|600,000|600k|ITERATIONS|Argon2|VLT[0-9]' --include=*.md .`; for a schema change, search for
 the key you changed.
 
 Documentation that lies is worse than none. A stale doc that contradicts the code should be

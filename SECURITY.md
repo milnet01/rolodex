@@ -65,10 +65,10 @@ one. It fails closed rather than open, deliberately.
 
 | Element | Choice |
 |---------|--------|
-| Key derivation | PBKDF2-HMAC-SHA256, 600,000 iterations |
+| Key derivation | Argon2id: 256 MiB memory, 3 passes, 4 lanes, recorded in the file header |
 | Salt | 16 random bytes per vault, stored in the clear in the file header |
 | Encryption | Fernet (AES-128-CBC + HMAC-SHA256, authenticated) |
-| File format | `VLT1` magic (4 B) + salt (16 B) + Fernet token |
+| File format | `VLT2` magic (4 B) + Argon2id parameters (12 B) + salt (16 B) + Fernet token |
 | File permissions | `0600` (owner read/write only) — every secret file (vault, export, backup) is created `0600` and moved into place atomically, so it is never briefly readable by anyone else |
 
 Changing the master password rotates the salt and re-encrypts the entire vault.

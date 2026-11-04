@@ -23,7 +23,7 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
 - **INV-5** When a vault file exists, `UnlockDialog` is in "unlock" mode requiring only the
   password. Enter activates the primary action.
 - **INV-6** Decryption runs on a background thread; the button shows `"Unlocking..."` (three
-  ASCII dots) and is disabled while it runs, so the 600k-iteration KDF never freezes the UI.
+  ASCII dots) and is disabled while it runs, so the KDF never freezes the UI.
 - **INV-7** A wrong password (`InvalidToken`) shows "Wrong password.", re-enables the button,
   and refocuses the password field. Other errors show their message.
 - **INV-7a** A load that fails with `ValueError`, other than `VaultTooNewError`
@@ -61,5 +61,4 @@ Retroactive spec for creating, unlocking, and changing the master password (`Unl
   model.
 - There is no recovery path; forgetting the master password means the vault is unrecoverable
   (see `SECURITY.md`).
-- A stronger KDF (Argon2id) is roadmap ROLO-0005; auto-lock that would force re-entry of the
-  password is ROLO-0002.
+- Auto-lock that would force re-entry of the password is ROLO-0002.

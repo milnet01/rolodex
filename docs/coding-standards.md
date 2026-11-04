@@ -49,7 +49,7 @@ stop and move it across the boundary.
 ## Concurrency
 
 - The initial **decrypt** paths (unlock, restore) run the KDF on a `threading.Thread` and
-  marshal results back with `GLib.idle_add`, so the 600k-iteration derive doesn't freeze the
+  marshal results back with `GLib.idle_add`, so the Argon2id derive doesn't freeze the
   UI. Preserve that for any new password-*checking* (decrypt) flow.
 - Never derive the key on a save path. `_save()` writes with the key derived at unlock
   (`save_vault_with_key`); only the password change and a restore, which rotate the salt,

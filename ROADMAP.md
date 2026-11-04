@@ -274,7 +274,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: chore.
   Source: claude-config reply 2026-10-15 (CFG-0493).
 
-- 📋 [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
+- ✅ [ROLO-0005] **Offer Argon2id key derivation with a transparent vault migration.**
   Why: Argon2id is memory-hard and resists GPU/ASIC cracking better than PBKDF2.
   Scope: add an argon2 KDF path, record the algorithm + parameters in the vault header, bump the format version, and re-wrap the vault on next save. migrate_vault gains a KDF-upgrade branch. Requires the argon2-cffi dependency — weigh against the one-file/minimal-deps goal.
   **Layman:** Upgrade the password-scrambling to a newer, tougher method, converting old vaults automatically.
@@ -328,6 +328,13 @@ release, which is what proves the in-app updater end to end: it installs from
   docs/security-standards.md rule 4, docs/specs/master-password.md INV-6,
   docs/coding-standards.md ("600k-iteration derive"). Once built, delete
   the spec's "INV-20 to INV-26 are forward" paragraph.
+  Shipped (2026-11-05): VLT2 + Argon2id per vault-format-and-crypto.md
+  INV-20 to INV-26. unlock_vault upgrades a stale vault right after
+  unlock; VaultTooNewError hides the unlock screen's recovery options.
+  Tests: tests/test_vault_format.py and two in tests/test_widgets.py.
+  The listed docs moved with the code, and the spec's forward paragraph
+  is deleted. Suite time rose from about 7 s to about 34 s, because
+  every test vault now derives a real 256 MiB Argon2id key.
 
 - ✅ [ROLO-0097] **Hide fields labelled as a seed phrase by default.**
   Why: SENSITIVE_KEYWORDS has no "seed", so a "Seed phrase" or

@@ -28,7 +28,7 @@ def test_load_vault_rejects_truncated_salt(tmp_path):
     salvaged. This must raise ValueError, not InvalidToken.
     """
     path = tmp_path / "trunc.vault"
-    path.write_bytes(rolodex.MAGIC + b"\x00" * 5)  # salt must be exactly 16 bytes
+    path.write_bytes(rolodex.MAGIC_VLT1 + b"\x00" * 5)  # salt must be exactly 16 bytes
     with pytest.raises(ValueError, match="truncated"):
         rolodex.load_vault(PW, str(path))
 
@@ -362,9 +362,9 @@ def _counting_derive_key(monkeypatch):
     calls = []
     real = rolodex.derive_key
 
-    def counted(password, salt):
+    def counted(password, salt, *params):
         calls.append((password, salt))
-        return real(password, salt)
+        return real(password, salt, *params)
 
     monkeypatch.setattr(rolodex, "derive_key", counted)
     return calls
@@ -651,13 +651,13 @@ def test_ROLO0071_migrate_fills_missing_entry_and_field_keys():
 # --- ROLO-0035: remaining pure-logic gaps --------------------------------------------------
 
 
-def test_ROLO0035_derive_key_matches_an_independent_pbkdf2():
-    """Locks the KDF contract -- SHA-256, 600k iterations, 32 bytes, urlsafe base64 -- against
+def test_ROLO0035_derive_key_pbkdf2_matches_an_independent_pbkdf2():
+    """Locks the VLT1 KDF contract -- SHA-256, 600k iterations, 32 bytes, urlsafe base64 -- against
     hashlib's independent PBKDF2, so a change to any parameter fails here."""
     salt = bytes(range(16))
     expected = base64.urlsafe_b64encode(
         __import__("hashlib").pbkdf2_hmac("sha256", PW.encode(), salt, 600_000, dklen=32))
-    assert rolodex.derive_key(PW, salt) == expected
+    assert rolodex.derive_key_pbkdf2(PW, salt) == expected
 
 
 def test_ROLO0035_delete_entry_and_list_entries():

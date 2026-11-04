@@ -34,7 +34,7 @@ Timestamped artifacts use `%Y%m%d_%H%M%S` so they sort chronologically by name.
   names the widget's *role*, which usually but not always matches its base: `UnlockDialog` is
   styled as a dialog yet extends `Gtk.Window`. The top-level `Adw.Application` subclass is
   `RolodexApp`.
-- **Constants:** `UPPER_SNAKE_CASE` at module scope (`VAULT_FILE`, `ITERATIONS`, `MAGIC`).
+- **Constants:** `UPPER_SNAKE_CASE` at module scope (`VAULT_FILE`, `ARGON2_LANES`, `MAGIC_VLT2`).
 - **Internal/private methods & attributes:** single leading underscore (`_save`,
   `_refresh_list`, `_current_entry_id`). GTK signal handlers are named `_on_<event>`
   (`_on_add`, `_on_selected_rows_changed`, `_on_drop`).

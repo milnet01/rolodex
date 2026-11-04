@@ -4,6 +4,7 @@
 import base64
 import hashlib
 import hmac
+import io
 import json
 import math
 import os
@@ -37,6 +38,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
+from cryptography.hazmat.primitives.kdf.argon2 import Argon2id  # noqa: E402
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # noqa: E402
 from cryptography.hazmat.primitives import hashes  # noqa: E402
 
@@ -63,8 +65,21 @@ else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
 VAULT_FILE = os.path.join(APP_DIR, "contacts.vault")
 CONFIG_FILE = os.path.join(APP_DIR, ".rolodex.conf")
-MAGIC = b"VLT1"
-ITERATIONS = 600_000
+# Vault formats (docs/specs/vault-format-and-crypto.md). Every magic is b"VLT" plus one digit,
+# so a build meeting a newer digit can say "update Rolodex" rather than "not a vault" (INV-21).
+MAGIC_VLT1 = b"VLT1"  # PBKDF2; read and upgraded, never written (INV-24)
+MAGIC_VLT2 = b"VLT2"  # Argon2id, its parameters in the header (INV-20)
+NEWEST_FORMAT = 2
+ITERATIONS = 600_000  # VLT1's PBKDF2 count; fixed, because that header cannot record it (INV-5)
+# Argon2id parameters every new write uses (INV-22). A floor: they may rise and never fall.
+ARGON2_MEMORY_KIB = 262_144  # 256 MiB
+ARGON2_ITERATIONS = 3
+ARGON2_LANES = 4
+# A header above any of these is from a newer build, and is never handed to Argon2id: a damaged
+# memory_cost of 0xFFFFFFFF would otherwise ask for 4 TiB (INV-23).
+ARGON2_MAX_MEMORY_KIB = 4_194_304  # 4 GiB
+ARGON2_MAX_ITERATIONS = 64
+ARGON2_MAX_LANES = 64
 SENSITIVE_KEYWORDS = {"password", "pass", "secret", "key", "token", "pin", "authenticator", "seed", "mnemonic"}
 MIN_PASSWORD_LENGTH = 12
 MASK = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
@@ -101,7 +116,25 @@ _IMPORT_TOO_LARGE = "That file is too large to import (the limit is 10 MB)."
 # ---------------------------------------------------------------------------
 
 
-def derive_key(password: str, salt: bytes) -> bytes:
+Argon2Params = tuple[int, int, int]  # (memory_cost KiB, iterations, lanes), header order
+
+
+def current_argon2_params() -> Argon2Params:
+    return (ARGON2_MEMORY_KIB, ARGON2_ITERATIONS, ARGON2_LANES)
+
+
+def derive_key(password: str, salt: bytes, params: Argon2Params | None = None) -> bytes:
+    """The Fernet key for a VLT2 vault: Argon2id over the password and salt (INV-22).
+
+    *params* are the ones a vault's header records; omitted, they are the current ones, which
+    every write uses."""
+    memory, iterations, lanes = params or current_argon2_params()
+    kdf = Argon2id(salt=salt, length=32, iterations=iterations, lanes=lanes, memory_cost=memory)
+    return base64.urlsafe_b64encode(kdf.derive(password.encode("utf-8")))
+
+
+def derive_key_pbkdf2(password: str, salt: bytes) -> bytes:
+    """The Fernet key for a VLT1 vault (INV-4). Only the VLT1 reader calls it."""
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
@@ -153,6 +186,17 @@ class VaultBusyError(Exception):
 
 class VaultChangedError(Exception):
     """The vault on disk changed since this session read or last wrote it (ROLO-0044)."""
+
+
+class VaultTooNewError(ValueError):
+    """The vault was written by a newer Rolodex (INV-21).
+
+    A ValueError, so every handler that reports an unreadable file reports this too. The unlock
+    screen catches it first: the file is not damaged, so it must not offer to set it aside."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This vault was made by a newer version of Rolodex. Update Rolodex to open it.")
 
 
 def vault_fingerprint(path: str) -> tuple[int, int, int] | None:
@@ -227,41 +271,108 @@ def save_vault_with_key(vault_data: dict, key: bytes, salt: bytes, path: str) ->
     save (ROLO-0043). `key` and `salt` must be the pair that belong together: the salt is
     stored in the clear beside the ciphertext, so writing a key derived from a different salt
     produces a vault no password can open.
+
+    The file is always VLT2 at the current Argon2id parameters, so `key` must be a current
+    key: load_vault_with_key and create_vault_with_key only ever return one (INV-24).
     """
     f = Fernet(key)
     plaintext = json.dumps(vault_data, ensure_ascii=False).encode("utf-8")
     ciphertext = f.encrypt(plaintext)
-    write_private_file(path, MAGIC + salt + ciphertext)
+    header = MAGIC_VLT2 + struct.pack(">III", *current_argon2_params())
+    write_private_file(path, header + salt + ciphertext)
 
 
 def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
     save_vault_with_key(vault_data, derive_key(password, salt), salt, path)
 
 
-def load_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]:
-    """Decrypt the vault, returning the derived key alongside it.
+_CORRUPT = "Vault file is truncated or corrupt"
 
-    Unlocking already runs the KDF once. Handing the key back lets the session keep it
-    instead of deriving it a second time for the first save (ROLO-0043).
+
+def read_vault_header(fp: IO[bytes]) -> tuple[Argon2Params | None, bytes]:
+    """Read and check a vault header, leaving *fp* at the ciphertext: (params, salt).
+
+    params is None for VLT1. Every check runs before any derivation (INV-2, INV-21, INV-23).
+    A short header must fail as corrupt here: past this point it fails as InvalidToken, which
+    the unlock dialog renders as "Wrong password." Reporting a corrupt file as a forgotten
+    password is the worst available error for an app with no recovery path -- the plausible
+    response is to delete and start again, destroying a file a backup could have salvaged.
+    """
+    magic = fp.read(4)
+    if magic == MAGIC_VLT1:
+        params = None
+    elif magic == MAGIC_VLT2:
+        raw = fp.read(12)
+        if len(raw) != 12:
+            raise ValueError(_CORRUPT)
+        memory, iterations, lanes = struct.unpack(">III", raw)
+        if (memory > ARGON2_MAX_MEMORY_KIB or iterations > ARGON2_MAX_ITERATIONS
+                or lanes > ARGON2_MAX_LANES):
+            raise VaultTooNewError()
+        # Argon2id's own minimums. Below them the file is damaged, not newer.
+        if lanes == 0 or iterations == 0 or memory < 8 * lanes:
+            raise ValueError(_CORRUPT)
+        params = (memory, iterations, lanes)
+    elif (len(magic) == 4 and magic[:3] == b"VLT" and magic[3:].isdigit()
+          and int(magic[3:]) > NEWEST_FORMAT):
+        raise VaultTooNewError()
+    else:
+        raise ValueError("Not a valid vault file")
+    salt = fp.read(16)
+    if len(salt) != 16:
+        raise ValueError(_CORRUPT)
+    return params, salt
+
+
+def _read_vault(password: str, path: str) -> tuple[dict, bytes, bytes, bool]:
+    """Decrypt the vault: (vault, salt, key, current).
+
+    The (salt, key) pair returned is always a current-format pair (INV-24). When the file is
+    VLT2 at exactly the current parameters, `current` is True and the pair is the file's own.
+    Otherwise -- VLT1, or VLT2 at other parameters -- the file's own key decrypts it, then a
+    fresh salt and a current key are minted, so the session's first save writes a vault the
+    same password opens. That costs a second derivation, once per stale file.
     """
     with open(path, "rb") as fp:
-        magic = fp.read(4)
-        if magic != MAGIC:
-            raise ValueError("Not a valid vault file")
-        salt = fp.read(16)
-        # INV-6 is "the exact 16 bytes", and a short read here is silently accepted by
-        # derive_key. A truncated vault -- a partial copy, an interrupted sync -- would then
-        # fail decryption with InvalidToken, which the unlock dialog renders as "Wrong
-        # password." Reporting a corrupt file as a forgotten password is the worst available
-        # error for an app with no recovery path: the plausible response is to delete and start
-        # again, destroying a file a backup restore could still have salvaged.
-        if len(salt) != 16:
-            raise ValueError("Vault file is truncated or corrupt")
+        params, salt = read_vault_header(fp)
         ciphertext = fp.read()
-    key = derive_key(password, salt)
-    f = Fernet(key)
-    plaintext = f.decrypt(ciphertext)
-    return json.loads(plaintext.decode("utf-8")), salt, key
+    if params is None:
+        file_key = derive_key_pbkdf2(password, salt)
+    else:
+        file_key = derive_key(password, salt, params)
+    plaintext = Fernet(file_key).decrypt(ciphertext)
+    vault = json.loads(plaintext.decode("utf-8"))
+    if params == current_argon2_params():
+        return vault, salt, file_key, True
+    new_salt = os.urandom(16)
+    return vault, new_salt, derive_key(password, new_salt), False
+
+
+def load_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]:
+    """Decrypt the vault, returning a current (salt, key) pair alongside it (INV-17, INV-24).
+
+    Unlocking already runs the KDF. Handing the key back lets the session keep it instead of
+    deriving it again for the first save (ROLO-0043). Never rewrites the file: the restore
+    path reads backups through here. unlock_vault is the path that upgrades.
+    """
+    vault, salt, key, _current = _read_vault(password, path)
+    return vault, salt, key
+
+
+def unlock_vault(password: str, path: str) -> tuple[dict, bytes, bytes]:
+    """Open the live vault, rewriting a stale one in the current format (INV-25).
+
+    The rewrite carries the vault as decrypted, before migrate_vault. A write that fails is not
+    an unlock failure: the vault opens, the file keeps its old format, and the session's first
+    save writes VLT2 anyway, since the returned pair is current.
+    """
+    vault, salt, key, current = _read_vault(password, path)
+    if not current:
+        try:
+            save_vault_with_key(vault, key, salt, path)
+        except OSError:
+            pass
+    return vault, salt, key
 
 
 def load_vault(password: str, path: str) -> tuple[dict, bytes]:
@@ -307,15 +418,23 @@ def set_aside_vault(path: str) -> str | None:
 def adopt_vault_file(source: str, path: str) -> str | None:
     """Make the vault file at *source* -- a backup, or an existing vault -- the vault at *path*.
 
-    Checks only the header (MAGIC and a full salt); the password is checked by the normal
-    unlock that follows, so this never needs it. Any vault already at *path* is set aside
-    first, and its new path is returned (ROLO-0045, ROLO-0078).
+    Checks only the header, as the reader does; the password is checked by the normal
+    unlock that follows, so this never needs it. The bytes are copied verbatim -- that unlock
+    upgrades the format (INV-26). Any vault already at *path* is set aside first, and its new
+    path is returned (ROLO-0045, ROLO-0078).
     """
     with open(source, "rb") as fp:
         data = fp.read(MAX_IMPORT_BYTES * 10 + 1)
     if len(data) > MAX_IMPORT_BYTES * 10:
         raise ValueError("That file is too large to be a Rolodex vault.")
-    if data[:4] != MAGIC or len(data) < 4 + 16 + 1:
+    header = io.BytesIO(data)
+    try:
+        read_vault_header(header)
+    except VaultTooNewError:
+        raise
+    except ValueError:
+        raise ValueError("That file is not a Rolodex vault.") from None
+    if header.tell() == len(data):  # a header and no ciphertext
         raise ValueError("That file is not a Rolodex vault.")
     aside = set_aside_vault(path)
     write_private_file(path, data)
@@ -2224,10 +2343,16 @@ class UnlockDialog(Gtk.Window):
 
     def _try_unlock(self, pw):
         try:
-            vault, salt, key = load_vault_with_key(pw, self.vault_path)
+            # unlock_vault, not load_vault_with_key: the live vault is upgraded to the current
+            # format here, while this thread holds the lock and before MainWindow takes its
+            # fingerprint (INV-25).
+            vault, salt, key = unlock_vault(pw, self.vault_path)
             GLib.idle_add(self._unlock_ok, vault, salt, pw, key)
         except InvalidToken:
             GLib.idle_add(self._unlock_fail, "Wrong password.")
+        except VaultTooNewError as e:
+            # Not a damaged file, so no restore or start-fresh offer (INV-21).
+            GLib.idle_add(self._unlock_fail, str(e))
         except ValueError as e:
             # Bad magic, a truncated salt, or ciphertext that decrypted to something that is not
             # a vault: the FILE is the problem, not the password (ROLO-0045).

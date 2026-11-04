@@ -13,7 +13,7 @@ This covers everything Rolodex depends on:
 
 - **Python runtime** — target the current stable CPython (3.10+ minimum for the idioms used).
 - **`cryptography`** — the one security-critical dependency in `requirements.txt`. Track its
-  releases and skim its changelog when bumping (Fernet / PBKDF2 behaviour especially).
+  releases and skim its changelog when bumping (Fernet, Argon2id and PBKDF2 behaviour especially).
 - **Bundled build-time deps** — `certifi` and PyInstaller, installed by
   `.github/workflows/build.yml` and named as prerequisites in `packaging/*-build.sh`, rather
   than coming from `requirements.txt`. `certifi` is security-critical too: it is the CA bundle

@@ -46,20 +46,17 @@ Cold-review history for this document is kept in `review-2026-09-02-security-sta
    and `gen-signing-key.py` refuses up front as well. Replacing a release private key without
    the operator noticing is unrecoverable — every already-published signature stops verifying.
 
-4. **Don't weaken the KDF.** `ITERATIONS = 600_000` PBKDF2-HMAC-SHA256 is the floor. It may be
-   raised, never lowered. The salt stays 16 random bytes, unique per vault, generated with
-   `os.urandom`.
+4. **Don't weaken the KDF.** New vaults use Argon2id at `ARGON2_MEMORY_KIB`,
+   `ARGON2_ITERATIONS` and `ARGON2_LANES`, and those are the floor. They may be raised, never
+   lowered. The salt stays 16 random bytes, unique per vault, generated with `os.urandom`.
 
-   Raising it is a **format change, not a constant change.** The header carries no iteration
-   count, so an existing vault re-read at a higher count fails as `InvalidToken` — which the
-   unlock dialog reports as "Wrong password.", the worst available error for an app with no
-   recovery path. A raise therefore needs a **new magic** that every reader of the header
-   understands — `load_vault_with_key` on unlock and on Restore, and `adopt_vault_file` when a
-   backup or an existing vault is adopted at the unlock screen. `VLT1` implies 600,000, because
-   the old header has no field to read it from; the new format records its count so later raises
-   can. That is the mechanism
-   `vault-format-and-crypto.md` INV-5 states for ROLO-0005. Bumping the constant alone is the
-   breakage, not the migration.
+   Raising them is a constant change: every `VLT2` header records the parameters it was
+   written with, so an older vault still opens and is rewritten at its next unlock
+   (`vault-format-and-crypto.md` INV-22, INV-24). A raise past an `ARGON2_MAX_*` cap is not:
+   older builds report such a vault as too new (INV-23). Changing the algorithm or the header
+   layout needs a **new magic** (`VLT3`), understood by `read_vault_header`, the one reader
+   that unlock, Restore and `adopt_vault_file` share. `VLT1`'s PBKDF2 count, `ITERATIONS`, is
+   fixed: that header has no field to record it (INV-5).
 
 5. **Never persist the master password.** It lives only as a local variable / `self.password`
    for the session. No writing it to config, no environment variables, no clipboard.
@@ -78,11 +75,8 @@ subprocesses, or the network and update code:
       because the file is readable until it runs. A signing key is the one exception:
       `O_CREAT | O_EXCL`, per non-negotiable 3.
 - [ ] The master password is not logged, cached, or persisted.
-- [ ] KDF iterations and salt handling are unchanged — or a raise ships as a format change: a
-      new magic recording the count, understood by every header reader, per non-negotiable 4.
-      "Strengthened" is not a passing state on its own, and "did the on-disk format change?" is
-      the wrong question: the byte layout is identical after a raise, so asking only that merges
-      a bump that locks every existing vault out.
+- [ ] KDF parameters and salt handling are unchanged or raised within their caps. A new
+      algorithm or header layout ships as a new magic, per non-negotiable 4.
 - [ ] Imported/parsed input can't cause a crash that leaks state; parse errors surface as a
       dialog, not an unhandled traceback.
 - [ ] Subprocess calls pass their arguments as a list, and `shell=True` is never used. A shell
@@ -111,7 +105,7 @@ subprocesses, or the network and update code:
   on an older release because it is "current enough" breaches that standard.
   `certifi` is a bundled build-time dependency, not a `requirements.txt` entry, so a freshness
   sweep that reads only `requirements.txt` misses it. When bumping `cryptography`, skim its
-  changelog for anything affecting Fernet/PBKDF2.
+  changelog for anything affecting Fernet, Argon2id or PBKDF2.
 - `requirements.txt` sets a floor of `>=44.0.0` because older releases carry known CVEs, and
   **that floor overrides the forced-older-pin exception** — a pin below it is never permitted,
   ledger entry or not. A break fixable only by going below the floor is a release blocker.

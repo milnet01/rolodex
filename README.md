@@ -15,8 +15,8 @@ data never leaves your machine. It runs on Linux, Windows, and macOS.
 
 - **Everything stays encrypted.** Your whole vault is scrambled with strong, industry-standard
   encryption and can only be opened with your master password. *(For the technically curious:
-  AES via Fernet, with the key derived from your password using PBKDF2-HMAC-SHA256 at 600,000
-  rounds and a random per-vault salt.)*
+  AES via Fernet, with the key derived from your password using Argon2id (256 MiB) and a
+  random per-vault salt.)*
 - **Organise into categories.** Group entries (Email, Banking, Games…), collapse the sections
   you're not using, and drag entries from one category to another. Ctrl-click or Shift-click
   several entries to move or delete them together.

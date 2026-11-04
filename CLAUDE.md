@@ -33,9 +33,12 @@ reason about changes. (Grep for the banner rather than trusting a line number.)
 
 **Encryption layer** (`derive_key`, `save_vault`, `load_vault`, `create_vault`, plus their
 `*_with_key` siblings) — canonical contract: `docs/specs/vault-format-and-crypto.md`:
-- On-disk format is `MAGIC(4 bytes "VLT1") + salt(16 bytes) + Fernet ciphertext`.
-- Key = PBKDF2-HMAC-SHA256, 600k iterations, over the master password + per-vault salt,
-  fed into Fernet. The salt is stored in the clear inside the file (standard practice).
+- On-disk format is `"VLT2"` + Argon2id parameters (three 4-byte ints) + salt(16 bytes) +
+  Fernet ciphertext. Key = Argon2id over the master password + salt, at the parameters the
+  header records, fed into Fernet. The header is in the clear (standard practice).
+- The older `"VLT1"` format (PBKDF2, 600k iterations) is read, never written: `unlock_vault`
+  rewrites it as `VLT2` right after a successful unlock. Builds 1.6 and older cannot open a
+  `VLT2` vault.
 - Secret files are written owner-only (`0o600`) through **one helper**: `write_private_file()`,
   which `mkstemp`s at 0600, `fsync`s and `os.replace`s. `save_vault`, the plaintext export and
   the backup path all route through it. Keep any new secret-writing path on that helper — a
@@ -60,7 +63,7 @@ flag or the user-defined `categories`.
 **Migration** — `migrate_vault()` upgrades older vaults in place (adds `categories`, backfills
 `entry["category"]`, stamps `version: 2`). It is idempotent and MUST be called after every
 successful load. Not after `load_vault` — nothing calls that; the app calls
-`load_vault_with_key` / `create_vault_with_key`, and unlock, restore and create each migrate
+`unlock_vault` / `load_vault_with_key` / `create_vault_with_key`, and unlock, restore and create each migrate
 before the data is used. If you change the on-disk shape, bump the
 version and extend this function rather than assuming fields exist.
 
@@ -74,7 +77,7 @@ version and extend this function rather than assuming fields exist.
   flat search results, category-grouped (with collapsible `CategoryHeaderRow`s), or a plain
   flat list when no categories exist.
 - Decryption (unlock, restore) runs on a background `threading.Thread`, marshalling results
-  back with `GLib.idle_add` so the 600k-iteration KDF doesn't freeze the UI. Preserve that
+  back with `GLib.idle_add` so the KDF doesn't freeze the UI. Preserve that
   when adding any password-checking flow.
 - The sidebar and detail sit in an `Adw.NavigationSplitView` that a breakpoint collapses
   into two pages on a narrow window (ROLO-0024). Activating an entry row opens the detail
@@ -129,8 +132,8 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   contiguous digits fails against a working feature. Strip spaces before comparing.
 - **Never derive the key on a save path.** `MainWindow._key` holds the key derived at unlock,
   and `_save()` writes through `save_vault_with_key`. Calling `save_vault` there instead still
-  works and still passes every round-trip test — it just silently puts 600k PBKDF2 rounds back
-  on the GTK main thread, measured at ~81 ms per mutation (ROLO-0043). Re-derive only where the
+  works and still passes every round-trip test — it just silently puts a full Argon2id
+  derivation back on the GTK main thread on every mutation (ROLO-0043). Re-derive only where the
   salt rotates: `_finish_change_password` and `_finish_restore`. A cached key and its salt are a
   pair; writing one with the other's salt yields a vault no password opens.
 - Master-password changes (`_finish_change_password`) rotate the salt and re-encrypt on save;

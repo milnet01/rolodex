@@ -92,11 +92,10 @@ There is no autosave, no dirty tracking, and no partial writes — the whole vau
 persistence. This trades write efficiency (irrelevant at this scale) for a design with no
 possible desync between memory and disk.
 
-**Off-thread key derivation.** The KDF runs 600,000 iterations, which takes long enough to
-freeze the UI. The initial **decrypt** paths — unlock and restore — therefore run the KDF on a
-daemon thread and marshal the result back with `GLib.idle_add`. Note that a `_save()`
-re-derives the key to *encrypt*, and that currently runs synchronously on the UI thread (so
-password-change and every edit briefly block the loop); moving saves off-thread is future work.
+**Off-thread key derivation.** The Argon2id KDF takes long enough to freeze the UI. The
+**decrypt** paths — unlock and restore — therefore run it on a daemon thread and marshal the
+result back with `GLib.idle_add`. A `_save()` derives nothing: it writes with the key held
+since unlock (ROLO-0043).
 
 ## Data model
 
@@ -124,8 +123,10 @@ Design choices:
 
 ## On-disk format
 
-`contacts.vault` = `VLT1` (4-byte magic) + salt (16 bytes) + Fernet token. The magic lets the
-loader reject non-vault files with a clear error; the salt is stored in the clear (standard
+`contacts.vault` = `VLT2` (4-byte magic) + Argon2id parameters (12 bytes) + salt (16 bytes) +
+Fernet token. The magic lets the loader reject non-vault files with a clear error, and tell a
+vault from a newer Rolodex apart from a damaged one; an older `VLT1` vault is rewritten as
+`VLT2` when it is unlocked; the salt is stored in the clear (standard
 for password-based encryption); everything after is authenticated ciphertext. See
 `docs/specs/vault-format-and-crypto.md` for the full contract.
 
@@ -150,7 +151,7 @@ for password-based encryption); everything after is authenticated ciphertext. Se
 |----------|----------|------------|
 | App structure | One file, minimal deps | Modularity, plugin surface |
 | Persistence | Rewrite whole vault per change | Write efficiency (a non-issue at this scale) |
-| KDF | PBKDF2 600k (via `cryptography`) | Argon2's memory-hardness (see ROLO-0005) |
+| KDF | Argon2id (via `cryptography`), parameters in the header | Opening a vault in Rolodex 1.6 or older |
 | Theme | Bespoke palettes, one stylesheet | Stock Adwaita's look, which the themes approximate rather than reuse |
 | Recovery | None — password is the only key | Convenience; in exchange, zero server-side attack surface |
 

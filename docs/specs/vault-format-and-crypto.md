@@ -12,12 +12,6 @@ An invariant below naming `save_vault`, `load_vault` or `create_vault` describes
 implemented in the corresponding `_with_key` sibling and inherited by the wrapper, which only
 delegates. INV-13 is the one place that distinction changes what a caller must do.
 
-INV-20 to INV-26 are forward: ROLO-0005 adds them, and they describe no shipped code until it
-ships. So is every clause elsewhere that names `VLT2`, Argon2id or `derive_key_pbkdf2`, or
-cites INV-20 to INV-26. They add the `VLT2` format, keyed by Argon2id, and the upgrade of a
-`VLT1` vault at unlock. Decisions behind them (user, 2026-10-19): upgrade right after unlock; builds 1.6 and
-older failing to open a `VLT2` vault is accepted.
-
 ## Behaviour
 
 ### File format

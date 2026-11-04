@@ -7,7 +7,12 @@ one (GTK falls back to the session's Wayland socket even with DISPLAY unset); CI
 runs this suite under xvfb-run. Run with: pytest tests/
 """
 
+import base64
+import hashlib
+import os
+
 import pytest
+from cryptography.fernet import Fernet
 
 import rolodex
 
@@ -257,6 +262,33 @@ def test_ROLO0045_an_unreadable_vault_offers_restore_and_new(app, tmp_path, monk
     _run_try_unlock(dlg, PW, monkeypatch)
     assert dlg.recover_box.get_visible()
     assert not dlg.lock.held
+
+
+def test_INV21_a_vault_too_new_offers_no_recovery(app, tmp_path, monkeypatch):
+    """VaultTooNewError is a ValueError, but the file is not damaged: offering to set it aside
+    and start fresh would invite discarding a good vault (vault-format-and-crypto.md INV-21)."""
+    path = tmp_path / "v.vault"
+    path.write_bytes(b"VLT9" + b"\x00" * 64)
+    dlg = rolodex.UnlockDialog(app, str(path), is_new=False)
+    _run_try_unlock(dlg, PW, monkeypatch)
+    assert "newer version of Rolodex" in dlg.status.get_text()
+    assert not dlg.recover_box.get_visible()
+    assert not dlg.lock.held
+
+
+def test_INV25_the_unlock_screen_upgrades_a_vlt1_vault(app, tmp_path, monkeypatch):
+    path = tmp_path / "v.vault"
+    salt = os.urandom(16)
+    raw = hashlib.pbkdf2_hmac("sha256", PW.encode(), salt, 600_000, dklen=32)
+    token = Fernet(base64.urlsafe_b64encode(raw)).encrypt(
+        b'{"version": 2, "categories": [], "entries": {}}')
+    path.write_bytes(b"VLT1" + salt + token)
+    dlg = rolodex.UnlockDialog(app, str(path), is_new=False)
+    dlg.app = FakeApp()
+    _run_try_unlock(dlg, PW, monkeypatch)
+    assert path.read_bytes()[:4] == b"VLT2"
+    assert dlg.app.opened[1] == path.read_bytes()[16:32]
+    dlg.lock.release()
 
 
 def test_ROLO0045_a_wrong_password_offers_nothing(app, tmp_path, monkeypatch):
