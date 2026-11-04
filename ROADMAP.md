@@ -488,13 +488,17 @@ Wanted work not yet promised to any release.
   Kind: fix.
   Source: in-session-2026-09-24 (cut-release 1.6.0).
 
-- 📋 [ROLO-0099] **Forget a noted click that never activated its row.**
+- ✅ [ROLO-0099] **Forget a noted click that never activated its row.**
   _note_click records the row and modifiers on every press, but only
   _apply_click_selection clears _pending_click. A press that is dragged
   off the row never activates it, so the note survives. A later Enter on
   that same row then reads the old Ctrl or Shift state instead of acting
   as a plain activation. Fix: clear the note on the gesture's release or
   cancel, or when the selection changes for another reason.
+  Shipped 2026-11-05: the capture gesture's "stopped" signal clears
+  _pending_click. On Xvfb with xdotool, a drag past the threshold
+  emits "stopped" before the release and the row never activates;
+  a normal click emits it only after activation.
   **Layman:** After you press on an entry and drag off it, a later Enter on that entry can still act as if Ctrl or Shift were held.
   Kind: fix.
   Source: pr-1-review-2026-10-29.

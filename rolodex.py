@@ -2671,6 +2671,10 @@ class MainWindow(Adw.ApplicationWindow):
         click = Gtk.GestureClick(button=Gdk.BUTTON_PRIMARY)
         click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         click.connect("pressed", self._on_list_pressed)
+        # A press dragged past the threshold stops the gesture before its release, and the
+        # row never activates; forget the note, or a later Enter reads its modifiers
+        # (ROLO-0099). A normal click stops only after the activation has used the note.
+        click.connect("stopped", self._forget_click)
         self.listbox.add_controller(click)
         scroll.set_child(self.listbox)
         left_box.append(scroll)
@@ -3049,6 +3053,9 @@ class MainWindow(Adw.ApplicationWindow):
         """Record a primary click on *row*: its modifiers, and whether the row was selected
         before the list's own handling of the click changed that."""
         self._pending_click = (row, state, row is not None and row.is_selected())
+
+    def _forget_click(self, _gesture):
+        self._pending_click = None
 
     def _apply_click_selection(self, row):
         """Make the selection what the activating click or Enter meant (ROLO-0025).

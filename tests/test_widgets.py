@@ -884,6 +884,24 @@ def test_ROLO0025_a_plain_click_on_a_second_entry_replaces_the_selection(app, tm
     assert sorted(win._selected_entry_ids()) == sorted([first.entry_id, second.entry_id])
 
 
+def test_ROLO0099_a_press_dragged_off_its_row_is_forgotten(app, tmp_path, monkeypatch):
+    # Dragging past GTK's threshold stops the click gesture before the release, and the row
+    # never activates. The noted Ctrl must not then turn a later Enter on that row into a
+    # Ctrl-toggle that deselects it.
+    win = _window_with(app, tmp_path, monkeypatch, [])
+    win.split_view.set_collapsed(True)
+    row = next(r for r in win.listbox if isinstance(r, rolodex.EntryRow))
+    win.listbox.select_row(row)
+    win._note_click(row, rolodex.Gdk.ModifierType.CONTROL_MASK)
+    gesture = next(c for c in win.listbox.observe_controllers()
+                   if isinstance(c, rolodex.Gtk.GestureClick)
+                   and c.get_propagation_phase() == rolodex.Gtk.PropagationPhase.CAPTURE)
+    gesture.emit("stopped")  # what a drag off the row does
+    row.activate()  # Enter
+    assert win._selected_entry_ids() == [row.entry_id]
+    assert win.split_view.get_show_content()
+
+
 def test_ROLO0025_one_selected_entry_still_shows_its_detail(app, tmp_path, monkeypatch):
     win = _window_with(app, tmp_path, monkeypatch, [])
     row = next(r for r in win.listbox if isinstance(r, rolodex.EntryRow))

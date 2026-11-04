@@ -65,6 +65,9 @@ All notable changes to Rolodex are documented here. The format is based on
   click only added the clicked entry to the selection, so the earlier one stayed highlighted
   and the detail pane went blank. A plain click now selects just that entry, Ctrl-click
   toggles one, and Shift-click selects a range.
+- **Enter on an entry opens it, even after a drag that started there.** Pressing on an entry
+  with Ctrl or Shift held and dragging off it left those keys remembered, so a later Enter
+  on that entry deselected it or selected a range instead of opening it. (ROLO-0099)
 - **A plaintext export that cannot be written now says so.** A read-only folder or a full disk
   made the export fail silently, with no file and no message.
 - **Password Health shows entries whose name contains `&` or `<`.** Such a name, like
