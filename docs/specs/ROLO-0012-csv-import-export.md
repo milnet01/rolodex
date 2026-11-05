@@ -5,7 +5,7 @@ Genre: spec
 Status: draft
 Describes: planned
 
-**Status:** spec draft (2026-11-05).
+**Status:** accepted (2026-11-05).
 **Kind:** implement.
 **Source:** ROADMAP ROLO-0012 (in-session 2026-07-04; scope decision by the user 2026-09-25).
 
@@ -81,7 +81,7 @@ quoting (Source: each writer, cited in § 4.3).
   created, modified`, then zero or more groups `field_N_label, field_N_value, field_N_hidden`
   with N counting up from 1.
 - **Every other format** is recognised when the header contains all of its required columns.
-  Extra columns are allowed, because two of the five writers have added columns in recent
+  Extra columns are allowed, because writers have added columns in recent
   versions (§ 4.3).
 - **Exactly one format must match.** No match, or more than one, goes to the mapping step
   (§ 4.5). There is no precedence order between formats.
@@ -107,7 +107,8 @@ keys:
 
 Columns map to a target: **Name**, **Category**, **Notes**, a **field** with a fixed label,
 or **Drop**. A column the table does not name becomes a field labelled with its header text,
-as typed in the file. An empty cell never becomes a field.
+as typed in the file. An empty cell never becomes a field. A field's value is never stripped, because a
+password may begin or end with a space.
 
 | Format | Name | Category | Notes | Fields (label ← column) | Dropped |
 |---|---|---|---|---|---|
@@ -223,13 +224,13 @@ Each fixture names the rule it isolates.
   `csv_rows_to_entries`, and importing that into an empty vault with
   `import_entries(..., category=None)` yields entries equal to the originals. Equal means
   the same name, category, notes, created and modified, and fields equal in order, label,
-  value and `sensitive`. The fixture holds a multi-line note, a value with `,` and `"`, a
-  leading `=`, a non-ASCII name, a field hidden under a keyword-free label, a field shown under
-  the label `Password`, and entries with zero and with three fields.
+  value and `sensitive`. The fixture holds a multi-line note with a `\r\n` line end, a value
+  with `,` and `"`, a leading `=`, a non-ASCII name, a field hidden under a keyword-free label, a field shown under
+  the label `Password`, a value with a leading space, and entries with zero and with three fields.
   *Test:* `tests/test_csv.py::test_INV1_rolodex_csv_round_trips`.
   *Breaks when:* the hidden column, the timestamps or the padding are dropped, `import_entries`
-  stamps over the parsed timestamps, the keyword rule overrides the hidden column, or the file
-  is read without `newline=""`. The keyword-free hidden field is the one only the hidden column
+  stamps over the parsed timestamps, the keyword rule overrides the hidden column, values are
+  stripped, or the file is read without `newline=""`. The keyword-free hidden field is the one only the hidden column
   can restore.
 
 - **INV-2** — `detect_csv_format` returns each format's id for that writer's header, both the
