@@ -367,7 +367,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: security.
   Source: in-session-2026-10-19 (found while shipping ROLO-0094).
 
-- 📋 [ROLO-0098] **Take the vault fingerprint when unlock reads the file, not when the window opens.**
+- ✅ [ROLO-0098] **Take the vault fingerprint when unlock reads the file, not when the window opens.**
   vault-format-and-crypto.md INV-19 says the fingerprint check is what
   covers a vault in a synced folder. But MainWindow.__init__ takes
   the first fingerprint after the unlock thread has read and
@@ -382,6 +382,9 @@ release, which is what proves the in-app updater end to end: it installs from
   INV-25 rewrite skip itself, as it does on an OSError, when the
   file changed in between. This is a design choice the spec leaves
   open; it was filed rather than invented during the review.
+  Shipped 2026-11-05: unlock_vault takes the fingerprint before the read
+  and returns it; MainWindow starts from it; the INV-25 rewrite is
+  skipped when the file changed in between. INV-25 amended.
   **Layman:** If a sync tool changes the vault file in the second or so while Rolodex is unlocking it, Rolodex can later save over that change without warning.
   Kind: review-fix.
   Source: review-contract 2026-10-19 on vault-format-and-crypto.md (out-of-radius finding, one lane).

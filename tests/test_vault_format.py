@@ -173,7 +173,7 @@ def test_INV24_a_current_file_returns_its_own_salt_and_key(tmp_path):
 def test_INV25_unlock_rewrites_a_vlt1_vault_as_vlt2_before_migrating(tmp_path):
     path = tmp_path / "v.vault"
     _write_vlt1(path, V1_DATA)
-    vault, salt, key = rolodex.unlock_vault(PW, str(path))
+    vault, salt, key, _fingerprint = rolodex.unlock_vault(PW, str(path))
     assert vault == V1_DATA  # as decrypted: migrate_vault has not run
     assert path.read_bytes()[:4] == b"VLT2"
     assert path.read_bytes()[16:32] == salt
@@ -196,10 +196,56 @@ def test_INV25_a_failed_rewrite_still_unlocks(tmp_path, monkeypatch):
         raise PermissionError("read-only folder")
 
     monkeypatch.setattr(rolodex, "write_private_file", refuse)
-    vault, salt, key = rolodex.unlock_vault(PW, str(path))
+    vault, salt, key, _fingerprint = rolodex.unlock_vault(PW, str(path))
     assert vault == V1_DATA
     assert path.read_bytes()[:4] == b"VLT1"
     assert key == rolodex.derive_key(PW, salt)  # the first save writes VLT2
+
+
+# --- ROLO-0098: the fingerprint is taken when unlock reads the file -----------------------
+
+
+def _sync_lands_during_read(monkeypatch, path, new_bytes):
+    """Make a sync client replace the vault file just after unlock has read it."""
+    real_read = rolodex._read_vault
+
+    def read_then_sync(password, p):
+        result = real_read(password, p)
+        other = path.with_name("synced.tmp")
+        other.write_bytes(new_bytes)
+        os.replace(other, path)
+        return result
+
+    monkeypatch.setattr(rolodex, "_read_vault", read_then_sync)
+
+
+def test_ROLO0098_unlock_returns_the_fingerprint_it_read_not_a_later_one(tmp_path, monkeypatch):
+    path = tmp_path / "v.vault"
+    rolodex.create_vault_with_key(PW, str(path))
+    before = rolodex.vault_fingerprint(str(path))
+    _sync_lands_during_read(monkeypatch, path, b"a synced change")
+    *_unlocked, fingerprint = rolodex.unlock_vault(PW, str(path))
+    assert fingerprint == before
+    # So the session's first save sees the change instead of adopting it as its baseline.
+    assert rolodex.vault_fingerprint(str(path)) != fingerprint
+
+
+def test_ROLO0098_the_upgrade_at_unlock_skips_a_file_that_changed_meanwhile(tmp_path,
+                                                                             monkeypatch):
+    path = tmp_path / "v.vault"
+    _write_vlt1(path, V1_DATA)
+    _sync_lands_during_read(monkeypatch, path, b"a synced change")
+    vault, _salt, _key, _fingerprint = rolodex.unlock_vault(PW, str(path))
+    assert vault == V1_DATA
+    assert path.read_bytes() == b"a synced change"
+
+
+def test_ROLO0098_after_the_upgrade_the_fingerprint_is_the_rewritten_file(tmp_path):
+    path = tmp_path / "v.vault"
+    _write_vlt1(path, V1_DATA)
+    *_unlocked, fingerprint = rolodex.unlock_vault(PW, str(path))
+    assert path.read_bytes()[:4] == b"VLT2"
+    assert fingerprint == rolodex.vault_fingerprint(str(path))
 
 
 # --- INV-26: adopt checks the header and copies verbatim ----------------------------------

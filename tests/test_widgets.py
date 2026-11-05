@@ -35,9 +35,10 @@ class FakeApp:
     def __init__(self):
         self.opened = None
 
-    def open_main(self, vault, salt, password, path, key, lock=None):
+    def open_main(self, vault, salt, password, path, key, lock=None, fingerprint=None):
         self.opened = (vault, salt, password, path, key)
         self.lock = lock
+        self.fingerprint = fingerprint
 
 
 class FakeMainWindow:
@@ -75,6 +76,19 @@ def test_ROLO0059_unlock_dialog_wipes_the_password_after_a_successful_unlock(app
 
     assert dlg.app.opened is not None, "the unlock must still have handed the vault over"
     assert dlg.pw_entry.get_text() == ""
+
+
+def test_ROLO0098_unlock_hands_the_fingerprint_it_read_to_the_main_window(app, tmp_path):
+    """MainWindow fingerprinted the file itself, after the read, so a change landing during
+    the unlock became the baseline and the first save overwrote it."""
+    dlg = rolodex.UnlockDialog(app, str(tmp_path / "v.vault"), is_new=False)
+    dlg.app = FakeApp()
+    read_at_unlock = (1, 2, 3)
+
+    dlg._unlock_ok({"version": 2, "categories": [], "entries": {}}, b"\x00" * 16, PW, b"k",
+                   read_at_unlock)
+
+    assert dlg.app.fingerprint == read_at_unlock
 
 
 def test_ROLO0059_unlock_dialog_wipes_both_entries_after_creating_a_vault(app, tmp_path,

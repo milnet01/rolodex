@@ -359,20 +359,28 @@ def load_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]:
     return vault, salt, key
 
 
-def unlock_vault(password: str, path: str) -> tuple[dict, bytes, bytes]:
+def unlock_vault(password: str, path: str
+                 ) -> tuple[dict, bytes, bytes, tuple[int, int, int] | None]:
     """Open the live vault, rewriting a stale one in the current format (INV-25).
 
-    The rewrite carries the vault as decrypted, before migrate_vault. A write that fails is not
-    an unlock failure: the vault opens, the file keeps its old format, and the session's first
-    save writes VLT2 anyway, since the returned pair is current.
+    Returns (vault, salt, key, fingerprint). The fingerprint is taken before the read, so a
+    file a sync client changes while the KDF runs is seen by the session's first save rather
+    than adopted as its baseline (ROLO-0098). For the same reason the rewrite is skipped when
+    the file changed in between.
+
+    The rewrite carries the vault as decrypted, before migrate_vault. A write that fails or is
+    skipped is not an unlock failure: the vault opens, the file keeps its old format, and the
+    session's first save writes VLT2 anyway, since the returned pair is current.
     """
+    fingerprint = vault_fingerprint(path)
     vault, salt, key, current = _read_vault(password, path)
-    if not current:
+    if not current and vault_fingerprint(path) == fingerprint:
         try:
             save_vault_with_key(vault, key, salt, path)
+            fingerprint = vault_fingerprint(path)
         except OSError:
             pass
-    return vault, salt, key
+    return vault, salt, key, fingerprint
 
 
 def load_vault(password: str, path: str) -> tuple[dict, bytes]:
@@ -2344,10 +2352,10 @@ class UnlockDialog(Gtk.Window):
     def _try_unlock(self, pw):
         try:
             # unlock_vault, not load_vault_with_key: the live vault is upgraded to the current
-            # format here, while this thread holds the lock and before MainWindow takes its
-            # fingerprint (INV-25).
-            vault, salt, key = unlock_vault(pw, self.vault_path)
-            GLib.idle_add(self._unlock_ok, vault, salt, pw, key)
+            # format here, while this thread holds the lock, and the fingerprint MainWindow
+            # starts from is the one taken at the read (INV-25, ROLO-0098).
+            vault, salt, key, fingerprint = unlock_vault(pw, self.vault_path)
+            GLib.idle_add(self._unlock_ok, vault, salt, pw, key, fingerprint)
         except InvalidToken:
             GLib.idle_add(self._unlock_fail, "Wrong password.")
         except VaultTooNewError as e:
@@ -2360,7 +2368,7 @@ class UnlockDialog(Gtk.Window):
         except Exception as e:  # noqa: BLE001 - a thread's escape would strand "Unlocking..."
             GLib.idle_add(self._unlock_fail, str(e))
 
-    def _unlock_ok(self, vault, salt, pw, key):
+    def _unlock_ok(self, vault, salt, pw, key, fingerprint=None):
         # Everything after a SUCCESSFUL decrypt needs its own handler. This runs from a
         # GLib.idle_add callback with the unlock button already disabled, so an exception here
         # (a malformed vault reaching migrate_vault, a bad value in .rolodex.conf reaching
@@ -2368,7 +2376,8 @@ class UnlockDialog(Gtk.Window):
         # decrypted in memory and nothing on screen explaining why.
         try:
             migrate_vault(vault)
-            self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
+            self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock,
+                               fingerprint=fingerprint)
         except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
             self._unlock_fail(f"The vault opened but could not be loaded: {exc}")
             return
@@ -2617,15 +2626,18 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
 
 
 class MainWindow(Adw.ApplicationWindow):
-    def __init__(self, app, vault, salt, password, vault_path, key=None, lock=None):
+    def __init__(self, app, vault, salt, password, vault_path, key=None, lock=None,
+                 fingerprint=None):
         super().__init__(application=app, title="Rolodex")
         self.app_ref = app
         # ROLO-0044: the lock the unlock screen took, held until this window closes, and what
         # this session last saw of the vault file. _write_vault compares against the
         # fingerprint before every write, so a vault something else rewrote is never
-        # silently overwritten.
+        # silently overwritten. Unlock passes the fingerprint it took when it read the file;
+        # taking one here instead adopts a change made since then as the baseline (ROLO-0098).
         self._vault_lock = lock
-        self._disk_fingerprint = vault_fingerprint(vault_path)
+        self._disk_fingerprint = (fingerprint if fingerprint is not None
+                                  else vault_fingerprint(vault_path))
         self.vault = vault
         self.salt = salt
         self.password = password
@@ -5838,8 +5850,9 @@ class RolodexApp(Adw.Application):
         win = UnlockDialog(self, self.vault_path, is_new)
         win.present()
 
-    def open_main(self, vault, salt, password, vault_path, key=None, lock=None):
-        win = MainWindow(self, vault, salt, password, vault_path, key, lock)
+    def open_main(self, vault, salt, password, vault_path, key=None, lock=None,
+                  fingerprint=None):
+        win = MainWindow(self, vault, salt, password, vault_path, key, lock, fingerprint)
         win.present()
 
 

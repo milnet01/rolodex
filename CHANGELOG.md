@@ -75,6 +75,10 @@ All notable changes to Rolodex are documented here. The format is based on
 - **Enter on an entry opens it, even after a drag that started there.** Pressing on an entry
   with Ctrl or Shift held and dragging off it left those keys remembered, so a later Enter
   on that entry deselected it or selected a range instead of opening it. (ROLO-0099)
+- **A change synced in while Rolodex unlocks is no longer saved over.** If a sync tool
+  replaced the vault file during the second or so of unlocking, Rolodex treated the new file
+  as already seen, and the first save overwrote it without asking. That save now asks
+  whether to reload or overwrite, as it does for any other outside change. (ROLO-0098)
 - **A plaintext export that cannot be written now says so.** A read-only folder or a full disk
   made the export fail silently, with no file and no message.
 - **Password Health shows entries whose name contains `&` or `<`.** Such a name, like
