@@ -16,7 +16,7 @@ and out to a spreadsheet file, without losing anything on the way back in.
 
 Rolodex can read the CSV export of five other password managers, and any other CSV after the
 user says which column is which. It can write its own vault as a CSV that Rolodex reads back
-into exactly the entries it came from.
+into exactly the entries it came from, within the import's size limits (§ 4.6).
 
 ## 2. Problem
 
@@ -35,12 +35,15 @@ writes a human-readable dump that nothing parses back. So:
 - **The export is lossless: one row per entry, each field a group of columns.** Re-importing
   it gives back what was exported. The user, 2026-11-05, choosing it over a
   common-columns layout and a one-row-per-field layout.
-- **Deduced from that choice, not separately agreed** (the author, 2026-11-05): each field
+- **Deduced from that choice by the author, confirmed by the user 2026-11-05:** each field
   carries a third column for its Hide flag, and each entry carries `created` and `modified`.
   Without them a field the user hid by hand, under a label no keyword matches
   (`entries-and-fields.md` INV-10), comes back visible, and every timestamp is reset.
-- **The author's call, 2026-11-05, for the user to overturn:** the export does not neutralise
+- **The author's call, confirmed by the user 2026-11-05:** the export does not neutralise
   spreadsheet formulas (§ 8, *Formula escaping*).
+- **A vault too big to re-import in one go is warned about, not split.** The import caps
+  stay. The export's confirmation says when the file will exceed them. The user, 2026-11-05,
+  choosing this over exempting Rolodex files from the entry cap and over splitting the export.
 
 ## 4. Design
 
@@ -196,8 +199,14 @@ Two new actions sit in the main menu beside their text-file siblings:
   the preview.
 - **"Export as CSV (decrypted)..."** confirms through `_confirm_destructive`, as `import-export-backup.md`
   INV-14 requires.
-  The body says the file is unencrypted. The default name is
-  `rolodex_export_<YYYYMMDD>_<HHMMSS>.csv`.
+  The body says the file is unencrypted. When `csv_export_exceeds_import_limits(vault)` is
+  true, the body also says the file is too large for Rolodex to import in one go. The default
+  name is `rolodex_export_<YYYYMMDD>_<HHMMSS>.csv`.
+
+```python
+def csv_export_exceeds_import_limits(vault: dict) -> bool:
+    """More than MAX_IMPORT_ENTRIES entries, or export_csv's UTF-8 bytes over MAX_IMPORT_BYTES."""
+```
 
 ### 4.7 Writing the export
 
@@ -306,6 +315,14 @@ Each fixture names the rule it isolates.
   against a throwaway vault.
   *Breaks when:* the export uses `open(path, "w")`.
 
+- **INV-13** — `csv_export_exceeds_import_limits` is true for a vault of
+  `MAX_IMPORT_ENTRIES + 1` entries, and for a vault of one entry whose notes make the export
+  larger than `MAX_IMPORT_BYTES`. It is false for a vault of exactly `MAX_IMPORT_ENTRIES`
+  small entries.
+  *Test:* `tests/test_csv.py::test_INV13_export_warns_over_import_limits`. The one-entry case
+  isolates the byte limit, which the entry count cannot trip.
+  *Breaks when:* only one of the two limits is checked, or the entry check uses `>=`.
+
 ## 6. Failure modes
 
 - **A non-UTF-8 file** (a spreadsheet saving as Windows-1252) raises `UnicodeDecodeError` and
@@ -327,8 +344,8 @@ Each fixture names the rule it isolates.
 
 ## 7. Tests
 
-`tests/test_csv.py` is new and covers INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7
-and INV-8 against the pure layer. Its fixtures are literal strings
+`tests/test_csv.py` is new and covers INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7,
+INV-8 and INV-13 against the pure layer. Its fixtures are literal strings
 written to a `tmp_path`. `tests/test_widgets.py` gains INV-9, INV-10, INV-11 and INV-12. Each test is seen failing before its code lands, by running it against the tree
 without the function or rule it names.
 
@@ -374,6 +391,7 @@ without the function or rule it names.
 | INV-10 | `tests/test_widgets.py::test_INV10_mapping_dialog_gates_continue` |
 | INV-11 | Partial: `tests/test_widgets.py::test_INV11_csv_entry_cap` and `tests/test_widgets.py::test_INV11_csv_markup_shown_as_text` cover the entry cap and today's labels; **nothing** checks a label added to either dialog later |
 | INV-12 | `tests/test_widgets.py::test_INV12_csv_export_is_private` |
+| INV-13 | `tests/test_csv.py::test_INV13_export_warns_over_import_limits` |
 | § 4.3 headers still match the live writers | **nothing** — a writer can change its header in any release; INV-2 pins only the headers known on 2026-11-05 |
 
 ## 11. Cross-doc impact

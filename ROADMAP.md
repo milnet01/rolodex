@@ -165,10 +165,9 @@ release, which is what proves the in-app updater end to end: it installs from
   Spec: docs/specs/ROLO-0012-csv-import-export.md, accepted 2026-11-05
   after review-contract (2 loops, capped, calm; run
   review-contract-2026-11-05-ROLO-0012-csv-import-export in
-  docs/reviews/gate-log.md). One verified finding awaits the user, do not
-  re-review, fold in directly: a vault over MAX_IMPORT_ENTRIES (2000) or
-  MAX_IMPORT_BYTES (10 MB) exports as one CSV that the import refuses
-  whole, against § 1's lossless promise (§ 4.6, § 4.7, INV-11).
+  docs/reviews/gate-log.md). The review's one surfaced finding, a vault too big for the
+  import caps, was resolved by the user 2026-11-05: the export's
+  confirmation warns (spec § 3, § 4.6, INV-13).
   **Layman:** Move data in and out using the spreadsheet format other password apps use.
   Kind: feature.
   Source: in-session-2026-07-04.

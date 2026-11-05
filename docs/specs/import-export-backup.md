@@ -83,4 +83,5 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 ## Notes
 
 - Backup/restore round-trips ciphertext; export is a deliberate one-way plaintext escape hatch.
-- CSV import/export is roadmap ROLO-0012.
+- CSV import/export is roadmap ROLO-0012, specified in
+  [ROLO-0012-csv-import-export.md](ROLO-0012-csv-import-export.md).
