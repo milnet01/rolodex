@@ -47,9 +47,10 @@ handlers). Constants quoted below (`SENSITIVE_KEYWORDS` members, the `MASK` bull
   editor, editing a label to contain a keyword auto-checks "Hide" — one-way: removing the keyword
   leaves the checkbox as-is, and the user un-checks it manually. Once the user toggles "Hide" by
   hand, later label edits no longer change it (`FieldRow._sens_user_set`). A field marked
-  "Hide" renders masked in the editor by default. An eye icon inside the value box reveals it while editing
-  (ROLO-0021); that peek is view-only, never changes the "Hide" flag, and is reset whenever the
-  checkbox is toggled.
+  "Hide" renders masked in the editor by default. An eye toggle button beside the value box
+  reveals it while editing (ROLO-0021). The button shows only on a field marked "Hide", takes
+  keyboard focus, and is named "Show value" or "Hide value" by its state (ROLO-0091). That peek
+  is view-only, never changes the "Hide" flag, and is reset whenever the checkbox is toggled.
 - **INV-10** The "Hide" checkbox is the source of truth for `sensitive` on save — the user can
   override the auto-detection either way, except that two kinds of field are always stored and
   shown masked: one `parse_totp_field` recognises (`totp-codes.md` INV-15, INV-16), and one whose

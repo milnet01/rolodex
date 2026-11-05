@@ -4326,6 +4326,13 @@ class FieldRow(Gtk.ListBoxRow):
         self.value_entry.set_size_request(160, -1)
         box.append(self.value_entry)
 
+        # Peek toggle (ROLO-0021): a real button beside the value box, not an entry icon,
+        # which GTK gives no accessible name or keyboard focus (ROLO-0091).
+        self.peek_btn = Gtk.Button()
+        self.peek_btn.add_css_class("flat")
+        self.peek_btn.connect("clicked", self._on_peek_clicked)
+        box.append(self.peek_btn)
+
         # Latches once the user toggles "Hide" by hand, after which the label no longer drives
         # sensitivity (see on_label_changed).
         self._sens_user_set = False
@@ -4346,11 +4353,10 @@ class FieldRow(Gtk.ListBoxRow):
         self.sens_check = Gtk.CheckButton(label="Hide", active=sensitive)
         box.append(self.sens_check)
 
-        # Peek toggle (ROLO-0021): sensitive values render masked, with an eye icon inside
-        # the value box to reveal/hide them while editing. The peek is view-only — it never
-        # changes the "Hide" flag that decides how the field is stored.
+        # Sensitive values render masked; the peek button reveals/hides them while editing.
+        # The peek is view-only — it never changes the "Hide" flag that decides how the field
+        # is stored.
         self._peek = False
-        self.value_entry.connect("icon-press", self._on_value_icon_press)
         self._update_value_visibility()
 
         # The "Hide" checkbox decides whether the value is a secret. Toggling it resets any
@@ -4401,8 +4407,8 @@ class FieldRow(Gtk.ListBoxRow):
         self.add_controller(drop)
 
     def _update_value_visibility(self):
-        """Mask/reveal the value and drive the eye icon. A sensitive field is masked unless
-        the user is peeking; the icon appears only on sensitive fields and reflects state."""
+        """Mask/reveal the value and drive the peek button. A sensitive field is masked unless
+        the user is peeking; the button appears only on sensitive fields and reflects state."""
         sensitive = self.sens_check.get_active()
         self.value_entry.set_visibility(not sensitive or self._peek)
         # Tell the platform this is a secret. Without these an input method may keep it in
@@ -4416,20 +4422,16 @@ class FieldRow(Gtk.ListBoxRow):
         else:
             self.value_entry.set_input_purpose(Gtk.InputPurpose.FREE_FORM)
             self.value_entry.set_input_hints(Gtk.InputHints.NONE)
-        pos = Gtk.EntryIconPosition.SECONDARY
-        if sensitive:
-            self.value_entry.set_icon_from_icon_name(
-                pos, "view-conceal-symbolic" if self._peek else "view-reveal-symbolic")
-            self.value_entry.set_icon_activatable(pos, True)
-            self.value_entry.set_icon_tooltip_text(
-                pos, "Hide value" if self._peek else "Show value")
-        else:
-            self.value_entry.set_icon_from_icon_name(pos, None)
+        self.peek_btn.set_visible(sensitive)
+        name = "Hide value" if self._peek else "Show value"
+        self.peek_btn.set_icon_name(
+            "view-conceal-symbolic" if self._peek else "view-reveal-symbolic")
+        self.peek_btn.set_tooltip_text(name)
+        a11y_label(self.peek_btn, name)
 
-    def _on_value_icon_press(self, _entry, icon_pos):
-        if icon_pos == Gtk.EntryIconPosition.SECONDARY:
-            self._peek = not self._peek
-            self._update_value_visibility()
+    def _on_peek_clicked(self, _btn):
+        self._peek = not self._peek
+        self._update_value_visibility()
 
     def _build_generator_popover(self) -> Gtk.Popover:
         """A small popover with length + character-class options and a Generate button."""

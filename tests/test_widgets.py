@@ -608,8 +608,8 @@ def _unnamed(root):
     accessibility bus. The rules mirror what AT-SPI was measured to report on 2026-09-25:
     an explicit label, a labelled-by relation, a tooltip on an image, or text inside a
     button all yield a name. libadwaita's entry rows and the window controls name their own
-    parts and are not walked; neither are a Gtk.Entry's internal icons, which GTK gives no
-    way to name (ROLO-0091). An Adw.ActionRow IS walked: its prefixes and suffixes are ours.
+    parts and are not walked. A Gtk.Entry is walked, so an entry icon, which GTK gives no way
+    to name, fails here (ROLO-0091). An Adw.ActionRow IS walked: its prefixes and suffixes are ours.
     """
     from gi.repository import Gtk
 
@@ -648,8 +648,6 @@ def _unnamed(root):
         if w.get_accessible_role() in interactive and not named(w):
             parent = w.get_parent()
             found.append(f"{type(w).__name__} in {type(parent).__name__ if parent else '-'}")
-        if isinstance(w, Gtk.Entry):
-            return
         c = w.get_first_child()
         while c is not None:
             walk(c)
@@ -714,6 +712,33 @@ def test_ROLO0017_a_masked_value_is_not_read_out_as_dots(app, tmp_path, monkeypa
     win._revealed = True
     win._show_detail(entry_id)
     assert "Hidden value" not in seen
+
+
+def test_ROLO0091_the_show_value_eye_is_a_named_focusable_button(monkeypatch):
+    names = {}
+    orig = rolodex.a11y_label
+    monkeypatch.setattr(rolodex, "a11y_label",
+                        lambda w, t: names.__setitem__(w, t) or orig(w, t))
+    dlg = rolodex.AddEditDialog(FakeMainWindow(), "Add Entry")
+    row = rolodex.FieldRow(dlg, "Password", "hunter2")
+    btn = row.peek_btn
+    assert btn.get_visible() and btn.get_focusable()
+    assert not row.value_entry.get_visibility()
+    assert names[btn] == "Show value"
+
+    btn.emit("clicked")
+    assert row.value_entry.get_visibility()
+    assert names[btn] == "Hide value"
+    assert row.sens_check.get_active()  # peeking never changes the Hide flag (INV-9)
+
+    row.sens_check.set_active(False)  # toggling Hide resets the peek and hides the eye
+    assert not btn.get_visible()
+    row.sens_check.set_active(True)
+    assert not row.value_entry.get_visibility()
+    assert names[btn] == "Show value"
+
+    plain = rolodex.FieldRow(dlg, "Username", "bob")
+    assert not plain.peek_btn.get_visible()
 
 
 def _labels(widget):

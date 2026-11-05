@@ -36,7 +36,8 @@ All notable changes to Rolodex are documented here. The format is based on
   new-category box are announced by name. Hidden values are read as
   "Hidden value" rather than a string of bullets, and category headers
   say whether they are expanded or collapsed. The edit dialog's
-  show-value eye is still unnamed (ROLO-0091).
+  show-value eye is now a button beside the value box: Tab reaches it,
+  and it is read as "Show value" or "Hide value" (ROLO-0091).
 
 ### Changed
 

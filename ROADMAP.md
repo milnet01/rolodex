@@ -166,7 +166,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: feature.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0091] **Make the edit dialog's show-value eye reachable by keyboard and screen reader.**
+- ✅ [ROLO-0091] **Make the edit dialog's show-value eye reachable by keyboard and screen reader.**
   Why: FieldRow puts the peek toggle (ROLO-0021) inside the value box as
   a Gtk.Entry secondary icon. GTK gives an entry icon no accessible name
   and no keyboard focus. AT-SPI on 2026-09-25 read each one as an
@@ -188,6 +188,11 @@ release, which is what proves the in-app updater end to end: it installs from
   icon inside the value box reveals it while editing". Moving it to a
   button beside the box changes that line, so amend INV-9 and run
   review-contract (rule 14) before the code.
+  Shipped 2026-11-05: FieldRow.peek_btn, a flat Gtk.Button beside the
+  value box, named by state; INV-9 amended (no review, rule 14 as
+  settled 2026-10-31); _unnamed() now walks Gtk.Entry. The AT-SPI check
+  did not run: the desktop's a11y bus refused connections and a private
+  bus could not start its registry.
   **Layman:** The eye button that shows a hidden value while editing can only be clicked with a mouse, and a screen reader calls it just "image".
   Kind: accessibility.
   Source: in-session-2026-09-25 (ROLO-0017).
