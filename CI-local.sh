@@ -68,7 +68,13 @@ echo "==> [2/3] pytest"
 # ci.yml runs this under xvfb-run because the runner has no display. A desktop session always
 # has one -- GTK falls back to the session's Wayland socket even with DISPLAY unset -- and
 # xvfb-run is not installed here, so the plain invocation is the local equivalent.
-python3 -m pytest tests/ -q
+# Parallel where pytest-xdist is installed: the same tests, in about 15 s instead of 25 s on
+# the maintainer's 12-core desktop (measured 2026-11-05). Without it the run is serial.
+if python3 -c 'import xdist' 2>/dev/null; then
+    python3 -m pytest tests/ -q -n auto
+else
+    python3 -m pytest tests/ -q
+fi
 
 echo
 echo "==> [3/3] Linux build + self-test (mirrors the ubuntu-latest CI job)"
