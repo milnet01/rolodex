@@ -58,13 +58,14 @@ def read_csv_file(filepath: str) -> tuple[list[str], list[list[str]]]:
   re-save adds) and `newline=""` (so a quoted multi-line cell stays one cell).
 - The `MAX_IMPORT_BYTES` check runs exactly as in `parse_text_file`, raising `ValueError`
   with `_IMPORT_TOO_LARGE`.
-- Comma delimiter only. `csv.Error` (including a cell over the module's field-size limit) is
-  re-raised as `ValueError` naming the row number.
+- Comma delimiter only. The `csv` module's field-size limit is raised to `MAX_IMPORT_BYTES`,
+  so a long note the export wrote reads back. `csv.Error` is re-raised as `ValueError` naming
+  the row number.
 - The first row is the header. A row whose cells are all empty is dropped. A shorter row is
   padded with empty cells. **A row longer than the header raises `ValueError`**, because the
   extra cells have no column to go to and dropping them would lose data silently.
-- An empty file, or a header with no rows, returns no rows; the caller shows INV-5's
-  "No entries found in file."
+- An empty file, or a header with no rows, returns no rows; the caller shows
+  `import-export-backup.md` INV-5's "No entries found in file."
 
 ### 4.2 Recognising the format
 
@@ -134,7 +135,7 @@ Rules the table needs:
   remains, still `/`-joined, is the category. Nothing left means no category.
 - **Name fallback.** An empty name takes the URL field's value, else `"Untitled"`. This holds
   for every format, including Firefox's host rule when `url` does not parse to a host.
-- **Sensitivity.** A field is sensitive when `is_sensitive_label(label)` or
+- **Sensitivity**, in every format but `rolodex`. A field is sensitive when `is_sensitive_label(label)` or
   `parse_totp_field(label, value)` says so, the rule `parse_text_file` uses. **A TOTP field is
   always sensitive**, even when its value fails `parse_totp_field`, so a malformed seed is
   never shown in clear.
@@ -154,6 +155,9 @@ def csv_rows_to_entries(fmt: str, header: list[str], rows: list[list[str]]) -> l
 entry under its own `category` key.** A category the vault lacks is created with
 `add_category`, in the order the imported entries first name it. Only entries actually
 imported create one. `category=""` and a named category behave exactly as today.
+
+A parsed entry's `created` and `modified`, where present, replace the fresh timestamps
+`add_entry` stamps. An entry without them is stamped as today.
 
 `ImportPreviewDialog`'s *Add to category* picker gains a first option,
 **"Categories from file"**, shown only when some parsed entry carries a non-empty category.
@@ -178,18 +182,19 @@ def entries_from_mapping(header: list[str], rows: list[list[str]],
                          mapping: list[str]) -> list[dict]:   # one target per column
 ```
 
-*Continue* builds the entries, applies the `MAX_IMPORT_ENTRIES` check, and opens
-`ImportPreviewDialog`. *Cancel* imports nothing.
+*Continue* builds the entries and opens `ImportPreviewDialog`. *Cancel* imports nothing.
 
 ### 4.6 Menu and flow
 
 Two new actions sit in the main menu beside their text-file siblings:
 
 - **"Import from CSV file..."** opens `make_file_dialog` with a `*.csv` filter, in the home
-  directory (INV-4's rule). Its outcomes are: `read_csv_file`, then `detect_csv_format`, then
-  either `csv_rows_to_entries` or the mapping step, then the existing empty, too-many and
-  preview paths of `_on_import_file_chosen`.
-- **"Export as CSV (decrypted)..."** confirms through `_confirm_destructive`, as INV-14 does.
+  directory (`import-export-backup.md` INV-4). The steps run in this order: `read_csv_file`;
+  `_on_import_file_chosen`'s existing empty and too-many messages, judged on the row count,
+  since one row is one entry; `detect_csv_format`; `csv_rows_to_entries` or the mapping step;
+  the preview.
+- **"Export as CSV (decrypted)..."** confirms through `_confirm_destructive`, as `import-export-backup.md`
+  INV-14 requires.
   The body says the file is unencrypted. The default name is
   `rolodex_export_<YYYYMMDD>_<HHMMSS>.csv`.
 
@@ -214,15 +219,17 @@ def export_csv(vault: dict) -> str:
 The test clauses are test-file paths: the code does not exist yet, so nothing runs today.
 Each fixture names the rule it isolates.
 
-- **INV-1** — Exporting a vault with `export_csv` and importing the result with
-  `read_csv_file` → `csv_rows_to_entries` yields entries equal to the originals. Equal means
+- **INV-1** — Exporting a vault with `export_csv`, reading the result with `read_csv_file` →
+  `csv_rows_to_entries`, and importing that into an empty vault with
+  `import_entries(..., category=None)` yields entries equal to the originals. Equal means
   the same name, category, notes, created and modified, and fields equal in order, label,
   value and `sensitive`. The fixture holds a multi-line note, a value with `,` and `"`, a
-  leading `=`, a non-ASCII name, a field hidden under a keyword-free label, and entries with
-  zero and with three fields.
+  leading `=`, a non-ASCII name, a field hidden under a keyword-free label, a field shown under
+  the label `Password`, and entries with zero and with three fields.
   *Test:* `tests/test_csv.py::test_INV1_rolodex_csv_round_trips`.
-  *Breaks when:* the hidden column, the timestamps or the padding are dropped, or the file is
-  read without `newline=""`. The keyword-free hidden field is the one only the hidden column
+  *Breaks when:* the hidden column, the timestamps or the padding are dropped, `import_entries`
+  stamps over the parsed timestamps, the keyword rule overrides the hidden column, or the file
+  is read without `newline=""`. The keyword-free hidden field is the one only the hidden column
   can restore.
 
 - **INV-2** — `detect_csv_format` returns each format's id for that writer's header, both the
@@ -259,10 +266,10 @@ Each fixture names the rule it isolates.
   *Breaks when:* sensitivity uses only the `parse_text_file` rule.
 
 - **INV-7** — A row longer than the header raises `ValueError`, and an oversized file raises
-  `ValueError` with `_IMPORT_TOO_LARGE`. A cell over `csv`'s
-  field-size limit raises `ValueError`, not `csv.Error`.
+  `ValueError` with `_IMPORT_TOO_LARGE`. A cell longer than `csv`'s
+  default field-size limit of 131072 characters is read whole.
   *Test:* `tests/test_csv.py::test_INV7_malformed_file_raises_value_error`.
-  *Breaks when:* extra cells are silently dropped, or `csv.Error` escapes into the GTK callback.
+  *Breaks when:* extra cells are silently dropped, or the field-size limit is left at its default.
 
 - **INV-8** — `import_entries(..., category=None)` files each entry under its own category.
   It creates a missing category once, in first-named order, only for imported entries.
@@ -283,17 +290,19 @@ Each fixture names the rule it isolates.
   *Breaks when:* two Name columns are accepted, or none.
 
 - **INV-11 (trust boundary)** — An imported CSV is untrusted input. It reaches the vault only
-  as strings in the parsed-entry shape. It reaches the screen only through the existing
+  as strings in the parsed-entry shape. It reaches the screen through the existing
   escaping in the preview row title and the detail view. The file-size cap and the
   `MAX_IMPORT_ENTRIES` cap both apply before any dialog is built.
-  *Test:* `tests/test_csv.py::test_INV11_caps`, where 2001 rows hit the entry cap; and
+  *Test:* `tests/test_widgets.py::test_INV11_csv_entry_cap`, where a 2001-row file shows the
+  too-many message and builds no dialog (INV-7 tests the size cap); and
   `tests/test_widgets.py::test_INV11_csv_markup_shown_as_text`, where a name and a mapping-step
   header of `<b>x</b>` render as those literal characters.
   *Breaks when:* a new label or subtitle in either dialog skips `GLib.markup_escape_text`.
 
 - **INV-12** — The CSV export is written through `write_private_file` and is `0600`, on first
   write and on overwrite.
-  *Test:* `tests/test_csv.py::test_INV12_export_is_private`.
+  *Test:* `tests/test_widgets.py::test_INV12_csv_export_is_private`, driving the export handler
+  against a throwaway vault.
   *Breaks when:* the export uses `open(path, "w")`.
 
 ## 6. Failure modes
@@ -317,9 +326,9 @@ Each fixture names the rule it isolates.
 
 ## 7. Tests
 
-`tests/test_csv.py` is new and covers INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7,
-INV-8, INV-11 (the caps) and INV-12 against the pure layer. Its fixtures are literal strings
-written to a `tmp_path`. `tests/test_widgets.py` gains INV-9, INV-10 and INV-11 (the markup). Each test is seen failing before its code lands, by running it against the tree
+`tests/test_csv.py` is new and covers INV-1, INV-2, INV-3, INV-4, INV-5, INV-6, INV-7
+and INV-8 against the pure layer. Its fixtures are literal strings
+written to a `tmp_path`. `tests/test_widgets.py` gains INV-9, INV-10, INV-11 and INV-12. Each test is seen failing before its code lands, by running it against the tree
 without the function or rule it names.
 
 ## 8. Alternatives considered (and rejected)
@@ -362,14 +371,14 @@ without the function or rule it names.
 | INV-8 | `tests/test_csv.py::test_INV8_categories_from_file` |
 | INV-9 | `tests/test_widgets.py::test_INV9_csv_preview_category_option` |
 | INV-10 | `tests/test_widgets.py::test_INV10_mapping_dialog_gates_continue` |
-| INV-11 | Partial: `tests/test_csv.py::test_INV11_caps` and `tests/test_widgets.py::test_INV11_csv_markup_shown_as_text` cover the caps and today's labels; **nothing** checks a label added to either dialog later |
-| INV-12 | `tests/test_csv.py::test_INV12_export_is_private` |
+| INV-11 | Partial: `tests/test_widgets.py::test_INV11_csv_entry_cap` and `tests/test_widgets.py::test_INV11_csv_markup_shown_as_text` cover the entry cap and today's labels; **nothing** checks a label added to either dialog later |
+| INV-12 | `tests/test_widgets.py::test_INV12_csv_export_is_private` |
 | § 4.3 headers still match the live writers | **nothing** — a writer can change its header in any release; INV-2 pins only the headers known on 2026-11-05 |
 
 ## 11. Cross-doc impact
 
-- `docs/specs/import-export-backup.md`: annotate INV-7a and INV-8 with `category=None` and the
-  "Categories from file" option, and point its Notes line at this spec.
+- `docs/specs/import-export-backup.md`: annotate INV-7a and INV-8 with `category=None`, the
+  "Categories from file" option and the kept timestamps, and point its Notes line at this spec.
 - `docs/specs/README.md`: a row for this spec.
 - `CHANGELOG.md` and `README.md`: the two menu items.
 
