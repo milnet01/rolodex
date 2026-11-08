@@ -2,6 +2,7 @@
 """Rolodex - Encrypted credential manager with GTK4/Adwaita GUI."""
 
 import base64
+import csv
 import hashlib
 import hmac
 import io
@@ -1126,13 +1127,16 @@ def duplicate_flags(vault: dict, parsed: list[dict]) -> list[bool]:
 
 
 def import_entries(vault: dict, parsed: list[dict], skip_duplicates: bool = True,
-                   category: str = "") -> tuple[int, int]:
+                   category: str | None = "") -> tuple[int, int]:
     """Add parsed entries to the vault, returning (imported, skipped).
 
     skip_duplicates=False imports every entry given. The import preview passes that, because
     it hands over only what the user ticked -- a duplicate they ticked deliberately must land,
     not vanish behind a checkbox that did nothing (ROLO-0047). `category` files every imported
-    entry under one existing category; "" leaves them uncategorised (ROLO-0067).
+    entry under one existing category; "" leaves them uncategorised (ROLO-0067). None files
+    each entry under its own "category" key, creating a missing one the first time an
+    imported entry names it (ROLO-0012). A parsed "created" / "modified" replaces the fresh
+    stamp, so a Rolodex CSV export re-imports with its history intact.
     """
     if category and category not in vault["categories"]:
         raise ValueError(f"No category named {category!r}")
@@ -1142,9 +1146,265 @@ def import_entries(vault: dict, parsed: list[dict], skip_duplicates: bool = True
         if is_dup:
             skipped += 1
             continue
-        add_entry(vault, entry_data["name"], entry_data["fields"], entry_data["notes"], category)
+        target = entry_data.get("category", "") if category is None else category
+        if target:
+            add_category(vault, target)  # a no-op when the vault already has it
+        eid = add_entry(vault, entry_data["name"], entry_data["fields"], entry_data["notes"],
+                        target)
+        for stamp in ("created", "modified"):
+            if entry_data.get(stamp):
+                vault["entries"][eid][stamp] = entry_data[stamp]
         imported += 1
     return imported, skipped
+
+
+# ---------------------------------------------------------------------------
+# CSV import and export (ROLO-0012, docs/specs/ROLO-0012-csv-import-export.md)
+# ---------------------------------------------------------------------------
+
+CSV_ROLODEX_BASE = ["name", "category", "notes", "created", "modified"]
+CSV_FIELD_GROUP = ("label", "value", "hidden")
+
+# Format id -> the columns its header must contain (compared stripped and casefolded). The
+# rolodex format is recognised by structure instead, in _is_rolodex_header.
+CSV_FORMATS: dict[str, frozenset[str]] = {
+    "bitwarden": frozenset({"type", "name", "notes", "fields", "login_uri", "login_username",
+                            "login_password", "login_totp"}),
+    "keepassxc": frozenset({"group", "title", "username", "password", "url", "notes"}),
+    "chromium": frozenset({"name", "url", "username", "password"}),
+    "firefox": frozenset({"url", "username", "password", "httprealm", "formactionorigin",
+                          "guid"}),
+    "1password": frozenset({"title", "url", "username", "password", "otpauth", "notes"}),
+}
+
+# Format id -> {casefolded column: target}. A target is "name", "category", "notes", "drop",
+# "field:<Label>", or a format's special rule ("bw_fields", "kp_group", "ff_url"). Columns not
+# listed become a field labelled with the header text as typed (spec INV-5).
+_CSV_COLUMN_MAPS: dict[str, dict[str, str]] = {
+    "bitwarden": {
+        "name": "name", "folder": "category", "collections": "bw_collections", "notes": "notes",
+        "login_username": "field:Username", "login_password": "field:Password",
+        "login_uri": "field:URL", "login_totp": "field:TOTP", "fields": "bw_fields",
+        "type": "drop", "favorite": "drop", "reprompt": "drop", "archiveddate": "drop",
+    },
+    "keepassxc": {
+        "title": "name", "group": "kp_group", "notes": "notes",
+        "username": "field:Username", "password": "field:Password", "url": "field:URL",
+        "totp": "field:TOTP", "icon": "drop", "last modified": "drop", "created": "drop",
+    },
+    "chromium": {
+        "name": "name", "note": "notes",
+        "username": "field:Username", "password": "field:Password", "url": "field:URL",
+    },
+    "firefox": {
+        "url": "ff_url", "username": "field:Username", "password": "field:Password",
+        "httprealm": "drop", "formactionorigin": "drop", "guid": "drop", "timecreated": "drop",
+        "timelastused": "drop", "timepasswordchanged": "drop",
+    },
+    "1password": {
+        "title": "name", "notes": "notes", "username": "field:Username",
+        "password": "field:Password", "url": "field:URL", "otpauth": "field:TOTP",
+        "tags": "field:Tags", "favorite": "drop", "archived": "drop",
+    },
+}
+
+
+def read_csv_file(filepath: str) -> tuple[list[str], list[list[str]]]:
+    """(header, rows). Raises ValueError on a malformed or oversized file.
+
+    Rows are padded to the header's width; a row of only empty cells is dropped. A row LONGER
+    than the header raises, because its extra cells have no column to go to.
+    """
+    # utf-8-sig strips the byte-order mark a spreadsheet re-save adds; newline="" keeps a
+    # quoted multi-line cell one cell. The size check is parse_text_file's (ROLO-0050).
+    with open(filepath, "r", encoding="utf-8-sig", newline="") as fp:
+        if os.fstat(fp.fileno()).st_size > MAX_IMPORT_BYTES:
+            raise ValueError(_IMPORT_TOO_LARGE)
+        content = fp.read(MAX_IMPORT_BYTES + 1)
+        if len(content) > MAX_IMPORT_BYTES:
+            raise ValueError(_IMPORT_TOO_LARGE)
+    # The default limit (131072 characters) would refuse a long note export_csv wrote.
+    csv.field_size_limit(MAX_IMPORT_BYTES)
+    reader = csv.reader(io.StringIO(content, newline=""))
+    try:
+        records = list(reader)
+    except csv.Error as e:
+        raise ValueError(f"Row {reader.line_num} of the CSV file is malformed: {e}") from None
+    if not records:
+        return [], []
+    header, rows = records[0], []
+    for number, row in enumerate(records[1:], start=2):
+        if not any(row):
+            continue
+        if len(row) > len(header):
+            raise ValueError(f"Row {number} of the CSV file has more cells than the header.")
+        rows.append(row + [""] * (len(header) - len(row)))
+    return header, rows
+
+
+def _csv_key(cell: str) -> str:
+    return cell.strip().casefold()
+
+
+def _is_rolodex_header(keys: list[str]) -> bool:
+    if keys[:len(CSV_ROLODEX_BASE)] != CSV_ROLODEX_BASE:
+        return False
+    groups = keys[len(CSV_ROLODEX_BASE):]
+    if len(groups) % len(CSV_FIELD_GROUP):
+        return False
+    expected = [f"field_{n}_{part}" for n in range(1, len(groups) // 3 + 1)
+                for part in CSV_FIELD_GROUP]
+    return groups == expected
+
+
+def detect_csv_format(header: list[str]) -> str | None:
+    """The one format whose header this is, or None when none or several match (spec § 4.2).
+    There is deliberately no precedence order: an ambiguous header goes to the mapping step."""
+    keys = [_csv_key(cell) for cell in header]
+    matches = [fmt for fmt, required in CSV_FORMATS.items() if required <= set(keys)]
+    if _is_rolodex_header(keys):
+        matches.append("rolodex")
+    return matches[0] if len(matches) == 1 else None
+
+
+def _csv_field(label: str, value: str) -> dict:
+    """A parsed field, sensitive by parse_text_file's rule -- or always, for a TOTP field, so
+    a malformed seed is never shown in clear (spec INV-6)."""
+    sensitive = (label.strip().casefold() == "totp" or is_sensitive_label(label)
+                 or parse_totp_field(label, value) is not None)
+    return {"label": label, "value": value, "sensitive": sensitive}
+
+
+def _csv_entry(name: str, fields: list[dict], notes: str, category: str) -> dict:
+    """A parsed entry, after the name fallback every format shares: an empty name takes the
+    URL field's value, else "Untitled"."""
+    if not name.strip():
+        url = next((f["value"] for f in fields if f["label"].casefold() == "url"), "")
+        name = url if url.strip() else "Untitled"
+    return {"name": name, "fields": fields, "notes": notes, "category": category}
+
+
+def _rolodex_row_to_entry(row: list[str]) -> dict:
+    name, category, notes, created, modified = row[:len(CSV_ROLODEX_BASE)]
+    fields = []
+    groups = row[len(CSV_ROLODEX_BASE):]
+    for i in range(0, len(groups), 3):
+        label, value, hidden = groups[i:i + 3]
+        if label or value:
+            # Anything but an explicit "no" hides the field rather than exposing it.
+            fields.append({"label": label, "value": value,
+                           "sensitive": hidden.strip().casefold() != "no"})
+    entry = _csv_entry(name, fields, notes, category)
+    for key, stamp in (("created", created), ("modified", modified)):
+        try:
+            datetime.fromisoformat(stamp)
+        except ValueError:
+            continue
+        entry[key] = stamp
+    return entry
+
+
+def _row_to_entry(targets: list[str], header: list[str], row: list[str]) -> dict:
+    """One foreign row -> one parsed entry, each cell going where *targets* says."""
+    name = notes = category = collections = ""
+    fields: list[dict] = []
+    extra_notes: list[str] = []
+    for target, column, cell in zip(targets, header, row):
+        if target == "drop" or cell == "":
+            continue
+        if target == "name":
+            name = cell
+        elif target == "notes":
+            notes = cell
+        elif target == "category":
+            category = cell
+        elif target == "bw_collections":
+            collections = cell
+        elif target == "kp_group":
+            # The first segment is the root group, whose name is translated (not always "Root").
+            category = "/".join(cell.split("/")[1:])
+        elif target == "ff_url":
+            name = urllib.parse.urlsplit(cell).hostname or ""
+            fields.append(_csv_field("URL", cell))
+        elif target == "bw_fields":
+            for line in cell.splitlines():
+                label, sep, value = line.partition(": ")
+                if sep and label.strip():
+                    fields.append(_csv_field(label.strip(), value))
+                elif line.strip():
+                    extra_notes.append(line)
+        else:
+            label = target[len("field:"):] if target.startswith("field:") else column
+            fields.append(_csv_field(label, cell))
+    notes = "\n".join(filter(None, [notes, *extra_notes]))
+    return _csv_entry(name, fields, notes, category or collections)
+
+
+def csv_rows_to_entries(fmt: str, header: list[str], rows: list[list[str]]) -> list[dict]:
+    """Rows of a recognised format -> parsed entries, the shape parse_text_file returns plus
+    "category" (and, for the rolodex format, "created" / "modified")."""
+    if fmt == "rolodex":
+        return [_rolodex_row_to_entry(row) for row in rows]
+    column_map = _CSV_COLUMN_MAPS[fmt]
+    # Iterate the header, not the map, so an unnamed column becomes a field (spec INV-5).
+    targets = [column_map.get(_csv_key(cell), "field") for cell in header]
+    return [_row_to_entry(targets, header, row) for row in rows]
+
+
+CSV_MAPPING_TARGETS = ("name", "category", "notes", "field", "skip")
+
+
+def csv_mapping_defaults(header: list[str]) -> list[str]:
+    """The mapping step's starting choice for each column (spec § 4.5)."""
+    defaults = {"name": "name", "title": "name", "category": "category", "folder": "category",
+                "group": "category", "notes": "notes", "note": "notes", "comments": "notes"}
+    return [defaults.get(_csv_key(cell), "field") for cell in header]
+
+
+def csv_mapping_problem(mapping: list[str]) -> str | None:
+    """Why a mapping cannot continue, or None when it can: exactly one Name column, and at
+    most one each of Category and Notes."""
+    if mapping.count("name") != 1:
+        return "Choose exactly one column as the Name."
+    for target, title in (("category", "Category"), ("notes", "Notes")):
+        if mapping.count(target) > 1:
+            return f"Choose at most one column as the {title}."
+    return None
+
+
+def entries_from_mapping(header: list[str], rows: list[list[str]],
+                         mapping: list[str]) -> list[dict]:
+    """Rows of an unrecognised file -> parsed entries, by the user's choice per column."""
+    targets = ["drop" if t == "skip" else t for t in mapping]
+    return [_row_to_entry(targets, header, row) for row in rows]
+
+
+def export_csv(vault: dict) -> str:
+    """The whole vault as Rolodex's own CSV layout: one row per entry, each field a
+    label / value / hidden group. Read back by csv_rows_to_entries("rolodex", ...) into the
+    entries it came from (spec INV-1). Values are written as they are -- no formula escaping,
+    which would change the data (spec § 8)."""
+    entries = list_entries(vault)
+    width = max((len(e["fields"]) for _eid, e in entries), default=0)
+    header = CSV_ROLODEX_BASE + [f"field_{n}_{part}" for n in range(1, width + 1)
+                                 for part in CSV_FIELD_GROUP]
+    out = io.StringIO(newline="")
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(header)
+    for _eid, entry in entries:
+        row = [entry["name"], entry_category(vault, entry), entry.get("notes", ""),
+               entry.get("created", ""), entry.get("modified", "")]
+        for field in entry["fields"]:
+            row += [field["label"], field["value"], "yes" if field.get("sensitive") else "no"]
+        writer.writerow(row + [""] * (len(header) - len(row)))
+    return out.getvalue()
+
+
+def csv_export_exceeds_import_limits(vault: dict) -> bool:
+    """More than MAX_IMPORT_ENTRIES entries, or export_csv's UTF-8 bytes over MAX_IMPORT_BYTES."""
+    if len(vault["entries"]) > MAX_IMPORT_ENTRIES:
+        return True
+    return len(export_csv(vault).encode("utf-8")) > MAX_IMPORT_BYTES
 
 
 # ---------------------------------------------------------------------------
@@ -2692,9 +2952,11 @@ class MainWindow(Adw.ApplicationWindow):
         menu.append("Password health...", "win.health")
         menu.append("Manage categories...", "win.manage-categories")
         menu.append("Import from text file...", "win.import")
+        menu.append("Import from CSV file...", "win.import-csv")
         menu.append("Backup vault...", "win.backup")
         menu.append("Restore vault from backup...", "win.restore")
         menu.append("Export (decrypted plaintext)...", "win.export")
+        menu.append("Export as CSV (decrypted)...", "win.export-csv")
         menu.append("Change master password...", "win.chpass")
         menu.append("Check for updates...", "win.check-updates")
         menu.append("Check for updates automatically", "win.auto-updates")
@@ -2713,9 +2975,11 @@ class MainWindow(Adw.ApplicationWindow):
             ("health", self._on_password_health),
             ("manage-categories", self._on_manage_categories),
             ("import", self._on_import),
+            ("import-csv", self._on_import_csv),
             ("backup", self._on_backup),
             ("restore", self._on_restore),
             ("export", self._on_export),
+            ("export-csv", self._on_export_csv),
             ("chpass", self._on_change_password),
             ("check-updates", self._on_check_updates),
         ]:
@@ -3964,28 +4228,65 @@ class MainWindow(Adw.ApplicationWindow):
             self._show_message("Import Error", str(e))
             return
 
-        if not parsed:
-            self._show_message("Import", "No entries found in file.")
-            return
-        if len(parsed) > MAX_IMPORT_ENTRIES:
-            # The preview builds one row per entry up front, so an enormous file froze the UI in
-            # its constructor (ROLO-0070).
-            self._show_message(
-                "Import",
-                f"That file holds {len(parsed)} entries. Import at most {MAX_IMPORT_ENTRIES} at "
-                "a time — split the file and import each part.",
-            )
+        if self._import_count_refused(len(parsed)):
             return
 
         # Show preview dialog
         dialog = ImportPreviewDialog(self, parsed, filepath)
         dialog.present(self)
 
+    def _import_count_refused(self, count):
+        """Say so and return True when a file holds no entries, or more than the preview builds
+        in one go. Runs before any dialog is built, for the text and the CSV import alike."""
+        if not count:
+            self._show_message("Import", "No entries found in file.")
+            return True
+        if count > MAX_IMPORT_ENTRIES:
+            # The preview builds one row per entry up front, so an enormous file froze the UI in
+            # its constructor (ROLO-0070).
+            self._show_message(
+                "Import",
+                f"That file holds {count} entries. Import at most {MAX_IMPORT_ENTRIES} at "
+                "a time — split the file and import each part.",
+            )
+            return True
+        return False
+
+    def _on_import_csv(self, *_args):
+        chooser = make_file_dialog("Import from CSV file", "CSV files", pattern="*.csv")
+        home = GLib.get_home_dir()
+        if home:
+            chooser.set_initial_folder(Gio.File.new_for_path(home))
+        chooser.open(self, None, self._on_import_csv_file_chosen)
+
+    def _on_import_csv_file_chosen(self, chooser, result):
+        try:
+            gfile = chooser.open_finish(result)
+        except GLib.Error:
+            return
+        filepath = gfile.get_path()
+        if not filepath or self.vault is None:
+            return  # no local path, or the idle lock fired while the dialog was open
+
+        try:
+            header, rows = read_csv_file(filepath)
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            self._show_message("Import Error", str(e))
+            return
+        if self._import_count_refused(len(rows)):  # one row is one entry
+            return
+
+        fmt = detect_csv_format(header)
+        if fmt is None:
+            CsvMappingDialog(self, header, rows, filepath).present(self)
+            return
+        ImportPreviewDialog(self, csv_rows_to_entries(fmt, header, rows), filepath).present(self)
+
     def _finish_import(self, parsed, category=""):
         if self.vault is None:
             return  # locked while the preview dialog was open
         if category and category not in self.vault["categories"]:
-            category = ""  # deleted while the preview was open
+            category = ""  # deleted while the preview was open; None (from the file) passes
         # The preview hands over exactly the rows the user ticked, duplicates included, so
         # nothing is skipped here: a ticked row that did not import was ROLO-0047.
         imported, _skipped = import_entries(self.vault, parsed, skip_duplicates=False,
@@ -4102,28 +4403,56 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_export(self, *_args):
         self._confirm_destructive("Export decrypted backup",
                                   "This will export all entries in plaintext. Continue?",
-                                  "Export", self._on_export_confirmed)
+                                  "Export", self._on_export_confirmed,
+                                  "txt", self._on_export_file_chosen)
 
-    def _on_export_confirmed(self, dialog, response):
+    def _on_export_csv(self, *_args):
+        body = ("This will export all entries to an unencrypted CSV file. Anyone who can read "
+                "the file can read every password.")
+        if csv_export_exceeds_import_limits(self.vault):
+            body += (f" The file will be too large for Rolodex to import in one go (the limits "
+                     f"are {MAX_IMPORT_ENTRIES} entries and 10 MB).")
+        self._confirm_destructive("Export as CSV", body + " Continue?", "Export",
+                                  self._on_export_confirmed, "csv", self._on_export_csv_file_chosen)
+
+    def _on_export_confirmed(self, dialog, response, extension, on_chosen):
         if response != "export":
             return
 
         save_dialog = Gtk.FileDialog()
         save_dialog.set_title("Export to file")
-        default_name = f"rolodex_export_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}.txt"
-        save_dialog.set_initial_name(default_name)
-        save_dialog.save(self, None, self._on_export_file_chosen)
+        stamp = datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')
+        save_dialog.set_initial_name(f"rolodex_export_{stamp}.{extension}")
+        save_dialog.save(self, None, on_chosen)
 
-    def _on_export_file_chosen(self, chooser, result):
+    def _export_path(self, chooser, result):
+        """The path the save dialog chose, or None when it was cancelled, had no local path,
+        or the idle lock fired while the file dialog held the input grab."""
         try:
             gfile = chooser.save_finish(result)
         except GLib.Error:
-            return
+            return None
         filepath = gfile.get_path()
+        return filepath if filepath and self.vault is not None else None
+
+    def _write_export(self, filepath, content, count):
+        try:
+            write_private_file(filepath, content.encode("utf-8"))
+        except OSError as e:
+            # Uncaught, this escaped into the GTK callback: no file and no message.
+            self._show_message("Export Error", str(e))
+            return
+        self._toast(f"Exported {count} {entries_noun(count)}")
+
+    def _on_export_csv_file_chosen(self, chooser, result):
+        filepath = self._export_path(chooser, result)
+        if filepath:
+            self._write_export(filepath, export_csv(self.vault), len(self.vault["entries"]))
+
+    def _on_export_file_chosen(self, chooser, result):
+        filepath = self._export_path(chooser, result)
         if not filepath:
             return
-        if self.vault is None:
-            return  # the idle lock fired while the file dialog held the input grab
 
         entries = list_entries(self.vault)
         lines = []
@@ -4139,15 +4468,7 @@ class MainWindow(Adw.ApplicationWindow):
                 lines.append(f"  Notes: {entry['notes']}")
             lines.append("")
 
-        content = "\n".join(lines)
-        try:
-            write_private_file(filepath, content.encode("utf-8"))
-        except OSError as e:
-            # Uncaught, this escaped into the GTK callback: no file and no message.
-            self._show_message("Export Error", str(e))
-            return
-
-        self._toast(f"Exported {len(entries)} {entries_noun(len(entries))}")
+        self._write_export(filepath, "\n".join(lines), len(entries))
 
     # ------------------------------------------------------------------
     # Change password
@@ -4790,9 +5111,16 @@ class ImportPreviewDialog(Adw.Dialog):
         vbox.append(ctrl_box)
 
         # ROLO-0067: one target category for the whole import, "No category" by default.
+        # ROLO-0012: a file whose entries carry their own categories (a CSV) offers, and
+        # defaults to, filing each under its own -- the None choice import_entries reads.
         self.categories = list(main_win.vault["categories"])
+        self.choices: list[str | None] = ["", *self.categories]
+        labels = ["No category", *self.categories]
+        if any(entry.get("category") for entry in parsed):
+            self.choices.insert(0, None)
+            labels.insert(0, "Categories from file")
         cat_row = Adw.ComboRow(title="Add to category")
-        cat_row.set_model(Gtk.StringList.new(["No category", *self.categories]))
+        cat_row.set_model(Gtk.StringList.new(labels))
         cat_group = Gtk.ListBox()
         cat_group.set_selection_mode(Gtk.SelectionMode.NONE)
         cat_group.add_css_class("boxed-list")
@@ -4839,10 +5167,79 @@ class ImportPreviewDialog(Adw.Dialog):
             self.status.set_text("Tick at least one entry to import.")  # ROLO-0070
             self.status.set_visible(True)
             return
-        pos = self.cat_row.get_selected()
-        category = self.categories[pos - 1] if pos >= 1 else ""
-        self.main_win._finish_import(selected, category)
+        self.main_win._finish_import(selected, self.choices[self.cat_row.get_selected()])
         self.close()
+
+
+class CsvMappingDialog(Adw.Dialog):
+    """Which column is which, for a CSV whose header matches no single known format
+    (ROLO-0012 spec § 4.5). Continue builds the entries and opens the import preview."""
+
+    TITLES: ClassVar[dict[str, str]] = {"name": "Name", "category": "Category", "notes": "Notes", "field": "Field",
+                                        "skip": "Skip"}
+
+    def __init__(self, main_win, header, rows, filepath):
+        super().__init__()
+        self.main_win = main_win
+        self.header = header
+        self.rows = rows
+        self.filepath = filepath
+
+        header_bar, clamp = make_dialog_scaffold(
+            self, "Match CSV Columns", width=500, height=520, clamp_max=460, margin=12,
+            scrolled=True)
+
+        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn.connect("clicked", lambda b: self.close())
+        header_bar.pack_start(cancel_btn)
+
+        self.continue_btn = Gtk.Button(label="Continue")
+        self.continue_btn.add_css_class("suggested-action")
+        self.continue_btn.connect("clicked", self._on_continue)
+        header_bar.pack_end(self.continue_btn)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        info = Gtk.Label(label="Rolodex does not recognise this file's columns. Say what each "
+                               "one holds.", xalign=0, wrap=True)
+        vbox.append(info)
+        self.status = Gtk.Label(xalign=0, wrap=True)
+        self.status.add_css_class("error")
+        vbox.append(self.status)
+
+        listbox = Gtk.ListBox()
+        listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        listbox.add_css_class("boxed-list")
+        choice_labels = [self.TITLES[t] for t in CSV_MAPPING_TARGETS]
+        self.combos = []
+        for i, (column, default) in enumerate(zip(header, csv_mapping_defaults(header))):
+            sample = next((row[i] for row in rows if row[i]), "")
+            # Both strings come from an untrusted file and the row renders markup (INV-11).
+            row = Adw.ComboRow(title=GLib.markup_escape_text(column or f"Column {i + 1}"),
+                               subtitle=GLib.markup_escape_text(sample))
+            row.set_model(Gtk.StringList.new(choice_labels))
+            row.set_selected(CSV_MAPPING_TARGETS.index(default))
+            row.connect("notify::selected", lambda *_a: self._update_continue())
+            self.combos.append(row)
+            listbox.append(row)
+        vbox.append(listbox)
+        clamp.set_child(vbox)
+        self._update_continue()
+
+    def mapping(self):
+        return [CSV_MAPPING_TARGETS[row.get_selected()] for row in self.combos]
+
+    def _update_continue(self):
+        problem = csv_mapping_problem(self.mapping())
+        self.continue_btn.set_sensitive(problem is None)
+        self.status.set_text(problem or "")
+        self.status.set_visible(problem is not None)
+
+    def _on_continue(self, _btn):
+        if csv_mapping_problem(self.mapping()) is not None or self.main_win.vault is None:
+            return
+        entries = entries_from_mapping(self.header, self.rows, self.mapping())
+        self.close()
+        ImportPreviewDialog(self.main_win, entries, self.filepath).present(self.main_win)
 
 
 # --------------------------------------------------------------------------

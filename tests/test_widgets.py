@@ -687,6 +687,7 @@ def test_ROLO0017_every_control_in_every_window_has_a_spoken_name(app, tmp_path,
         "health": rolodex.PasswordHealthDialog(win),
         "import": rolodex.ImportPreviewDialog(win, [{"name": "A", "fields": [], "notes": ""}],
                                               "/x.txt"),
+        "csv mapping": rolodex.CsvMappingDialog(win, ["Site", "Login"], [["a", "b"]], "/x.csv"),
         "unlock": rolodex.UnlockDialog(app, str(tmp_path / "v.vault"), False),
         "create": rolodex.UnlockDialog(app, str(tmp_path / "new.vault"), True),
     }
@@ -1030,3 +1031,151 @@ def test_password_health_escapes_markup_in_entry_names(app, tmp_path, monkeypatc
     assert row.get_title() == "AT&amp;T &lt;work&gt;"
     # libadwaita 1.5 hands back the subtitle as rendered, later versions as stored.
     assert row.get_subtitle() in ("PIN & code", "PIN &amp; code")
+
+
+# --- CSV import and export (ROLO-0012) ----------------------------------------------------
+
+
+def test_INV9_csv_preview_category_option():
+    vault = {"version": 2, "categories": ["Games"], "entries": {}}
+    win = ImportRecorder(vault)
+    from_csv = [{"name": "A", "fields": [], "notes": "", "category": "Work"},
+                {"name": "B", "fields": [], "notes": "", "category": ""}]
+    dlg = rolodex.ImportPreviewDialog(win, from_csv, "/x.csv")
+    model = dlg.cat_row.get_model()
+    assert [model.get_string(i) for i in range(model.get_n_items())] == [
+        "Categories from file", "No category", "Games"]
+    assert dlg.cat_row.get_selected() == 0
+    dlg._on_import(None)
+    assert win.imported[1] is None
+
+    # A text-file import (no entry carries a category) does not offer it.
+    plain = rolodex.ImportPreviewDialog(win, [{"name": "A", "fields": [], "notes": ""}], "/x")
+    model = plain.cat_row.get_model()
+    assert [model.get_string(i) for i in range(model.get_n_items())] == ["No category", "Games"]
+    plain.cat_row.set_selected(1)
+    plain._on_import(None)
+    assert win.imported[1] == "Games"
+
+
+def test_INV10_mapping_dialog_gates_continue():
+    win = ImportRecorder({"version": 2, "categories": [], "entries": {}})
+    header = ["Title", "Folder", "Comments", "Login", "Site"]
+    dlg = rolodex.CsvMappingDialog(win, header, [["a", "b", "c", "d", "e"]], "/x.csv")
+    assert dlg.mapping() == ["name", "category", "notes", "field", "field"]
+    assert dlg.continue_btn.get_sensitive()
+
+    targets = list(rolodex.CSV_MAPPING_TARGETS)
+    dlg.combos[4].set_selected(targets.index("name"))  # two Name columns
+    assert not dlg.continue_btn.get_sensitive() and dlg.status.get_visible()
+    dlg.combos[0].set_selected(targets.index("skip"))  # back to one
+    assert dlg.continue_btn.get_sensitive() and not dlg.status.get_visible()
+    dlg.combos[4].set_selected(targets.index("field"))  # none
+    assert not dlg.continue_btn.get_sensitive()
+    dlg.combos[0].set_selected(targets.index("name"))
+    dlg.combos[3].set_selected(targets.index("notes"))  # two Notes columns
+    assert not dlg.continue_btn.get_sensitive()
+    dlg.combos[3].set_selected(targets.index("category"))  # two Category columns
+    assert not dlg.continue_btn.get_sensitive()
+
+
+class FakeChooser:
+    def __init__(self, path):
+        from gi.repository import Gio
+        self.file = Gio.File.new_for_path(path)
+
+    def open_finish(self, _result):
+        return self.file
+
+    save_finish = open_finish
+
+
+def _csv_window(app, tmp_path, monkeypatch):
+    win = _window_with(app, tmp_path, monkeypatch, ["Games"])
+    shown = []
+    monkeypatch.setattr(win, "_show_message", lambda *a: shown.append(a))
+    return win, shown
+
+
+def test_INV11_csv_entry_cap(app, tmp_path, monkeypatch):
+    win, shown = _csv_window(app, tmp_path, monkeypatch)
+
+    def no_dialog(*_a):
+        raise AssertionError("a dialog was built for a file over the entry cap")
+
+    monkeypatch.setattr(rolodex, "ImportPreviewDialog", no_dialog)
+    monkeypatch.setattr(rolodex, "CsvMappingDialog", no_dialog)
+    path = tmp_path / "big.csv"
+    path.write_text("name,url,username,password\n"
+                    + "".join(f"e{i},,u,p\n" for i in range(rolodex.MAX_IMPORT_ENTRIES + 1)))
+    win._on_import_csv_file_chosen(FakeChooser(str(path)), None)
+    assert len(shown) == 1 and str(rolodex.MAX_IMPORT_ENTRIES + 1) in shown[0][1]
+
+
+def test_csv_import_routes_by_whether_the_format_is_known(app, tmp_path, monkeypatch):
+    win, shown = _csv_window(app, tmp_path, monkeypatch)
+    built = []
+    for name in ("ImportPreviewDialog", "CsvMappingDialog"):
+        cls = getattr(rolodex, name)
+        monkeypatch.setattr(cls, "present", lambda self, *_a, n=name: built.append(n))
+    known = tmp_path / "known.csv"
+    known.write_text("name,url,username,password\nMail,,bob,pw\n")
+    unknown = tmp_path / "unknown.csv"
+    unknown.write_text("site,login\nMail,bob\n")
+    win._on_import_csv_file_chosen(FakeChooser(str(known)), None)
+    win._on_import_csv_file_chosen(FakeChooser(str(unknown)), None)
+    assert built == ["ImportPreviewDialog", "CsvMappingDialog"] and shown == []
+
+
+def test_INV11_csv_markup_shown_as_text():
+    from gi.repository import GLib
+
+    markup = "<b>x</b>"
+    escaped = GLib.markup_escape_text(markup)
+    win = ImportRecorder({"version": 2, "categories": [], "entries": {}})
+    preview = rolodex.ImportPreviewDialog(
+        win, [{"name": markup, "fields": [], "notes": "", "category": markup}], "/x.csv")
+    rows = [r for r in _walk(preview.get_child()) if isinstance(r, Adw.ActionRow)
+            and not isinstance(r, Adw.ComboRow)]
+    assert [r.get_title() for r in rows] == [escaped]
+
+    mapping = rolodex.CsvMappingDialog(win, [markup, "Title"], [[markup, "a"]], "/x.csv")
+    assert mapping.combos[0].get_title() == escaped
+    assert mapping.combos[0].get_subtitle() == escaped
+
+
+def _walk(widget):
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _walk(child)
+        child = child.get_next_sibling()
+
+
+def test_INV12_csv_export_is_private(app, tmp_path, monkeypatch):
+    win, shown = _csv_window(app, tmp_path, monkeypatch)
+    path = tmp_path / "out.csv"
+    old_umask = os.umask(0o022)
+    try:
+        win._on_export_csv_file_chosen(FakeChooser(str(path)), None)
+        assert os.stat(path).st_mode & 0o777 == 0o600
+        os.chmod(path, 0o644)
+        win._on_export_csv_file_chosen(FakeChooser(str(path)), None)
+        assert os.stat(path).st_mode & 0o777 == 0o600
+    finally:
+        os.umask(old_umask)
+    assert shown == []
+    header, rows = rolodex.read_csv_file(str(path))
+    assert rolodex.detect_csv_format(header) == "rolodex"
+    assert sorted(r[0] for r in rows) == ["Steam", "Wi-Fi"]
+
+
+def test_csv_export_warns_when_the_file_will_be_too_big_to_reimport(app, tmp_path, monkeypatch):
+    win, _shown = _csv_window(app, tmp_path, monkeypatch)
+    bodies = []
+    monkeypatch.setattr(win, "_confirm_destructive", lambda h, body, *a: bodies.append(body))
+    win._on_export_csv()
+    monkeypatch.setattr(rolodex, "MAX_IMPORT_ENTRIES", 1)
+    win._on_export_csv()
+    assert "unencrypted" in bodies[0] and "too large" not in bodies[0]
+    assert "too large for Rolodex to import" in bodies[1]

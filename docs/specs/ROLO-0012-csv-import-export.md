@@ -2,10 +2,10 @@
 # ROLO-0012 — Import and export CSV
 
 Genre: spec
-Status: draft
-Describes: planned
+Status: active
+Describes: current
 
-**Status:** accepted (2026-11-05).
+**Status:** accepted (2026-11-05); implemented 2026-11-08.
 **Kind:** implement.
 **Source:** ROADMAP ROLO-0012 (in-session 2026-07-04; scope decision by the user 2026-09-25).
 
@@ -226,7 +226,6 @@ def export_csv(vault: dict) -> str:
 
 ## 5. Invariants
 
-The test clauses are test-file paths: the code does not exist yet, so nothing runs today.
 Each fixture names the rule it isolates.
 
 - **INV-1** — Exporting a vault with `export_csv`, reading the result with `read_csv_file` →

@@ -11,6 +11,14 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ### Added
 
+- **Import from CSV, and export as CSV.** (ROLO-0012)
+  "Import from CSV file..." reads the CSV export of Bitwarden,
+  KeePassXC, Chrome, Edge, Brave, Firefox or 1Password. Any other
+  CSV opens a step where you say which column is which. Entries keep
+  their categories from the file. "Export as CSV (decrypted)..."
+  writes every entry with its hidden flags and dates, and Rolodex
+  reads that file back with nothing lost.
+
 - **Select several entries to move or delete them together.** (ROLO-0025)
   Ctrl-click, Shift-click, or Ctrl+A in the list selects more than one
   entry. A bar under the list then offers Move to…,

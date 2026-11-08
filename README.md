@@ -32,8 +32,11 @@ data never leaves your machine. It runs on Linux, Windows, and macOS.
   few seconds later, so it doesn't sit there for other apps to read.
 - **Auto-locks when you step away.** After a stretch of inactivity (or instantly with the Lock
   button or `Ctrl+L`), Rolodex re-locks and forgets your master password until you unlock again.
-- **Import your existing list** from a plain text file, with a preview and a skip-duplicates step.
-- **Backup & restore**, plus a plain-text export if you ever want to move your data elsewhere.
+- **Import your existing list** from a plain text file, or from a CSV file that Bitwarden,
+  KeePassXC, Chrome, Edge, Brave, Firefox or 1Password exported — with a preview and a
+  skip-duplicates step.
+- **Backup & restore**, plus a plain-text or CSV export if you ever want to move your data
+  elsewhere. Rolodex reads its own CSV export back with nothing lost.
 - **Change your master password** whenever you like.
 - **Easy to scan.** Different kinds of fields — logins, keys, web addresses, dates — each get
   their own colour accent and icon so a card reads at a glance. The colours stay tellable apart
@@ -129,6 +132,17 @@ Before anything is saved, a preview lists every entry. Entries whose name you al
 unticked, and you can file the whole import under one category. The limits are 10 MB and 2000
 entries per file.
 
+**Import from CSV file** (in the app menu) reads the CSV export of Bitwarden, KeePassXC,
+Chrome, Edge, Brave, Firefox or 1Password, and Rolodex's own CSV export. The file must use
+commas and be saved as UTF-8. A file Rolodex does not recognise opens a step where you say
+which column is the name, the category, the notes, a field, or nothing. Entries keep the
+category the file gives them, unless you pick another in the preview.
+
+**Export as CSV (decrypted)** writes every entry, one per row, with each field's hidden
+setting and the entry's dates. The file is not encrypted: anyone who can read it can read
+every password. Rolodex warns you first, and warns again if the file will be too big to
+import back in one go.
+
 ## Where your things are kept
 
 | File | What it is |
@@ -136,7 +150,7 @@ entries per file.
 | `rolodex.py` | The whole application (it's a single file). |
 | `contacts.vault` | Your encrypted vault — created on first run. Never shared or committed. |
 | `.rolodex.conf` | Window size plus a few non-secret settings (see below), including the update check. Plain text, no secrets. |
-| `Backups/`, `rolodex_export_*.txt` | Backups and exports you create. |
+| `Backups/`, `rolodex_export_*.txt`, `rolodex_export_*.csv` | Backups and exports you create. |
 | `requirements.txt` | The single pip dependency (`cryptography`). |
 | `scripts/` | Maintainer tooling — currently just the release-signing keygen. |
 | `rolodex.desktop` | The app-menu launcher (edit its paths — see above). |

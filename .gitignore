@@ -18,6 +18,7 @@ rolodex-signing.key
 
 # Local export/import artifacts
 rolodex_export_*.txt
+rolodex_export_*.csv
 
 # Python
 __pycache__/

@@ -155,7 +155,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: feature.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0012] **CSV import and export for interoperability with other managers.**
+- ✅ [ROLO-0012] **CSV import and export for interoperability with other managers.**
   Why: the current importer only understands one bespoke text layout; CSV eases migration from other tools.
   Scope: a CSV parser/writer alongside parse_text_file, reusing the ImportPreviewDialog. Warn loudly that CSV export is plaintext (same gating as the existing export).
   Decision (user, 2026-09-25): import auto-detects the header row of
@@ -168,6 +168,11 @@ release, which is what proves the in-app updater end to end: it installs from
   docs/reviews/gate-log.md). The review's one surfaced finding, a vault too big for the
   import caps, was resolved by the user 2026-11-05: the export's
   confirmation warns (spec § 3, § 4.6, INV-13).
+  Shipped 2026-11-08 to the spec: "Import from CSV file..." (five
+  formats, plus a column-mapping step for any other CSV) and "Export as
+  CSV (decrypted)...", lossless on re-import. tests/test_csv.py covers
+  INV-1 to INV-8 and INV-13; tests/test_widgets.py covers INV-9 to
+  INV-12.
   **Layman:** Move data in and out using the spreadsheet format other password apps use.
   Kind: feature.
   Source: in-session-2026-07-04.

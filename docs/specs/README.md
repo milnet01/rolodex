@@ -27,7 +27,7 @@ Rolodex is a small app, so this set is small.
 | [auto-lock.md](auto-lock.md) | Idle auto-lock, manual Lock, and what locking tears down |
 | [clipboard-auto-clear.md](clipboard-auto-clear.md) | Copying a secret and wiping it again |
 | [ROLO-0037-auto-update.md](ROLO-0037-auto-update.md) | Opt-in signed auto-update: the check, the Ed25519 gate, the install and relaunch |
-| [ROLO-0012-csv-import-export.md](ROLO-0012-csv-import-export.md) | CSV import from five password managers or by column mapping, and a lossless CSV export (planned) |
+| [ROLO-0012-csv-import-export.md](ROLO-0012-csv-import-export.md) | CSV import from five password managers or by column mapping, and a lossless CSV export |
 
 ## Spec format
 

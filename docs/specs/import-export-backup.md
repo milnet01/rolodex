@@ -39,13 +39,18 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
   (ROLO-0047).
 - **INV-7a** The preview carries an "Add to category" picker listing "No category" and the
   vault's categories. Every imported entry is filed under the choice; the default is
-  uncategorised (ROLO-0067).
+  uncategorised (ROLO-0067). When a parsed entry carries a non-empty `category` (a CSV
+  import), the picker gains a first option, "Categories from file", which is then the default
+  and files each entry under its own category (ROLO-0012 spec § 4.4).
 - **INV-8** `import_entries(vault, parsed, skip_duplicates=True, category="")` skips entries
   `duplicate_flags` marks when `skip_duplicates` is true, and returns `(imported, skipped)`. The
   preview's commit path, `_finish_import`, passes `skip_duplicates=False`, because the preview
   has already applied the user's choice. An unknown `category` raises `ValueError`. Entries are
   added via `add_entry` (fresh UUID + timestamps) inside `import_entries`; `import_entries`
   itself does not persist — `_finish_import` saves the vault afterwards.
+  `category=None` files each entry under its own `category` key, creating a missing category
+  once, in first-named order, for imported entries only. A parsed `created` or `modified`
+  replaces the fresh timestamp (ROLO-0012 spec § 4.4).
 
 ## Encrypted backup
 
@@ -83,5 +88,5 @@ Retroactive spec for the data-movement features (`parse_text_file`, `import_entr
 ## Notes
 
 - Backup/restore round-trips ciphertext; export is a deliberate one-way plaintext escape hatch.
-- CSV import/export is roadmap ROLO-0012, specified in
+- CSV import and export (ROLO-0012) are specified in
   [ROLO-0012-csv-import-export.md](ROLO-0012-csv-import-export.md).
