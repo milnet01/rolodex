@@ -5213,6 +5213,8 @@ class CsvMappingDialog(Adw.Dialog):
         self.combos = []
         for i, (column, default) in enumerate(zip(header, csv_mapping_defaults(header))):
             sample = next((row[i] for row in rows if row[i]), "")
+            if sample and _csv_field(column, sample)["sensitive"]:
+                sample = MASK  # import's own secrecy rule; never shown in clear (INV-14)
             # Both strings come from an untrusted file and the row renders markup (INV-11).
             row = Adw.ComboRow(title=GLib.markup_escape_text(column or f"Column {i + 1}"),
                                subtitle=GLib.markup_escape_text(sample))

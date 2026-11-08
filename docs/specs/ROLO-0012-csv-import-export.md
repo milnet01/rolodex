@@ -172,8 +172,9 @@ applies only to a named category.
 ### 4.5 The mapping step
 
 A file with no single recognised format opens `CsvMappingDialog` before the preview. It shows
-one row per column, with the header text and the first non-empty value under it. Each row
-has a choice: **Name, Category, Notes, Field, Skip**.
+one row per column, with the header text and the first non-empty value under it. That value
+shows as `MASK` when § 4.3's rule makes the column sensitive (INV-14; user decision
+2026-11-08). Each row has a choice: **Name, Category, Notes, Field, Skip**.
 
 - Defaults, matched on the casefolded header: `name` or `title` → Name; `category`, `folder`
   or `group` → Category; `notes`, `note` or `comments` → Notes; everything else → Field.
@@ -321,6 +322,11 @@ Each fixture names the rule it isolates.
   *Test:* `tests/test_csv.py::test_INV13_export_warns_over_import_limits`. The one-entry case
   isolates the byte limit, which the entry count cannot trip.
   *Breaks when:* only one of the two limits is checked, or the entry check uses `>=`.
+- **INV-14** — The mapping step never shows a sensitive column's sample in clear: a column
+  whose header and first non-empty value make a sensitive field by § 4.3's rule shows `MASK`.
+  An empty sample stays empty.
+  *Test:* `tests/test_widgets.py::test_INV14_mapping_dialog_masks_sensitive_samples`.
+  *Breaks when:* a password or TOTP column's first value appears in the dialog.
 
 ## 6. Failure modes
 
@@ -391,6 +397,7 @@ without the function or rule it names.
 | INV-11 | Partial: `tests/test_widgets.py::test_INV11_csv_entry_cap` and `tests/test_widgets.py::test_INV11_csv_markup_shown_as_text` cover the entry cap and today's labels; **nothing** checks a label added to either dialog later |
 | INV-12 | `tests/test_widgets.py::test_INV12_csv_export_is_private` |
 | INV-13 | `tests/test_csv.py::test_INV13_export_warns_over_import_limits` |
+| INV-14 | `tests/test_widgets.py::test_INV14_mapping_dialog_masks_sensitive_samples` |
 | § 4.3 headers still match the live writers | **nothing** — a writer can change its header in any release; INV-2 pins only the headers known on 2026-11-05 |
 
 ## 11. Cross-doc impact

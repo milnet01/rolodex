@@ -14,7 +14,8 @@ All notable changes to Rolodex are documented here. The format is based on
 - **Import from CSV, and export as CSV.** (ROLO-0012)
   "Import from CSV file..." reads the CSV export of Bitwarden,
   KeePassXC, Chrome, Edge, Brave, Firefox or 1Password. Any other
-  CSV opens a step where you say which column is which. Entries keep
+  CSV opens a step where you say which column is which; that step hides
+  the example value of a password-like column. Entries keep
   their categories from the file. "Export as CSV (decrypted)..."
   writes every entry with its hidden flags and dates, and Rolodex
   reads that file back with nothing lost.

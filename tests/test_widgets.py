@@ -1079,6 +1079,16 @@ def test_INV10_mapping_dialog_gates_continue():
     assert not dlg.continue_btn.get_sensitive()
 
 
+def test_INV14_mapping_dialog_masks_sensitive_samples():
+    win = ImportRecorder({"version": 2, "categories": [], "entries": {}})
+    header = ["Title", "Password", "TOTP", "Seed", "PIN", "Site"]
+    rows = [["a", "hunter2", "not-a-seed", "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP", "",
+             "example.com"]]
+    dlg = rolodex.CsvMappingDialog(win, header, rows, "/x.csv")
+    assert [c.get_subtitle() for c in dlg.combos] == [
+        "a", rolodex.MASK, rolodex.MASK, rolodex.MASK, "", "example.com"]
+
+
 class FakeChooser:
     def __init__(self, path):
         from gi.repository import Gio
