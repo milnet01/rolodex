@@ -67,7 +67,8 @@ def test_INV1_rolodex_csv_round_trips(tmp_path):
 
 BITWARDEN_OLD = ("folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,"
                  "login_password,login_totp")
-BITWARDEN = BITWARDEN_OLD + ",archivedDate"
+# Current writers set archivedDate right after reprompt (buildCommonCipher, read 2026-11-08).
+BITWARDEN = BITWARDEN_OLD.replace("reprompt,", "reprompt,archivedDate,")
 BITWARDEN_ORG = ("collections,type,name,notes,fields,reprompt,login_uri,login_username,"
                  "login_password,login_totp")
 KEEPASSXC_OLD = '"Group","Title","Username","Password","URL","Notes"'
@@ -113,8 +114,8 @@ def _fields(entry):
 
 def test_INV4_bitwarden_maps_columns(tmp_path):
     fmt, [e] = _import(tmp_path, BITWARDEN + "\r\n"
-                       'Work,1,login,GitHub,a note,"PIN: 1234\nloose line\nColour: blue",0,'
-                       "https://github.com,bob,hunter2,JBSWY3DPEHPK3PXP,\r\n")
+                       'Work,1,login,GitHub,a note,"PIN: 1234\nloose line\nColour: blue",0,,'
+                       "https://github.com,bob,hunter2,JBSWY3DPEHPK3PXP\r\n")
     assert fmt == "bitwarden"
     assert e["name"] == "GitHub" and e["category"] == "Work"
     assert e["notes"] == "a note\nloose line"

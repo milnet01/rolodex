@@ -8,7 +8,7 @@ Status: active
 Rolodex is a single-file GTK4/Adwaita desktop app (`rolodex.py`) that stores
 credentials in one AES-encrypted vault file. There is no build system; the only manifest is
 `requirements.txt` (the single pip dependency, `cryptography`). Tests are a seed suite in
-`tests/` (pytest — run `pytest tests/`); broader coverage is ROLO-0001. The project is a git
+`tests/` (pytest — run `python3 -m pytest tests/`; bare `pytest` cannot import `rolodex`); broader coverage is ROLO-0001. The project is a git
 repository, published publicly at `github.com/milnet01/rolodex`.
 
 ## Running
