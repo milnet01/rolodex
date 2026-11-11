@@ -260,7 +260,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: enhancement.
   Source: in-session-2026-09-25 (ROLO-0015 screenshots).
 
-- 📋 [ROLO-0095] **Record trailer clips of the released app for the website's YouTube trailer.**
+- ✅ [ROLO-0095] **Record trailer clips of the released app for the website's YouTube trailer.**
   Why: the website session asked every app for trailer footage; the user said yes.
   Scope: after 1.7.0 ships, so themes are in. 3 to 6 clips of released
   features with `demoreel record -s 1920x1080 --cursor`, demo data only,
@@ -271,6 +271,9 @@ release, which is what proves the in-app updater end to end: it installs from
   (shared; do not delete). Style: the finished trailers in /mnt/Games/Trailers/, such as
   slipcase-trailer.mp4 (the brief's slipcase-sample.mp4 is gone).
   Method: memory note demo-video-method (in-process GLib-timer tour).
+  Done 2026-11-11: four clips (2FA code, search, password health,
+  themes) and notes.md in /mnt/Games/Trailers/incoming/rolodex/; website
+  session told.
   **Layman:** Short video clips of Rolodex in use, with made-up data, for a trailer on the website.
   Kind: marketing.
   Source: user-request-2026-10-15 (ants-projects-hub-website msg 570).
