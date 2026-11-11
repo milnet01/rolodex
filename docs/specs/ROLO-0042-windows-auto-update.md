@@ -149,14 +149,14 @@ is still running that image.
 
 ### 4.5 What the update touches
 
-The helper names four paths: `$exe`, `$new`, `$old` and its log, all in the `.exe`'s folder.
+The helper names three paths, `$exe`, `$new` and `$old`; the app opens its log. All four are in
+the `.exe`'s folder.
 The vault and `.rolodex.conf` live in `APP_DIR` (`GLib.get_user_data_dir()`\\`Rolodex`), which no
 step names. The old process's `VaultLock` on `<vault>.lock` is released when it exits, before
 the relaunch can take it.
 
 The helper log and `.rolodex-update-old` start with `.rolodex-update-`. So the existing
-`sweep_stale_update_temps()` removes them a day after they were last written, as it does any
-other staged leftover.
+`sweep_stale_update_temps()` removes them, as it does any other staged leftover.
 
 ### 4.6 Test releases without a runtime override
 
@@ -169,7 +169,7 @@ OWNER/REPO --version V` writes a copy of `rolodex.py` with four literals replace
 `__version__`, `RELEASE_PUBLIC_KEY_B64`, `GITHUB_OWNER` and `GITHUB_REPO`. It refuses when
 any of these holds:
 
-- one of the four does not occur exactly once;
+- one of the four assignment lines (`NAME = "…"` at module scope) does not occur exactly once;
 - `--key` equals the committed key;
 - `--feed` is `milnet01/rolodex`;
 - `--version` fails `parse_version`.
@@ -178,7 +178,7 @@ any of these holds:
 `permissions: contents: read`, no `environment:` and so no access to `ROLODEX_SIGNING_KEY`.
 Over a matrix of versions it writes the test source over `rolodex.py` in its own checkout, runs
 `packaging/windows-build.sh`, and uploads each `.exe` as an artifact. It publishes nothing. Its
-MSYS2 setup step is a copy of `build.yml`'s.
+MSYS2 setup step and its `pip install` line are copies of those in `build.yml`'s Windows job.
 
 **The test key never leaves this machine.** Each run makes a fresh pair with
 `scripts/gen-signing-key.py` in `/mnt/Emulators/.claude/Scratchpad/Rolodex/update-e2e/`. Only the
@@ -262,10 +262,12 @@ BLOCKED, meaning a precondition failed and nothing was tested.
   `("win32", "AMD64")`. For `("win32", "ARM64")` and any other Windows machine it is `None`, and
   `check_for_update()` makes no request. A release carrying the asset, its `.sig` and a
   `rolodex-windows-x86_64.exe.zip` is offered. *Test:* `tests/test_update_windows.py::test_win32_asset_row`
-  → passes. *Breaks when:* matching becomes a prefix or suffix test (the `.sig` and `.zip` become
+  → passes. *Breaks when:* matching becomes a prefix test (the `.sig` and `.zip` become
   second matches and the guard refuses), or an ARM64 row is added.
 - **INV-2** — A frozen `--selftest` exits non-zero when `platform_asset_name()` is `None`.
-  *Test:* `tests/test_update_windows.py::test_selftest_fails_without_asset`, plus the
+  *Test:* `tests/test_update_windows.py::test_selftest_fails_without_asset`, with a fake
+  `sys._MEIPASS` whose `gi_typelibs` holds every `BUNDLED_TYPELIBS` file → exit 0 with the asset
+  row and non-zero without it; plus the
   Windows job of `build.yml`, which runs `--selftest` and fails the build on a non-zero exit.
   *Breaks when:* MSYS2 Python reports a machine other than `AMD64`, or the check is removed.
 - **INV-3** — The Windows install receives only what `download_and_verify()` returned. That
@@ -291,13 +293,13 @@ BLOCKED, meaning a precondition failed and nothing was tested.
   the wait switches to a PID, or the abort branch relaunches.
 - **INV-6** — The swap never leaves a missing or partly written `.exe`: the original bytes are
   always at the target or at `.rolodex-update-old`. The script never uses `-Force` on a
-  `Move-Item`. *Test:* `test_helper_script_shape` (no `-Force` on any `Move-Item`; the rename
-  order is old-aside, new-in, restore); `scripts/wintest-helper-probe.sh` leg H3 → `PASS`.
+  `Move-Item`. *Test:* `test_helper_script_shape` (no `-Force` on any `Move-Item`; the `Try5`
+  calls run old-aside, new-in, restore, in that order); `scripts/wintest-helper-probe.sh` leg H3 → `PASS`.
   *Breaks when:* `Move-Item -Force` returns (measured: it deletes the destination first), or
   the restore branch is dropped.
 - **INV-7** — Immediately before the swap, the helper re-hashes the staged file. On a
   mismatch it deletes the file, swaps nothing and relaunches the old `.exe`. *Test:*
-  `test_helper_script_shape` (`Get-FileHash` precedes the first `Move-Item`);
+  `test_helper_script_shape` (`Get-FileHash` precedes the first `Try5` call);
   `scripts/wintest-helper-probe.sh` leg H4 → `PASS`. *Breaks when:* the hash check moves after
   the swap, or compares against a digest of the file re-read after verification.
 - **INV-8** — The relaunch is `Start-Process -FilePath $exe`, with no `/bin/sh`. The helper
@@ -305,22 +307,24 @@ BLOCKED, meaning a precondition failed and nothing was tested.
   changed. *Test:* `tests/test_update_windows.py::test_helper_env` → passes;
   `scripts/wintest-update-e2e.sh` cycle 2 → `PASS cycle 2`. *Breaks when:* the reset flag is
   dropped, which makes the relaunched bootloader collide with the old `_MEI` folder.
-- **INV-9** — Every path literal in the helper script is one of the target, the staged file,
-  `.rolodex-update-old` or the helper log, all in the target's folder. The vault's bytes are
-  unchanged by an update. *Test:* `test_helper_script_shape` (extracts the single-quoted
-  literals); `scripts/wintest-update-e2e.sh` → vault SHA-256 equal across both cycles. *Breaks
+- **INV-9** — The literals assigned to `$exe`, `$new` and `$old` are the target, the staged
+  file and `.rolodex-update-old`, all in the target's folder. No other literal in the script
+  contains `\`. The vault's bytes are unchanged by an update. *Test:* `test_helper_script_shape`
+  (the three assignments and the backslash rule); `scripts/wintest-update-e2e.sh` → vault SHA-256 equal across both cycles. *Breaks
   when:* the helper gains a path in `APP_DIR`, or an update path writes the vault.
 - **INV-10** — Production builds carry no key or feed override. `RELEASE_PUBLIC_KEY_B64`,
   `GITHUB_OWNER` and `GITHUB_REPO` are each assigned once, at module scope, to a string
   literal. The SHA-256 of the key literal and the value `milnet01/rolodex` are pinned. The bodies of
   `release_public_key`, `fetch_latest_release`, `_require_update_url` and
-  `download_and_verify` read no `os.environ`, `os.getenv`, `sys.argv` or `load_config`.
+  `download_and_verify` read no `os.environ`, `os.getenv`, `sys.argv` or `load_config`. No
+  reference to `fetch_latest_release` passes an owner or repo, and no call of
+  `check_for_update` outside tests passes `fetcher`.
   *Test:* `tests/test_update_windows.py::test_no_key_or_feed_override` → passes. *Breaks when:*
   someone adds an override, or commits a test key or feed into `rolodex.py`.
 - **INV-11** — Test builds stay apart from releases. `make-update-test-source.py` refuses
   each case in § 4.6. `update-test-build.yml` has no tag trigger, no `contents: write`, no
-  `environment:` and no `ROLODEX_SIGNING_KEY`, and its MSYS2 step equals `build.yml`'s.
-  `build.yml` never names the generator. *Test:*
+  `environment:` and no `ROLODEX_SIGNING_KEY`. Its MSYS2 step and `pip install` line equal those
+  of `build.yml`'s Windows job. `build.yml` never names the generator. *Test:*
   `tests/test_update_test_build.py` → passes. *Breaks when:* the test workflow gains the
   secret or a publish step, or the release workflow starts using the generator.
 - **INV-12** — A Windows update, from "Update Now" to the new version running, completes
@@ -445,7 +449,7 @@ next, is the remaining proof.
 
 ## 12. Cold-eyes loop log
 
-None yet: draft, not reviewed.
+Rows live in `../reviews/ROLO-0042-windows-auto-update-loop-log.md`.
 
 ## 13. Resource cost
 
