@@ -105,7 +105,7 @@ for ($i = 0; $i -lt 300; $i++) { if (-not (Busy)) { break }; Start-Sleep -Millis
 if (Busy) { 'abort: image still running'; Drop; exit 1 }                  # no relaunch
 if ((Get-FileHash -LiteralPath $new -Algorithm SHA256).Hash -ne $want) {
     'abort: staged bytes changed'; Drop; Start-Process -FilePath $exe; exit 1 }
-Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $exe) { Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue }
 if (-not (Try5 $exe $old)) { 'abort: old binary would not move'; Drop; Start-Process -FilePath $exe; exit 1 }
 if (Try5 $new $exe) { Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue; 'swapped' }
 elseif (Try5 $old $exe) { 'restored'; Drop }
@@ -123,7 +123,8 @@ neither runs, which is also when the bootloader has removed its `_MEI` folder. I
 `IOException`, and `dst` no longer existed. It deletes the destination first. Every step above
 is instead a plain rename within one folder, which either happens whole or not at all. At
 every moment the original bytes are at `$exe` or at `$old`, and no partly written `.exe` can
-exist.
+exist. A leftover `$old` is deleted only while `$exe` exists: after a failed restore it is the
+only copy (finbreak 3679b21 guards the same case).
 
 **Between the signature check and the swap** the staged file sits in the `.exe`'s folder for
 up to the wait cap. The helper re-hashes it just before the swap and refuses a mismatch.
