@@ -120,6 +120,37 @@ jobs:
           path: out/${{ matrix.asset }}
           if-no-files-found: error
 
+  # ---- Flatpak bundle (ROLO-0010), x86_64 only ----
+  #
+  # Self-hosted on the release page, not Flathub. Same split as `build`: no secret here. The
+  # bundle is signed below with everything else, which does no harm: the in-app updater matches
+  # asset names exactly (PLATFORM_ASSETS) and never offers rolodex.flatpak.
+  flatpak:
+    name: rolodex.flatpak
+    runs-on: ubuntu-latest
+    # The GNOME SDK download dominates; a cold one takes several minutes.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Build the bundle
+        run: bash packaging/flatpak/build.sh out
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rolodex.flatpak
+          path: out/rolodex.flatpak
+          if-no-files-found: error
+
   # ---- Sign the binaries so the in-app updater will install them (ROLO-0037) ----
   #
   # Ed25519 over the exact bytes of each artifact, published beside it as <asset>.sig.
@@ -131,7 +162,7 @@ jobs:
   # at all, rather than offering something it cannot verify.
   sign-and-release:
     name: Sign + publish
-    needs: build
+    needs: [build, flatpak]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     # Signs and publishes in about 20s; ten minutes leaves room for a slow upload.

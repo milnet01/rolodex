@@ -143,6 +143,11 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   CHANGELOG heading. Both halves are needed: `post_check` is a fixed shell string, so adding a
   `files[]` entry alone does not extend it, and a `__version__` that failed to rewrite would
   pass the bump silently.
+- **Every release needs a `<release>` in `packaging/com.rolodex.Contacts.metainfo.xml`.**
+  `tests/test_packaging.py` fails until its versions and dates match the CHANGELOG headings
+  and the newest equals `__version__`, so a version bump turns it red by design.
+  Build the Flatpak with `packaging/flatpak/build.sh <out dir>`; it is self-hosted, never
+  Flathub. With `FLATPAK_ID` set, `APP_DIR` is the user data dir, as in a frozen build.
 - **`urllib.request` is imported lazily, inside the update fetch helpers only.** Never at
   module scope — `tests/test_update.py` asserts `import rolodex` leaves it out of
   `sys.modules`. The module-scope `import urllib.parse` near the top is a *different* module,

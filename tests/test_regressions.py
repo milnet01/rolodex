@@ -890,3 +890,17 @@ def test_ROLO0009_category_filter_including_uncategorised_and_orphans():
     assert _names(rolodex.search_entries(vault, "", category=None)) == [
         "Bank", "Steam", "Wi-Fi", "Work Gmail"]
     assert _names(rolodex.search_entries(vault, "gmail", category="Games")) == []
+
+
+def test_ROLO0010_flatpak_keeps_data_in_the_user_data_dir(tmp_path):
+    # A Flatpak installs rolodex.py under the read-only /app, so "next to the script" is
+    # unwritable there. Flatpak sets FLATPAK_ID in every sandboxed process; with it set, the
+    # vault and config must live under the user data dir, as in a frozen build.
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env = dict(os.environ, FLATPAK_ID="com.rolodex.Contacts", XDG_DATA_HOME=str(tmp_path))
+    out = subprocess.run(
+        ["python3", "-c", "import rolodex; print(rolodex.VAULT_FILE)"],
+        cwd=repo, env=env, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    assert out == str(tmp_path / "Rolodex" / "contacts.vault")
+    assert (tmp_path / "Rolodex").is_dir()

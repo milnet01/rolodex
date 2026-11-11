@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metainfo (ROLO-0027): what a software centre shows for Rolodex.
+     The <releases> block mirrors CHANGELOG.md; add a <release> for every new version. -->
+<component type="desktop-application">
+  <id>com.rolodex.Contacts</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Rolodex</name>
+  <summary>Keep passwords, keys and private notes in one encrypted file</summary>
+  <developer id="io.github.milnet01">
+    <name>milnet01</name>
+  </developer>
+  <description>
+    <p>Rolodex keeps your logins, API keys and secret notes inside a single encrypted file
+      on your own computer. One master password unlocks it. There is no cloud, no account
+      and no tracking.</p>
+    <ul>
+      <li>Strong encryption, with the key made from your password by Argon2id</li>
+      <li>Categories, search across every field, and colour-coded field types</li>
+      <li>Copy a password in one click; the clipboard clears itself a few seconds later</li>
+      <li>Two-factor codes from stored authenticator secrets</li>
+      <li>A password health report that flags weak and reused passwords</li>
+      <li>Import from Bitwarden, KeePassXC, browsers and 1Password CSV files</li>
+      <li>Encrypted backup and restore, automatic locking, and themes including high contrast</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.rolodex.Contacts.desktop</launchable>
+  <provides>
+    <binary>rolodex</binary>
+  </provides>
+  <categories>
+    <category>Utility</category>
+    <category>Security</category>
+  </categories>
+  <keywords>
+    <keyword>password</keyword>
+    <keyword>credentials</keyword>
+    <keyword>vault</keyword>
+    <keyword>2FA</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/milnet01/rolodex</url>
+  <url type="bugtracker">https://github.com/milnet01/rolodex/issues</url>
+  <url type="vcs-browser">https://github.com/milnet01/rolodex</url>
+  <content_rating type="oars-1.1"/>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <screenshots>
+    <screenshot type="default">
+      <caption>An entry and its fields</caption>
+      <image>https://raw.githubusercontent.com/milnet01/rolodex/main/docs/screenshots/detail.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Editing an entry</caption>
+      <image>https://raw.githubusercontent.com/milnet01/rolodex/main/docs/screenshots/edit.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The password health report</caption>
+      <image>https://raw.githubusercontent.com/milnet01/rolodex/main/docs/screenshots/health.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The light theme</caption>
+      <image>https://raw.githubusercontent.com/milnet01/rolodex/main/docs/screenshots/theme-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The high-contrast theme</caption>
+      <image>https://raw.githubusercontent.com/milnet01/rolodex/main/docs/screenshots/theme-high-contrast.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="2.0.0" date="2026-11-08">
+      <description>
+        <p>Adds CSV import and export, selecting several entries at once, a layout for narrow windows, themes and accent colours, better screen reader support, and a stronger vault key.</p>
+        <ul>
+          <li>Import from CSV and export as CSV. Import reads the CSV exports of Bitwarden, KeePassXC, Chrome, Edge, Brave, Firefox and 1Password, and asks which column is which for any other CSV. Export writes every entry, with its dates and hidden flags, and Rolodex reads it back with nothing lost.</li>
+          <li>Select several entries with Ctrl-click, Shift-click or Ctrl+A, then move or delete them together.</li>
+          <li>The window works when narrow. Below about 560 pixels the list and the entry become two pages, and the window can shrink to 360 pixels.</li>
+          <li>Themes and accent colours in a new Preferences window (Ctrl+,): Automatic, Dark, Light and High contrast, with a choice of accent colours. Dark theme text is brighter.</li>
+          <li>Screen readers now name the search box, the editor fields and the category headers, read hidden values as Hidden value, and announce the show-value button as Show value or Hide value.</li>
+          <li>The vault key is now made with Argon2id, so guessing passwords is far costlier. An existing vault converts the first time you unlock it, and Rolodex 1.6 and older cannot open it afterwards. Seed phrases and two-factor seeds are always hidden, and fields named for two-factor codes get the key colour.</li>
+          <li>Password Health rates common passwords as Weak. Fixes: a plain click selects only the entry clicked, Enter opens an entry after a drag, and a change synced in while unlocking is no longer overwritten silently.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.6.0" date="2026-09-24">
+      <description>
+        <p>Field types now show an icon as well as a colour, and releases are signed so that in-app updates can install.</p>
+        <ul>
+          <li>Each field carries an icon before its label: a padlock for passwords, a cog for keys and tokens, a face for usernames and email, a network symbol for web addresses, a clock for dates and a document for anything else.</li>
+          <li>Releases are signed, so in-app updates can actually install. Rolodex still refuses any update that was tampered with or signed by anyone else.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.5.0" date="2026-09-18">
+      <description>
+        <p>A category filter above the list, multi-word search, and a Linux download that starts on any distribution.</p>
+        <ul>
+          <li>A drop-down above the list shows all entries, one category, or the uncategorised ones.</li>
+          <li>Search finds entries containing every word you type, in any order and in any field, so gmail work finds Work Gmail.</li>
+          <li>The Linux download carries everything it needs, so it starts on openSUSE and other distributions, not only Ubuntu-like ones.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.4.0" date="2026-09-18">
+      <description>
+        <p>Adds backup restore, a sample import file, an opt-in signed update check and a much faster save, along with many fixes to clipboard, import, locking and saving.</p>
+        <ul>
+          <li>Reopens on the entry you last had open, and reorders fields and categories from the keyboard with Ctrl+Up and Ctrl+Down.</li>
+          <li>When the vault file is damaged, the unlock screen offers Restore from Backup or Start a New Vault, and the damaged file is kept beside the original. Setup can use an existing vault file.</li>
+          <li>Import has a sample file and a description of the format, a category picker for imported entries, and a warning when your clock may make two-factor codes wrong.</li>
+          <li>An opt-in update check that only ever installs a release with a valid signature, and never checks on its own until you turn it on. Release downloads carry build provenance.</li>
+          <li>New master passwords need at least 12 characters. Saving no longer re-runs the slow key calculation on every edit, and password health counts reuse across entries only.</li>
+          <li>Security: the updater only connects to GitHub and cannot open a plain http address, slow downloads are cut off, secrets are cleared from input widgets, backup errors no longer show the full file path, recognised two-factor seeds are always hidden, and the release signing key is kept out of the build job.</li>
+          <li>Fixes: the macOS download builds again, copying no longer freezes the window, locking clears the clipboard, two copies cannot overwrite each other, a vault kept as a symlink stays one, auto-lock hides open dialogs, ticked duplicates import, and an interrupted save leaves no stray copy of the vault.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.3.1" date="2026-08-27">
+      <description>
+        <p>Vault saves are now atomic.</p>
+        <ul>
+          <li>A save writes to a temporary file, flushes it to disk and renames it into place, so an interrupted save leaves the previous vault intact.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.3.0" date="2026-07-17">
+      <description>
+        <p>Adds two-factor codes, a password health report, keyboard shortcuts and safer editing.</p>
+        <ul>
+          <li>Generate two-factor codes from stored authenticator secrets, with a countdown ring and one-click copy.</li>
+          <li>A password health report scores every stored secret and flags any reused across entries, worst first. Nothing leaves the app.</li>
+          <li>Keyboard shortcuts: Ctrl+F searches, Ctrl+N adds an entry, Ctrl+Shift+C copies the secret, Ctrl+L locks, Escape clears search, and Ctrl+? lists the shortcuts.</li>
+          <li>Safer editing: a warning when you close with unsaved changes, a warning for a duplicate name, and an eye button to peek at a masked value.</li>
+          <li>Search rebuilds once typing pauses instead of on every keystroke, and shared code was tidied with no change in behaviour.</li>
+          <li>Continuous integration runs the lint and test suite on every change.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.2.0" date="2026-07-16">
+      <description>
+        <p>Adds a Windows download, a password generator, automatic clipboard clearing and automatic locking.</p>
+        <ul>
+          <li>A prebuilt Windows binary is now available.</li>
+          <li>A password generator on sensitive fields, with length and character-class options.</li>
+          <li>A new application icon, a glossy card-file design with transparent corners.</li>
+          <li>A copied secret is wiped from the clipboard a few seconds later, unless you have copied something else since. The delay is set in .rolodex.conf.</li>
+          <li>The vault locks after a period of inactivity, and a Lock button (Ctrl+L) locks it on demand.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.1.0" date="2026-07-04">
+      <description>
+        <p>First public release, with prebuilt binaries for Linux and macOS and the full open-source documentation set.</p>
+        <ul>
+          <li>Prebuilt, self-contained binaries for Linux and macOS. The Windows build failed its self-test and was withheld.</li>
+          <li>Open-source documentation: licence, README, security policy, contributing guide, design document and project roadmap.</li>
+          <li>A seed automated test suite covers the encryption round trip, wrong passwords, file permissions and migration.</li>
+          <li>The import picker opens in your home folder, the desktop launcher has a placeholder path, and the entry count reads 1 entry rather than 1 entries.</li>
+          <li>Packaged builds keep the vault and settings in a per-user data folder, so data survives across runs. Running from source is unchanged.</li>
+          <li>Saving or exporting no longer reports a double-close error when a write fails, and a sensitive field no longer shows its value in cleartext while being edited.</li>
+        </ul>
+      </description>
+    </release>
+    <release version="1.0.0" date="2026-02-27">
+      <description>
+        <p>The initial versioned release, made before the project was published.</p>
+        <ul>
+          <li>An encrypted vault with a master password, owner-only file permissions, and migration of older vaults on load.</li>
+          <li>A GTK 4 and libadwaita interface with an unlock and create flow, a searchable sidebar and a detail pane.</li>
+          <li>Categories with collapse and expand, drag and drop between categories, and a management dialog.</li>
+          <li>Sensitive-field masking with auto-detection, per-entry reveal and colour-coded field types.</li>
+          <li>One-click copy to the clipboard, text-file import with preview and duplicate detection, encrypted backup and restore, plaintext export, and master-password change.</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

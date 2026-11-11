@@ -480,16 +480,27 @@ Wanted work not yet promised to any release.
   Kind: feature.
   Source: in-session-2026-08-27.
 
-- 📋 [ROLO-0010] **Package Rolodex as a Flatpak.**
+- ✅ [ROLO-0010] **Package Rolodex as a Flatpak.**
   Why: today users must hand-install GTK4, libadwaita, and cryptography and edit the .desktop file.
   Scope: a Flatpak manifest (GNOME runtime) bundling the cryptography wheel, a proper desktop file and icon install, and filesystem access scoped to where the vault lives.
+  Done 2026-11-11, self-hosted (Flathub refuses AI-assisted apps).
+  packaging/flatpak/ holds the manifest, desktop file, icon and
+  build.sh; build.yml's flatpak job attaches rolodex.flatpak to each
+  release. Bundles wl-clipboard and xsel, which copy_to_clipboard needs
+  and the GNOME runtime lacks. Verified locally: bundle built,
+  installed, vault round-trip and GUI launch inside the sandbox, then
+  uninstalled. The README download row lands with the next release, when
+  the file exists.
   **Layman:** A one-click install that bundles the app and its dependencies for any Linux distro.
   Kind: package.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0027] **Ship AppStream metainfo so the app appears properly in software centers.**
+- ✅ [ROLO-0027] **Ship AppStream metainfo so the app appears properly in software centers.**
   Why: a com.rolodex.Contacts.metainfo.xml is needed for GNOME Software / KDE Discover listings and pairs with the Flatpak (ROLO-0010).
   Scope: author the AppStream metainfo XML with summary, description, categories, and screenshots, and mirror release notes from CHANGELOG.md into its <releases> block (per documentation standards).
+  Done 2026-11-11: packaging/com.rolodex.Contacts.metainfo.xml,
+  appstreamcli validate passes. tests/test_packaging.py keeps its
+  releases in step with CHANGELOG.md.
   **Layman:** Make the app show up nicely (name, screenshots, description) in Linux app stores.
   Kind: package.
   Source: in-session-2026-07-04.

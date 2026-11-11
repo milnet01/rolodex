@@ -1,0 +1,90 @@
+# Flatpak manifest for Rolodex (ROLO-0010). Built by packaging/flatpak/build.sh and attached to
+# each GitHub release as rolodex.flatpak. Not submitted to Flathub: Flathub does not accept
+# AI-assisted applications.
+#
+# Sources are named file by file, never as the whole directory: a `dir` source would copy
+# contacts.vault and .rolodex.conf from a developer's checkout into the build tree.
+#
+# Inside the sandbox FLATPAK_ID is set, so rolodex.py keeps its data in
+# ~/.var/app/com.rolodex.Contacts/data/Rolodex. Import, export and backup go through the
+# GTK file-chooser portal, so no filesystem permission is granted.
+app-id: com.rolodex.Contacts
+runtime: org.gnome.Platform
+runtime-version: "51"
+sdk: org.gnome.Sdk
+command: rolodex
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # The opt-in update check (ROLO-0037) never offers an update here, because a Flatpak is not
+  # a frozen build. Network stays off.
+modules:
+  # Rolodex copies and clears secrets through these helpers (copy_to_clipboard,
+  # read_clipboard). The GNOME runtime has neither, and without them every copy fails.
+  - name: wl-clipboard
+    buildsystem: meson
+    config-opts:
+      - -Dzshcompletiondir=no
+      - -Dfishcompletiondir=no
+    sources:
+      - type: archive
+        url: https://github.com/bugaevc/wl-clipboard/archive/refs/tags/v2.3.0.tar.gz
+        sha256: b4dc560973f0cd74e02f817ffa2fd44ba645a4f1ea94b7b9614dacc9f895f402
+
+  - name: xsel
+    buildsystem: autotools
+    sources:
+      - type: archive
+        url: https://github.com/kfish/xsel/archive/refs/tags/1.2.1.tar.gz
+        sha256: 18487761f5ca626a036d65ef2db8ad9923bf61685e06e7533676c56d7d60eb14
+
+  # requirements.txt's one pip dependency, plus what it needs. Prebuilt wheels: building
+  # cryptography from source needs a Rust toolchain. The cffi wheel is tagged cp314 and must
+  # match the runtime's Python; a runtime-version bump can need a new cffi wheel.
+  - name: python-deps
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --no-deps --prefix=/app --no-build-isolation *.whl
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/d3/69/2c833a049475e0a3444e94c7d0aca0aa51d166374a449b09e92ac98138de/cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl
+        sha256: 9dab55f57c74c3cad24c323bacbbd04be4705ba6eb0d92e920b1fc4837ed5079
+        only-arches: [x86_64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/71/37/6202e488cc1eb625ea110c292c6bda92823176e023f427d8d5660ce8d632/cryptography-50.0.2-cp311-abi3-manylinux_2_34_aarch64.whl
+        sha256: 87e9ce85beb6b328ba370cc6e6aea483c92617b4c95b1d33a49297eb662bfb04
+        only-arches: [aarch64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/e9/02/4e7d553a7ac4b4238b38b3c1b80d486e9d4436f8d2acbf87a0997fe3f402/cffi-2.1.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+        sha256: b0431303acaea1089ad4b3e9ce4e6518193def1118d4073ca848635ee4ea2e96
+        only-arches: [x86_64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/67/b8/b42132ca113dc567d37684437b46ca1dafc885902b02a110a02d5b511857/cffi-2.1.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl
+        sha256: 58acb8ab8e295e6c5ea12f888cbb13cf21511ef2a3303a23f4325c29d17fe5c1
+        only-arches: [aarch64]
+      - type: file
+        url: https://files.pythonhosted.org/packages/b6/ae/315bbeee126a769cbde43cf4908acb4b40408d8bf8bbf334dd7368d8dadf/pycparser-3.12-py3-none-any.whl
+        sha256: a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e
+
+  - name: rolodex
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 rolodex.py /app/share/rolodex/rolodex.py
+      - printf '#!/bin/sh\nexec python3 /app/share/rolodex/rolodex.py "$@"\n' > rolodex
+      - install -Dm755 rolodex /app/bin/rolodex
+      - install -Dm644 com.rolodex.Contacts.desktop /app/share/applications/com.rolodex.Contacts.desktop
+      - install -Dm644 com.rolodex.Contacts.metainfo.xml /app/share/metainfo/com.rolodex.Contacts.metainfo.xml
+      # A 256-pixel copy of rolodex.png, which is over the 512-pixel limit for an exported
+      # icon. Resizing inside the build fails: the sandboxed image loader cannot start there.
+      - install -Dm644 com.rolodex.Contacts.png /app/share/icons/hicolor/256x256/apps/com.rolodex.Contacts.png
+    sources:
+      - type: file
+        path: ../../rolodex.py
+      - type: file
+        path: com.rolodex.Contacts.png
+      - type: file
+        path: com.rolodex.Contacts.desktop
+      - type: file
+        path: ../com.rolodex.Contacts.metainfo.xml

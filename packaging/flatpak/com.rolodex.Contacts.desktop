@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Rolodex
+Comment=Encrypted credential manager
+Exec=rolodex
+Icon=com.rolodex.Contacts
+Terminal=false
+StartupNotify=true
+StartupWMClass=com.rolodex.Contacts
+Categories=Utility;Security;
+Keywords=password;credentials;vault;secret;2fa;totp;

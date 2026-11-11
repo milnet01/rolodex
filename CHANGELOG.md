@@ -9,6 +9,17 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **A Flatpak download.** (ROLO-0010)
+  Each release carries `rolodex.flatpak`, installable on any Linux
+  distribution with `flatpak install --user rolodex.flatpak`. It keeps the vault in
+  `~/.var/app/com.rolodex.Contacts/data/Rolodex`. It is not on Flathub.
+
+- **Software-centre listing.** (ROLO-0027)
+  The Flatpak carries a description, screenshots and release history, so
+  GNOME Software and Discover show Rolodex properly.
+
 ## [2.0.0] - 2026-11-08
 
 **Theme:** Accessibility, layout and Argon2id
