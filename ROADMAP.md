@@ -486,6 +486,12 @@ Wanted work not yet promised to any release.
   windows-test-machine). The draft says GLib may put Windows data in
   %LOCALAPPDATA%, not the %APPDATA% the README claims; this is
   unverified.
+  2026-11-11: review-contract gate run on
+  docs/specs/ROLO-0042-windows-auto-update.md. Two loops (the cap for a
+  spec): 9 verified, 9 fixed, nothing deferred. Spec now accepted
+  (2026-11-11); implementation is its next reader. Q1 (a public
+  test-release repository) is still open with the user. Loop log:
+  docs/reviews/ROLO-0042-windows-auto-update-loop-log.md.
   **Layman:** Windows users can't yet update from inside the app; the swap has to work differently there.
   Kind: feature.
   Source: in-session-2026-08-27.
