@@ -532,6 +532,10 @@ Wanted work not yet promised to any release.
   the cold GNOME SDK download fits the job's 30-minute limit.
   2026-11-11: CI flatpak job verified. Run 43079351316 passed all four
   legs; the flatpak job took about 90 s and uploaded rolodex.flatpak.
+  2026-11-11: manual "Build binaries" run 43099028783 at commit
+  b47cdf2 passed every leg, including the
+  `rolodex.flatpak` job; Sign + publish skipped (no tag). The CI flatpak
+  job is now verified once.
   **Layman:** A one-click install that bundles the app and its dependencies for any Linux distro.
   Kind: package.
   Source: in-session-2026-07-04.
