@@ -5,7 +5,7 @@ Genre: spec
 Status: active
 Describes: planned
 
-**Status:** spec draft (2026-11-11).
+**Status:** accepted (2026-11-11).
 **Kind:** feature.
 **Source:** ROADMAP ROLO-0042 (in-session 2026-08-27; deferred from ROLO-0037 scope decision S4).
 **Pairs with:** `docs/specs/ROLO-0037-auto-update.md` (the updater this extends).
@@ -90,7 +90,8 @@ the hand-off.
 `_windows_helper_command(exe, new_file, sha256)` returns
 `[<powershell>, "-NoProfile", "-NonInteractive", "-Command", <script>]`. `<powershell>` is
 `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` when that file exists, else
-`shutil.which("powershell")`, else `"powershell.exe"`. Paths are single-quoted with
+`shutil.which("powershell")`, else `"powershell.exe"`. Paths are joined with `ntpath`, so the
+Linux tests, which pass Windows-form paths, see `\` separators. They are single-quoted with
 embedded `'` doubled. `-Command` is not subject to the script execution policy and leaves
 **no helper script file** to clean up or to be edited during the wait. The script, laid out:
 
@@ -175,7 +176,7 @@ any of these holds:
 - `--version` fails `parse_version`.
 
 `.github/workflows/update-test-build.yml` runs on `workflow_dispatch` only. It has
-`permissions: contents: read`, no `environment:` and so no access to `ROLODEX_SIGNING_KEY`.
+`permissions: contents: read` and no `environment:`.
 Over a matrix of versions it writes the test source over `rolodex.py` in its own checkout, runs
 `packaging/windows-build.sh`, and uploads each `.exe` as an artifact. It publishes nothing. Its
 MSYS2 setup step and its `pip install` line are copies of those in `build.yml`'s Windows job.
@@ -282,7 +283,8 @@ BLOCKED, meaning a precondition failed and nothing was tested.
   CREATE_NEW_PROCESS_GROUP` and the `DETACHED_PROCESS` bit clear. A `Popen` `OSError` unlinks
   the staged file, raises `UpdateError` and never calls the wipe. *Test:*
   `tests/test_update_windows.py::test_apply_windows_order_and_flags` → passes, with `Popen`,
-  `os._exit` and `os.replace` monkeypatched and the three flags set to `0x1`, `0x2` and `0x4`.
+  `os._exit`, `os.replace` and `os.chmod` monkeypatched, neither of the last two called, and the
+  three flags set to `0x1`, `0x2` and `0x4`.
   *Breaks when:* the wipe moves before the spawn, `DETACHED_PROCESS` returns, or the Linux
   branch runs on Windows.
 - **INV-5** — The helper waits until no process's `Path` equals the target, capped at 60 s.
@@ -439,7 +441,7 @@ next, is the remaining proof.
 | Document | Change owed |
 |----------|-------------|
 | `docs/specs/ROLO-0037-auto-update.md` | S4, D2's reserved row, § 6's "Running on Windows" row, § 8's "Doing Windows" and § 9's Windows bullet point here. Annotate INV-2, INV-10 and INV-14 "amended by ROLO-0042" for the Windows branch; D9's `/bin/sh` is Linux and macOS only |
-| `rolodex.py` comments | The `PLATFORM_ASSETS` comment that calls `win32` "deliberately ABSENT" |
+| `rolodex.py` comments | The `PLATFORM_ASSETS` comment that calls `win32` "deliberately ABSENT", and `detect_installer`'s docstring, which says a platform without an asset "includes Windows" |
 | `SECURITY.md` § The update check | Add the Windows helper, the re-hash, and what it does not defend (same-user write access to the `.exe` folder). Its "Its current state" paragraph still describes the placeholder key, which ROLO-0041 replaced; fix in passing |
 | `README.md` | Windows updates in-app; users of 2.0.0 or older install the next release by hand once. The data folder is stated as `%APPDATA%\Rolodex`, but GLib documents the local application-data folder; step 3 of § 4.7 records which, and the README follows it |
 | `CLAUDE.md` | Replace "Windows is deliberately absent (deferred)" with the `(win32, AMD64)` row and the never-`Move-Item -Force` rule. Add the Windows-test cadence of § 7 and the two `wintest` scripts |
