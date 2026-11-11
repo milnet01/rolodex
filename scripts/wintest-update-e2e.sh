@@ -81,7 +81,9 @@ PUB="$(cd "$SCRATCH" && python3 "$REPO/scripts/gen-signing-key.py" \
        | sed -n 's/.*RELEASE_PUBLIC_KEY_B64 = "\(.*\)".*/\1/p')"
 [ -n "$PUB" ] || { say "FAIL: could not make a test key"; exit 1; }
 since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-gh workflow run update-test-build.yml -R "$SOURCE_REPO" --ref main -f key="$PUB" \
+# The workflow takes the key as hex: a base64 input made every dispatch fail at startup.
+PUB_HEX="$(python3 -c 'import base64,sys;print(base64.b64decode(sys.argv[1]).hex())' "$PUB")"
+gh workflow run update-test-build.yml -R "$SOURCE_REPO" --ref main -f key_hex="$PUB_HEX" \
     -f feed="$FEED" || { say "FAIL: dispatch"; exit 1; }
 RUN=""
 for _ in $(seq 30); do

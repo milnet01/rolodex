@@ -188,7 +188,8 @@ MSYS2 setup step and its `pip install` line are copies of those in `build.yml`'s
 
 **The test key never leaves this machine.** Each run makes a fresh pair with
 `scripts/gen-signing-key.py` in `/mnt/Emulators/.claude/Scratchpad/Rolodex/update-e2e/`. Only the
-public half goes to the workflow, as an input. The `.sig` files are made locally, and the pair is
+public half goes to the workflow, as an input, in hex: GitHub failed every dispatch whose input
+was the base64 key at startup, and started a hex one (measured 2026-11-11). The `.sig` files are made locally, and the pair is
 deleted when the run ends.
 
 **The feed** is a public repository, `milnet01/rolodex-update-test` (Q1), whose releases the

@@ -13,8 +13,10 @@ name: Update test build
 on:
   workflow_dispatch:
     inputs:
-      key:
-        description: "Test public key (base64 raw Ed25519)"
+      # Hex, not base64: every dispatch whose input was a base64 key ended in startup_failure
+      # ("An unexpected error has occurred"), while a hex value started (2026-11-11).
+      key_hex:
+        description: "Test public key, raw Ed25519 as 64 hex digits"
         required: true
         type: string
       feed:
@@ -39,7 +41,7 @@ jobs:
         version: ["0.0.1", "0.0.2", "0.0.3"]
     env:
       ASSET: rolodex-windows-x86_64.exe
-      TEST_KEY: ${{ inputs.key }}
+      TEST_KEY_HEX: ${{ inputs.key_hex }}
       TEST_FEED: ${{ inputs.feed }}
       TEST_VERSION: ${{ matrix.version }}
 
@@ -65,8 +67,9 @@ jobs:
       - name: Write the test source over rolodex.py
         shell: msys2 {0}
         run: |
+          key="$(python -c 'import base64, os; k = bytes.fromhex(os.environ["TEST_KEY_HEX"]); assert len(k) == 32; print(base64.b64encode(k).decode())')"
           python scripts/make-update-test-source.py rolodex.py rolodex-test.py \
-            --key "$TEST_KEY" --feed "$TEST_FEED" --version "$TEST_VERSION"
+            --key "$key" --feed "$TEST_FEED" --version "$TEST_VERSION"
           mv rolodex-test.py rolodex.py
 
       - name: Build + self-test (Windows)
