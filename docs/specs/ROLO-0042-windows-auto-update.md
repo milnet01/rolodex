@@ -44,7 +44,7 @@ Turning the key on is not enough:
 | S1 | Follow finbreak FIBR-0131: a PowerShell helper, waiting on the image path. Departs in one place, the swap itself (S5) | Brief, 2026-11-11 |
 | S2 | Live only on `(win32, AMD64)`; native ARM64 Windows stays absent | Brief, 2026-11-11 |
 | S3 | An agent verifies on the Windows test PC over `ssh wintest`; the maintainer runs nothing | Brief, 2026-11-11 |
-| S4 | Test releases come from **test builds**: same source, with a test key, a test feed and a test version written in at build time (§ 4.6). No runtime override exists | Drafting agent; open question Q1 |
+| S4 | Test releases come from **test builds**: same source, with a test key, a test feed and a test version written in at build time (§ 4.6). No runtime override exists | Drafting agent; feed repository approved by the user 2026-11-11 (Q1) |
 | S5 | The swap renames the old `.exe` aside, then renames the new one in, never `Move-Item -Force` (§ 4.3) | Drafting agent, from a measurement |
 
 ## 4. Design
@@ -58,7 +58,9 @@ emulation on ARM64 Windows reports `AMD64` and gets the x64 asset, which is what
 `build.yml` builds Windows with MSYS2 UCRT64 Python. Nobody has checked what that Python
 returns for `platform.machine()`. So `--selftest` on a frozen build now exits non-zero
 when `platform_asset_name()` is `None`. Every CI build then proves its own key before a
-release ships an `.exe` that would never be offered an update.
+release ships an `.exe` that would never be offered an update. A hand-made build on a machine
+with no listed asset (ARM Linux, an Intel Mac) fails this check too; the user accepted that on
+2026-11-11, since such machines run from source.
 
 ### 4.2 Staging and the hand-off
 
@@ -429,7 +431,7 @@ Each new test must be seen failing against the code before its change.
 | INV-11 | `tests/test_update_test_build.py` |
 | INV-12 | **nothing** automatic: an agent runs `scripts/wintest-update-e2e.sh` before release; no hook or CI job requires it |
 | § 7 release cadence for the Windows tests | **nothing**: a convention in `CLAUDE.md` |
-| S4 | **nothing**: pending the maintainer (Q1) |
+| S4 | **nothing**: a scope decision (Q1, approved 2026-11-11) |
 
 The live test proves test builds. A real release differs in four literals and in being
 signed by CI with the release key. That CI signing step is shared with the Linux and macOS
@@ -461,7 +463,5 @@ releases on the test feed. Nothing new is added at runtime.
 
 ## 14. Open questions
 
-- **Q1** — The e2e test publishes throwaway test builds as public releases on a new
-  repository, `milnet01/rolodex-update-test`, and deletes them after each run. Recommendation:
-  allow it. It is the only route found that tests the real GitHub download path without
-  adding an override to shipped builds.
+None. Q1 (throwaway test releases on a new public repository,
+`milnet01/rolodex-update-test`, deleted after each run) was approved by the user on 2026-11-11.

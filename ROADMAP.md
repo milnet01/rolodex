@@ -492,6 +492,11 @@ Wanted work not yet promised to any release.
   (2026-11-11); implementation is its next reader. Q1 (a public
   test-release repository) is still open with the user. Loop log:
   docs/reviews/ROLO-0042-windows-auto-update-loop-log.md.
+  2026-11-11 (user): Q1 approved: the live test may publish throwaway
+  signed releases on a new public repo milnet01/rolodex-update-test (not
+  yet created). Also accepted: a hand-made frozen build on a machine
+  with no listed asset fails --selftest. Spec is accepted and ready to
+  build.
   **Layman:** Windows users can't yet update from inside the app; the swap has to work differently there.
   Kind: feature.
   Source: in-session-2026-08-27.
