@@ -310,6 +310,7 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
 | Vault is locked during the check | Check runs normally — it never touches the vault | INV-4 |
 | App is closed mid-download | Prompt torn down; the completing download installs nothing | INV-15 |
 | Signing key reverted to the placeholder | Every install fails closed; the check still works — and INV-11 reddens | INV-11 |
+| Signing secret is not the private half of the shipped key | The release job fails before publishing (`scripts/verify-release-sigs.py`, added 2026-11-11) | `tests/test_release_sigs.py` |
 | Running on Windows | Refused before any offer — the platform is out of scope (S4) | INV-2 |
 | Forced check cannot reach the network | Reported as "couldn't check", never as "up to date" | INV-13 |
 

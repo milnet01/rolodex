@@ -231,14 +231,23 @@ jobs:
 
       # The notes are the CHANGELOG section for this tag, verbatim (ROLO-0039): v1.3.1
       # published with an empty body and had to be corrected by hand. A tag with no section
-      # fails here, before anything is published. Sparse: only CHANGELOG.md is needed.
-      - name: Check out CHANGELOG.md
+      # fails here, before anything is published. Sparse: only the three files read below.
+      - name: Check out CHANGELOG.md and the signature check
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: CHANGELOG.md
+          sparse-checkout: |
+            CHANGELOG.md
+            rolodex.py
+            scripts/verify-release-sigs.py
           sparse-checkout-cone-mode: false
           path: src
+
+      # A signing secret that is not the private half of the key rolodex.py ships still signs
+      # without error, and every installed copy would then refuse this update. Fail here,
+      # before publishing, instead.
+      - name: Verify signatures against the shipped key
+        run: python3 src/scripts/verify-release-sigs.py src/rolodex.py out
 
       - name: Extract release notes
         env:
