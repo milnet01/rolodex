@@ -501,6 +501,12 @@ Wanted work not yet promised to any release.
   installed, vault round-trip and GUI launch inside the sandbox, then
   uninstalled. The README download row lands with the next release, when
   the file exists.
+  2026-11-11: the CI `flatpak` job is NOT yet verified. Manual run
+  43055277650 failed before any build step: the runner could not resolve
+  security.ubuntu.com during apt-get, and the Linux leg failed the same
+  way (macOS and Windows passed). Rerun with `gh workflow run "Build
+  binaries" --ref main` before the next release tag, and watch whether
+  the cold GNOME SDK download fits the job's 30-minute limit.
   **Layman:** A one-click install that bundles the app and its dependencies for any Linux distro.
   Kind: package.
   Source: in-session-2026-07-04.
