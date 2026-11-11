@@ -2373,8 +2373,9 @@ def _ps_quote(text: str) -> str:
 # move is a plain rename within one folder and never Move-Item -Force, which deletes the
 # destination first (measured on Windows 10, 2026-11-11). So the original bytes are always at
 # $exe or at $old. A leftover $old is deleted only while $exe exists, since after a failed
-# restore it is the only copy. Tuning: 300 x 200 ms caps the wait at 60 s; 5 x 500 ms rides out
-# an antivirus scan holding a file. Get-FileHash prints upper-case hex; -ne ignores case.
+# restore it is the only copy. The wait is capped by the clock at 60 s: a count of polls was
+# measured running past 75 s, because each Get-Process takes time of its own (helper probe
+# leg H2, 2026-11-11). 5 x 500 ms rides out an antivirus scan holding a file. Get-FileHash prints upper-case hex; -ne ignores case.
 _WINDOWS_HELPER_SCRIPT = (
     "function Busy { Get-Process -ErrorAction SilentlyContinue"
     " | Where-Object { $_.Path -eq $exe } }",
@@ -2382,7 +2383,8 @@ _WINDOWS_HELPER_SCRIPT = (
     "function Try5($a, $b) { for ($j = 0; $j -lt 5; $j++) {"
     " try { Move-Item -LiteralPath $a -Destination $b -ErrorAction Stop; return $true }"
     " catch { Start-Sleep -Milliseconds 500 } }; return $false }",
-    "for ($i = 0; $i -lt 300; $i++) { if (-not (Busy)) { break }; Start-Sleep -Milliseconds 200 }",
+    "$end = (Get-Date).AddSeconds(60)",
+    "while ((Busy) -and ((Get-Date) -lt $end)) { Start-Sleep -Milliseconds 200 }",
     "if (Busy) { 'abort: image still running'; Drop; exit 1 }",
     "if ((Get-FileHash -LiteralPath $new -Algorithm SHA256).Hash -ne $want) {"
     " 'abort: staged bytes changed'; Drop; Start-Process -FilePath $exe; exit 1 }",
