@@ -476,6 +476,16 @@ Wanted work not yet promised to any release.
   It also cannot be tested from this machine at all, so the swap and relaunch are
   empirical-only: they need a real two-cycle run on Windows against two signed
   releases. Specify it separately rather than folding it into ROLO-0037's spec.
+  2026-11-11: spec drafted at
+  docs/specs/ROLO-0042-windows-auto-update.md, not yet reviewed.
+  review-contract runs before any build. Open question Q1 for the user:
+  may the live test publish throwaway signed test releases on a new
+  PUBLIC repo milnet01/rolodex-update-test, deleted after each run? The
+  user said (2026-11-11) never to ask them to run anything on the
+  Windows PC: an agent drives `ssh wintest` itself (know_how topic
+  windows-test-machine). The draft says GLib may put Windows data in
+  %LOCALAPPDATA%, not the %APPDATA% the README claims; this is
+  unverified.
   **Layman:** Windows users can't yet update from inside the app; the swap has to work differently there.
   Kind: feature.
   Source: in-session-2026-08-27.
@@ -518,6 +528,17 @@ Wanted work not yet promised to any release.
   layout mirrored (Gtk.Widget direction, start/end margins rather than
   left/right, and the CSS border-left field cues become border-inline-start).
   Treat RTL as its own unit of work, not as two more catalogues.
+  2026-11-11: plumbing done but NOT merged. Commit d787f4c on branch
+  worktree-agent-ae0c16ba197240044 (worktree
+  .claude/worktrees/agent-ae0c16ba197240044): gettext setup in the pure
+  layer, every UI string wrapped, tests/conftest.py forces LANGUAGE=en,
+  scripts/update-translations.sh, po/rolodex.pot. Its author reported
+  398 tests passed and ruff clean; nobody else has read the diff yet.
+  Next: read that diff, merge to main, then German/French/Spanish .po
+  files, ship locale/ in packaging/rolodex.spec and the Flatpak
+  manifest, and add tests that each .po covers the .pot and its .mo is
+  current. Agent-reported English change: Password Health with one
+  password now reads "The 1 password looks strong."
   **Layman:** Prepare the app so it can be translated into other languages.
   Kind: accessibility.
   Source: in-session-2026-07-04.
