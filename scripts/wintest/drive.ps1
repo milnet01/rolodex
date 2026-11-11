@@ -22,7 +22,9 @@ public static class RoloWin {
 }
 '@
 
-function Say($msg) { '{0:HH:mm:ss.fff} {1}' -f (Get-Date), $msg }
+# Write-Host, not output: a function's output is its return value, so a logged line inside
+# Focus made its result an always-true array. runner.ps1's *>&1 still captures the host stream.
+function Say($msg) { Write-Host ('{0:HH:mm:ss.fff} {1}' -f (Get-Date), $msg) }
 
 function Window {
     # The GUI is the one-file build's child process; only it has a main window.

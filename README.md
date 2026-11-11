@@ -58,7 +58,7 @@ with everything bundled inside — there's nothing else to install.
 | **macOS** (Apple Silicon) | [`rolodex-macos-arm64`](https://github.com/milnet01/rolodex/releases/latest/download/rolodex-macos-arm64) | It isn't signed yet, so the first time **right-click → Open**, then confirm. After that it opens normally. |
 
 Your vault is saved in your personal data folder (`~/.local/share/Rolodex` on Linux,
-`~/Library/Application Support/Rolodex` on macOS, `%APPDATA%\Rolodex` on Windows), not next to
+`~/Library/Application Support/Rolodex` on macOS, `%LOCALAPPDATA%\Rolodex` on Windows), not next to
 the download.
 
 ## First launch
@@ -175,7 +175,8 @@ import back in one go.
   nothing from your vault, and it will only install a download that carries a valid signature
   from the Rolodex release key. You are always shown what changed and asked first — it never
   installs on its own. In-app updating applies to the downloadable builds; if you run from
-  source, use `git pull`.
+  source, use `git pull`. On Windows it works from the first release after 2.0.0, so if you
+  have 2.0.0 or older, download that release by hand once.
 - This is a personal-use tool, not audited security software. It's one readable file — feel free
   to look before trusting it with anything critical. The nuts-and-bolts of the vault format are
   documented in [`docs/specs/vault-format-and-crypto.md`](docs/specs/vault-format-and-crypto.md).

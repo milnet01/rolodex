@@ -462,7 +462,7 @@ Wanted work not yet promised to any release.
   Kind: doc.
   Source: adopt-project-run-2026-08-14 (from ~/.claude).
 
-- 📋 [ROLO-0042] **Extend in-app auto-update to Windows.**
+- ✅ [ROLO-0042] **Extend in-app auto-update to Windows.**
   Deferred from ROLO-0037 (its scope decision S4), and refused up front rather
   than half-working: PLATFORM_ASSETS has no win32 entry, so is_update_supported()
   is False there and no offer is made.
@@ -497,6 +497,18 @@ Wanted work not yet promised to any release.
   yet created). Also accepted: a hand-made frozen build on a machine
   with no listed asset fails --selftest. Spec is accepted and ready to
   build.
+  2026-11-11: built. (win32, AMD64) row; a PowerShell helper waits
+  on the .exe image path (60 s clock cap), re-hashes the staged bytes,
+  swaps by two renames and relaunches. Frozen --selftest now fails with
+  no asset row. Test builds via scripts/make-update-test-source.py and
+  update-test-build.yml. Verified on the Windows test PC over ssh, with
+  nobody at either machine: helper probe H1-H5 PASS, and
+  scripts/wintest-update-e2e.sh PASS cycle 1 and PASS cycle 2 (twice).
+  Found and fixed on the way: a poll-count cap that ran past 75 s (H2),
+  a base64 dispatch input that made GitHub fail every run at startup
+  (now hex), and a cmd if-chain that skipped the LOCALAPPDATA guard.
+  Windows data folder is %LOCALAPPDATA%\Rolodex (README corrected).
+  Feed repo milnet01/rolodex-update-test created, left empty.
   **Layman:** Windows users can't yet update from inside the app; the swap has to work differently there.
   Kind: feature.
   Source: in-session-2026-08-27.

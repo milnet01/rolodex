@@ -3,9 +3,9 @@
 
 Genre: spec
 Status: active
-Describes: planned
+Describes: current
 
-**Status:** accepted (2026-11-11).
+**Status:** accepted (2026-11-11); built and verified on the Windows test PC (2026-11-11).
 **Kind:** feature.
 **Source:** ROADMAP ROLO-0042 (in-session 2026-08-27; deferred from ROLO-0037 scope decision S4).
 **Pairs with:** `docs/specs/ROLO-0037-auto-update.md` (the updater this extends).
@@ -452,7 +452,7 @@ next, is the remaining proof.
 | `docs/specs/ROLO-0037-auto-update.md` | S4, D2's reserved row, § 6's "Running on Windows" row, § 8's "Doing Windows" and § 9's Windows bullet point here. Annotate INV-2, INV-10 and INV-14 "amended by ROLO-0042" for the Windows branch; D9's `/bin/sh` is Linux and macOS only |
 | `rolodex.py` comments | The `PLATFORM_ASSETS` comment that calls `win32` "deliberately ABSENT", and `detect_installer`'s docstring, which says a platform without an asset "includes Windows" |
 | `SECURITY.md` § The update check | Add the Windows helper, the re-hash, and what it does not defend (same-user write access to the `.exe` folder). Its "Its current state" paragraph still describes the placeholder key, which ROLO-0041 replaced; fix in passing |
-| `README.md` | Windows updates in-app; users of 2.0.0 or older install the next release by hand once. The data folder is stated as `%APPDATA%\Rolodex`, but GLib documents the local application-data folder; step 3 of § 4.7 records which, and the README follows it |
+| `README.md` | Windows updates in-app; users of 2.0.0 or older install the next release by hand once. The data folder is `%LOCALAPPDATA%\Rolodex`, recorded by step 3 of § 4.7 on 2026-11-11; the README said `%APPDATA%` |
 | `CLAUDE.md` | Replace "Windows is deliberately absent (deferred)" with the `(win32, AMD64)` row and the never-`Move-Item -Force` rule. Add the Windows-test cadence of § 7 and the two `wintest` scripts |
 | `.github/workflows/update-test-build.yml` | New (§ 4.6) |
 | `docs/specs/README.md` | Add this spec |

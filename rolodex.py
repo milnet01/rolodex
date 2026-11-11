@@ -104,7 +104,8 @@ __version__ = "2.0.0"
 if getattr(sys, "frozen", False) or os.environ.get("FLATPAK_ID"):
     # Packaged (PyInstaller) build: __file__ lives in a temp extraction dir that is deleted on
     # exit, so persist user data in the per-user data directory — ~/.local/share/Rolodex on
-    # Linux, ~/Library/Application Support/Rolodex on macOS, %APPDATA%\Rolodex on Windows.
+    # Linux, ~/Library/Application Support/Rolodex on macOS, %LOCALAPPDATA%\Rolodex on Windows
+    # (seen on a Windows 10 PC, ROLO-0042).
     # A Flatpak (ROLO-0010) installs the script under the read-only /app, so it does the same;
     # there the data dir is ~/.var/app/<app id>/data/Rolodex.
     APP_DIR = os.path.join(GLib.get_user_data_dir(), "Rolodex")
