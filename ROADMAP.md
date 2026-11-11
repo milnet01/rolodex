@@ -534,8 +534,8 @@ Wanted work not yet promised to any release.
   legs; the flatpak job took about 90 s and uploaded rolodex.flatpak.
   2026-11-11: manual "Build binaries" run 43099028783 at commit
   b47cdf2 passed every leg, including the
-  `rolodex.flatpak` job; Sign + publish skipped (no tag). The CI flatpak
-  job is now verified once.
+  `rolodex.flatpak` job; Sign + publish skipped (no tag). A second green
+  run of the CI flatpak job.
   **Layman:** A one-click install that bundles the app and its dependencies for any Linux distro.
   Kind: package.
   Source: in-session-2026-07-04.
