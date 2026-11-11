@@ -35,6 +35,10 @@ say() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*"; }
 blocked() { say "BLOCKED: $*"; exit 2; }
 wssh() { ssh -o BatchMode=yes wintest "$@"; }
 
+# Each `if` in brackets: unbracketed, cmd makes everything after `&` part of the first `if`'s
+# body, so the second folder was never checked when the first was absent.
+DATA_DIRS_CMD='(if exist "%APPDATA%\Rolodex" echo %APPDATA%\Rolodex) & (if exist "%LOCALAPPDATA%\Rolodex" echo %LOCALAPPDATA%\Rolodex)'
+
 # ---- 0. Preconditions ---------------------------------------------------------------------
 command -v gh >/dev/null || blocked "needs the gh CLI"
 python3 -c 'import cryptography' 2>/dev/null || blocked "needs python3 cryptography"
@@ -43,7 +47,7 @@ wssh 'tasklist /FI "IMAGENAME eq LogonUI.exe" /NH' | grep -qi logonui \
     && blocked "the Windows desktop is locked or signed out (LogonUI is running)"
 wssh 'tasklist /FI "IMAGENAME eq rolodex*" /NH' | grep -qi rolodex \
     && blocked "a Rolodex process is already running on the PC"
-existing="$(wssh 'if exist "%APPDATA%\Rolodex" echo %APPDATA%\Rolodex& if exist "%LOCALAPPDATA%\Rolodex" echo %LOCALAPPDATA%\Rolodex' | tr -d '\r')"
+existing="$(wssh "$DATA_DIRS_CMD" | tr -d '\r')"
 [ -n "$existing" ] && blocked "a Rolodex data folder exists on the PC, which may hold a real vault: $existing"
 gh repo view "$FEED" >/dev/null 2>&1 || blocked "the test feed $FEED does not exist"
 [ -z "$(gh release list -R "$FEED" --json tagName -q '.[].tagName')" ] \
@@ -117,7 +121,7 @@ scp -q scripts/wintest/runner.ps1 scripts/wintest/e2e_check.py "$SCP_E2E/"
 say "3. A --selftest, which creates the data folder"
 wssh "start /wait \"\" \"$WIN_EXE\" --selftest && echo SELFTEST-OK" | grep -q SELFTEST-OK \
     || { say "FAIL: A --selftest"; exit 1; }
-DATA_DIR="$(wssh 'if exist "%APPDATA%\Rolodex" echo %APPDATA%\Rolodex& if exist "%LOCALAPPDATA%\Rolodex" echo %LOCALAPPDATA%\Rolodex' | tr -d '\r')"
+DATA_DIR="$(wssh "$DATA_DIRS_CMD" | tr -d '\r')"
 case "$DATA_DIR" in
     *$'\n'*|"") say "FAIL: expected one data folder, found: '$DATA_DIR'"; DATA_DIR=""; exit 1 ;;
 esac
