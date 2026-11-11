@@ -507,6 +507,8 @@ Wanted work not yet promised to any release.
   way (macOS and Windows passed). Rerun with `gh workflow run "Build
   binaries" --ref main` before the next release tag, and watch whether
   the cold GNOME SDK download fits the job's 30-minute limit.
+  2026-11-11: CI flatpak job verified. Run 43079351316 passed all four
+  legs; the flatpak job took about 90 s and uploaded rolodex.flatpak.
   **Layman:** A one-click install that bundles the app and its dependencies for any Linux distro.
   Kind: package.
   Source: in-session-2026-07-04.
@@ -521,7 +523,7 @@ Wanted work not yet promised to any release.
   Kind: package.
   Source: in-session-2026-07-04.
 
-- 📋 [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
+- 🚧 [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
   Why: all UI text is hardcoded English; internationalization widens reach and is expected of a desktop app.
   Scope: wrap user-facing strings in gettext _(), add a translation template (.pot) and a build step, and document the workflow. Touches every UI string — do it as one deliberate pass.
   Re-requested by the user 2026-09-18: "add other language support to
@@ -545,6 +547,14 @@ Wanted work not yet promised to any release.
   manifest, and add tests that each .po covers the .pot and its .mo is
   current. Agent-reported English change: Password Health with one
   password now reads "The 1 password looks strong."
+  2026-11-11: plumbing merged (79fa785) after a cold read found no
+  defects. German, French and Spanish shipped in 808d09d: po/*.po,
+  compiled locale/, both installers carry locale/ (checked in a local
+  PyInstaller build and a local Flatpak build),
+  tests/test_translations.py guards template, coverage, placeholders and
+  .mo freshness. Workflow in CONTRIBUTING.md § Translations. Next:
+  Chinese and Japanese; then RTL (Hebrew, Arabic) as its own unit.
+  Unchecked: a German UI screenshot of the running app.
   **Layman:** Prepare the app so it can be translated into other languages.
   Kind: accessibility.
   Source: in-session-2026-07-04.
