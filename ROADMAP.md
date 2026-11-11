@@ -416,7 +416,7 @@ release, which is what proves the in-app updater end to end: it installs from
 
 Wanted work not yet promised to any release.
 
-- 📋 [ROLO-0036] **Nothing here says how we would know Rolodex works, outside security.**
+- ✅ [ROLO-0036] **Nothing here says how we would know Rolodex works, outside security.**
   Diagnosed 2026-08-14 by `adopt-project`, run from ~/.claude. Two cold
   readers, five documents each, plus a second pass. No source was read
   and no test was run -- this is not an audit and says nothing about
@@ -453,6 +453,11 @@ Wanted work not yet promised to any release.
   The user's words for the choice were "after this batch of features" over
   "now, before any more features" and "skip it" — so it is deferred, not
   declined, and a future session should not re-ask which.
+  Closed 2026-11-11. The user agreed the "simple" criterion: DESIGN.md
+  "Signs it is working", label SIMPLE-1 (a first-time user, with no
+  help, creates a vault, adds an entry, finds it with search and copies
+  its password within five minutes). The security half stays judged by
+  SECURITY.md's threat model.
   **Layman:** The security side has real, judgeable goals. The "simple to use" half of the promise has none, so nothing can tell us whether we delivered it.
   Kind: doc.
   Source: adopt-project-run-2026-08-14 (from ~/.claude).

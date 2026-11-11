@@ -26,6 +26,14 @@ for feature-level behaviour contracts see `docs/specs/`.
 - **Not defence against a compromised host.** See the threat model in `SECURITY.md`.
 - **Not a plugin platform.** Simplicity is a feature; extensibility is explicitly out of scope.
 
+## Signs it is working
+
+The security half of the purpose is judged against the threat model in `SECURITY.md`. The
+"simple" half is judged here. Agreed with the user 2026-11-11 (ROLO-0036).
+
+- **SIMPLE-1** — A first-time user, with no manual and no help, creates a vault, adds an
+  entry, finds it again with search and copies its password, all within five minutes.
+
 ## The one network carve-out: checking for updates
 
 Rolodex has exactly one thing that talks to the network, added in ROLO-0037: an **opt-in,
