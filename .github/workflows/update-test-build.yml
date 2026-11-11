@@ -21,10 +21,6 @@ on:
         description: "Test release feed, OWNER/REPO"
         required: true
         type: string
-      versions:
-        description: 'JSON list of versions, e.g. ["0.0.1","0.0.2","0.0.3"]'
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -36,8 +32,11 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: true
+      # Fixed, not an input: A, B and C of the e2e test (spec section 4.7). A matrix built from
+      # fromJSON(inputs.*) failed at startup three times on 2026-11-11 with only "An unexpected
+      # error has occurred".
       matrix:
-        version: ${{ fromJSON(inputs.versions) }}
+        version: ["0.0.1", "0.0.2", "0.0.3"]
     env:
       ASSET: rolodex-windows-x86_64.exe
       TEST_KEY: ${{ inputs.key }}
