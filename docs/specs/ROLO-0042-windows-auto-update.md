@@ -104,7 +104,8 @@ function Drop { Remove-Item -LiteralPath $new -Force -ErrorAction SilentlyContin
 function Try5($a, $b) { for ($j = 0; $j -lt 5; $j++) {
     try { Move-Item -LiteralPath $a -Destination $b -ErrorAction Stop; return $true }
     catch { Start-Sleep -Milliseconds 500 } }; return $false }
-for ($i = 0; $i -lt 300; $i++) { if (-not (Busy)) { break }; Start-Sleep -Milliseconds 200 }
+$end = (Get-Date).AddSeconds(60)
+while ((Busy) -and ((Get-Date) -lt $end)) { Start-Sleep -Milliseconds 200 }
 if (Busy) { 'abort: image still running'; Drop; exit 1 }                  # no relaunch
 if ((Get-FileHash -LiteralPath $new -Algorithm SHA256).Hash -ne $want) {
     'abort: staged bytes changed'; Drop; Start-Process -FilePath $exe; exit 1 }
@@ -119,7 +120,9 @@ Start-Process -FilePath $exe
 **The wait is on the image path, not a PID** (FIBR-0131 D3). A one-file build is a bootloader
 plus a child process, both running the `.exe`, and Windows reuses PIDs. The poll ends only when
 neither runs, which is also when the bootloader has removed its `_MEI` folder. Its cap is
-60 s. PowerShell's `-eq` ignores case, as Windows paths do.
+60 s by the clock. A count of 300 polls at 200 ms ran past 75 s on the test PC, because each
+`Get-Process` takes time of its own, and probe leg H2 then swapped an `.exe` still in use
+(measured 2026-11-11). PowerShell's `-eq` ignores case, as Windows paths do.
 
 **Why not FIBR-0131's `Move-Item -Force`.** Measured 2026-11-11 on `ssh wintest`
 (PowerShell 5.1.19041): with the source held open, `Move-Item -Force src dst` raised
@@ -215,8 +218,10 @@ keystrokes with `SendInput`.
 **`scripts/wintest-helper-probe.sh`** tests the helper with no GUI. It writes
 `_windows_helper_command()` output for each leg to JSON on Linux, copies it over, and runs it
 through a copied `.py` file under `wintest`'s own Python, with § 4.2's creation flags. The
-running "image" is a copy of `C:\Windows\System32\PING.EXE` started with `-n <seconds>
-127.0.0.1`. Legs:
+running "image" is a copy of the PC's `cmd.exe` started as `cmd /c ping -n <seconds>
+127.0.0.1`. Started bare, as the relaunch starts it, it keeps running, so a relaunch is
+visible; a `PING.EXE` copy exits at once and hides it. The update is the same `cmd.exe` with
+bytes appended. Legs:
 
 - **H1** — image exits after 5 s: swapped, `$old` gone, log ends `swapped`.
 - **H2** — image runs past the cap: target unchanged, staged gone, no relaunch.
@@ -242,8 +247,9 @@ BLOCKED, meaning a precondition failed and nothing was tested.
 4. **Cycle 1.** Publish B as the latest release on the feed; poll the API until
    `tag_name` is `v0.0.2`. The runner opens A the way a double-click does (Explorer
    `ShellExecute`, per the know-how), focuses its window, types the password and Enter. It
-   then sends the fixed keys that pick **Update Now**; the first run settles that key sequence
-   and the script records it.
+   then sends the fixed keys that pick **Update Now**: Tab, Tab, Enter. The dialog opens with
+   focus on **Later**, and arrow keys do not move between its buttons (measured under Xvfb with
+   real key events, 2026-11-11).
 5. **Check, from Linux, within 120 s:**
    - the `.exe`'s SHA-256 equals B's;
    - a process whose `Path` is the `.exe` started after step 4;
@@ -364,8 +370,8 @@ BLOCKED, meaning a precondition failed and nothing was tested.
 `tests/test_update_test_build.py` (INV-11). Like ROLO-0037 § 7, each one fakes a frozen
 build by monkeypatching `sys.frozen`, `sys.executable`, `sys.platform` and `platform.machine`.
 Each new test must be seen failing against the code before its change.
-`test_helper_script_shape` asserts structure and names, not the tuning values (300 × 200 ms,
-5 × 500 ms), which the probe may change.
+`test_helper_script_shape` asserts structure and names, not the tuning values (the 60 s
+deadline, the 200 ms poll, 5 × 500 ms), which the probe may change.
 
 **Changed:** ROLO-0037's INV-2 test forced `win32` and expected a refusal. It now forces
 `("win32", "ARM64")`. Callers of `download_and_verify()` move to `StagedUpdate`.

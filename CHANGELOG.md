@@ -24,6 +24,11 @@ All notable changes to Rolodex are documented here. The format is based on
   Rolodex now follows the system language. Other languages show English.
   Contributors can add a language; see "Translations" in `CONTRIBUTING.md`.
 
+- **In-app updates on Windows.** (ROLO-0042)
+  On 64-bit Windows, "Update Now" installs the new version and reopens Rolodex, as it already
+  does on Linux and macOS. Your vault and settings are not touched. Windows builds 2.0.0 and
+  older cannot update themselves, so install this release by hand once.
+
 ### Changed
 
 - **Password Health with one password** now reads "The 1 password looks strong.", not "All 1 passwords look strong." (ROLO-0028)

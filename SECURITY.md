@@ -57,9 +57,18 @@ record of the workflow run, commit and runner that produced it. With the GitHub 
 `gh attestation verify <downloaded file> --repo milnet01/rolodex` confirms it came from this
 repository's release workflow. This is separate from the Ed25519 signature the app checks.
 
-**Its current state.** Until a signing key is generated, the built-in key is an all-zero
-placeholder that verifies nothing — so the feature can offer an update and can never install
-one. It fails closed rather than open, deliberately.
+**On Windows (ROLO-0042).** Windows will not replace a running `.exe`, so the app verifies the
+download, starts a short PowerShell helper, and exits. The helper waits until no copy of
+Rolodex is running from that `.exe`, then hashes the downloaded file again and refuses it if
+its bytes differ from the ones whose signature was checked. Only then does it rename the old
+`.exe` aside and the new one in. All of this happens in the `.exe`'s own folder. The re-hash
+guards against accidental change, not against an attacker: a program running as you that can
+write to that folder could replace the `.exe` directly anyway. The helper's log is
+`.rolodex-update-helper.log` beside the `.exe`.
+
+**The signing key.** Builds from 1.6.0 on carry a real release key (ROLO-0041). The release
+workflow checks every signature against it before publishing, so a release signed with the
+wrong key fails to publish rather than being refused by every installed copy.
 
 ## Cryptographic design
 

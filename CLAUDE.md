@@ -160,8 +160,17 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   matches on every well-formed release, the ambiguity guard fires, and no update is ever
   offered — while a synthetic duplicate-asset test still passes. `PLATFORM_ASSETS` is keyed on
   `(sys.platform, platform.machine())`, not on platform alone: an Intel Mac must not be offered
-  the arm64 binary. Windows is deliberately absent (deferred) — `os.replace` cannot swap a
-  locked `.exe` and the relaunch needs `/bin/sh`.
+  the arm64 binary. Windows has one row, `("win32", "AMD64")`; native ARM64 Windows has none
+  (ROLO-0042).
+- **The Windows update helper never uses `Move-Item -Force`.** Measured on the test PC, it
+  deletes the destination before moving, so a failed move leaves no `.exe`. The helper renames
+  the old `.exe` aside, then the new one in, and its wait is capped by the clock, not a poll
+  count (spec `docs/specs/ROLO-0042-windows-auto-update.md` § 4.3). Re-run
+  `scripts/wintest-helper-probe.sh` after any change to `_windows_helper_command()`. Run
+  `scripts/wintest-update-e2e.sh` before the first release with the Windows updater, and before
+  any release that changes the Windows apply path, the helper, its environment or
+  `PLATFORM_ASSETS`. Both drive the Windows test PC over `ssh wintest`; never ask the user to
+  run anything there. No gate runs either.
 - **The release-signing public key in `rolodex.py` is not a routine thing to change.** Every
   binary already shipped trusts this key and nothing else, so replacing it makes those
   installs refuse every later update, and losing the private half does the same with no

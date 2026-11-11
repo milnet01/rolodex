@@ -64,7 +64,7 @@ app". These are the decisions taken in reading that across to Rolodex; the ones 
 | S1 | Port finbreak's shape rather than invent one | Explicit user request naming finbreak |
 | S2 | Opt-in, off by default | **Assumed.** finbreak's own shape, and the only reading that survives § 2.1's conflict with `DESIGN.md` |
 | S3 | Ed25519 signature verification is mandatory, not a later hardening step | **Assumed.** An unsigned updater in a password manager is a remote-code-execution path; see § 8 |
-| S4 | Linux and macOS now; Windows deferred to its own item | Windows needs an out-of-process swap and cannot be tested from this machine at all |
+| S4 | Linux and macOS now; Windows deferred to its own item | Windows needs an out-of-process swap and cannot be tested from this machine at all. Done since by ROLO-0042 |
 | S5 | The user generates and holds the signing key; the repo never contains it | Nothing else is safe, and it is not the session's key to make |
 
 ## 4. Design
@@ -82,13 +82,11 @@ Linux path off `$APPIMAGE`; Rolodex has no AppImage. A PyInstaller one-file buil
 |---|---|---|
 | `linux` | `x86_64` | `rolodex-linux-x86_64` |
 | `darwin` | `arm64` | `rolodex-macos-arm64` |
-| `win32` | `AMD64` | *(reserved — see below)* |
+| `win32` | `AMD64` | `rolodex-windows-x86_64.exe` (ROLO-0042) |
 
-**The `win32` row is reserved for the deferred Windows item and is not live** (S4). Windows is
-out of scope here, and the mechanism this spec describes does not work there: INV-10 `os.replace`s
-the running binary, which Windows refuses on a locked `.exe`, and D9 relaunches through
-`/bin/sh`, which Windows does not have. INV-2 therefore refuses the platform outright, before any
-offer.
+**The `win32` row belongs to `docs/specs/ROLO-0042-windows-auto-update.md`.** This spec's
+install, INV-10's `os.replace` and D9's `/bin/sh` relaunch, is Linux and macOS only. Windows
+installs out of process through ROLO-0042's helper.
 
 **Any other pair yields no asset and therefore no offer** — an Intel Mac is the live case, and
 matching on `sys.platform` alone would offer it the arm64 binary, which INV-10 would then
@@ -164,7 +162,8 @@ recipe.
 **D9 — The relaunch waits for the old process to exit.** A PyInstaller one-file binary unpacks
 itself into a private `_MEI` directory and cleans it up on exit; spawning the replacement before
 that teardown makes the new bootloader collide with the old extraction directory. finbreak
-shipped this bug twice. The relaunch is therefore a detached `/bin/sh` that polls until the old
+shipped this bug twice. On Linux and macOS the relaunch is therefore a detached `/bin/sh` (Windows:
+ROLO-0042 § 4.4) that polls until the old
 PID is gone — hard-capped, so a wedged process cannot hang it — then `exec`s the swapped binary
 with `PYINSTALLER_RESET_ENVIRONMENT=1` and the loader variables restored from PyInstaller's own
 `*_ORIG` values.
@@ -183,13 +182,13 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   absent / `false` / `"yes"` / `1`, and non-zero once explicitly enabled.
 - **INV-2** Off a frozen build (`sys.frozen` unset), `detect_installer()` returns `None`,
   `is_update_supported()` is `False`, and `check_for_update()` returns `None` before any network
-  call. **The same is true on `sys.platform == "win32"` whatever `sys.frozen` says** — Windows is
-  deferred (S4) and this spec's install mechanism does not work there, so the platform is refused
-  before any offer rather than after a 36 MB download. **Both gates live inside
+  call. **The same is true on any `(sys.platform, platform.machine())` pair with no D2 row,
+  whatever `sys.frozen` says**, such as native ARM64 Windows (amended by ROLO-0042, which added
+  the `AMD64` row). **Both gates live inside
   `check_for_update()`**, not in its GUI caller.
   *Test:* `tests/test_update.py` — with `sys.frozen` unset, assert all three and a zero fetcher
-  call count; separately, with `sys.frozen` set and `sys.platform` forced to `win32`, assert the
-  same. This is the **only** test that leaves the frozen state unset; see § 7.
+  call count; separately, with `sys.frozen` set and the pair forced to `("win32", "ARM64")`,
+  assert the same. This is the **only** test that leaves the frozen state unset; see § 7.
 - **INV-3** The check transmits nothing derived from the vault: the request carries a fixed
   `User-Agent`, no query parameters, no cookies and no identifier.
   *Test:* `tests/test_update.py` — the injected fetcher captures the URL and headers; assert the
@@ -244,7 +243,8 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
   refuse; a redirect handler handed an `http://` target refuses before following.
 - **INV-10** The temp is staged in the target binary's own directory, so the install is a
   same-filesystem `os.replace`. Any failure before the replace leaves the running binary
-  byte-for-byte intact.
+  byte-for-byte intact. On Windows the staging holds and the replace does not: amended by
+  ROLO-0042, whose helper renames after exit.
   *Test:* `tests/test_update.py` — assert the temp's parent equals `target_path().parent`; inject
   a raise before `os.replace` and assert the target's bytes are unchanged.
 - **INV-11** The shipped public key is a real 32-byte Ed25519 key, never the all-zero
@@ -283,6 +283,8 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
 - **INV-14** The install swaps the binary and only then relaunches; if the relaunch spawn fails
   the process still exits, because the new binary is already in place and a manual restart gets
   the new version. It never returns into a running window whose binary was swapped underneath it.
+  On Windows, amended by ROLO-0042 INV-4: the helper is spawned first, and nothing is swapped in
+  process.
   *Test:* `tests/test_update.py` — with `subprocess.Popen` and `os._exit` monkeypatched, assert
   the call order, and that a `Popen` raising `OSError` still reaches `os._exit`.
 - **INV-15** The check and the download run off the GTK main thread, marshalling back with
@@ -311,7 +313,7 @@ Comparison zero-pads the shorter tuple, so `0.1` and `0.1.0` compare equal.
 | App is closed mid-download | Prompt torn down; the completing download installs nothing | INV-15 |
 | Signing key reverted to the placeholder | Every install fails closed; the check still works — and INV-11 reddens | INV-11 |
 | Signing secret is not the private half of the shipped key | The release job fails before publishing (`scripts/verify-release-sigs.py`, added 2026-11-11) | `tests/test_release_sigs.py` |
-| Running on Windows | Refused before any offer — the platform is out of scope (S4) | INV-2 |
+| Running on ARM64 Windows | Refused before any offer; x64 Windows is ROLO-0042's | INV-2 |
 | Forced check cannot reach the network | Reported as "couldn't check", never as "up to date" | INV-13 |
 
 `UpdateVerificationError` (a signature that did not verify) and `UpdateError` (everything else
@@ -361,11 +363,11 @@ application and would dominate a single-file app with one dependency.
 the frozen-binary case without changing what a source install needs.
 
 **Doing Windows in this spec.** Rejected — see S4. Its swap cannot happen in process, so it is a
-materially different mechanism, and it cannot be exercised from this machine at all.
+materially different mechanism. ROLO-0042 specifies it.
 
 ## 9. Out of scope
 
-- **Windows.** Deferred to its own roadmap item (S4).
+- **Windows.** Specified by ROLO-0042 (S4).
 - **Updating a source checkout** (`python3 rolodex.py`) or a distro/Flatpak package. Those are
   the packager's job; the feature stays inert there (INV-2).
 - **Delta or partial updates.** The binary is replaced whole.
