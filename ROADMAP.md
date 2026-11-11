@@ -208,7 +208,7 @@ release, which is what proves the in-app updater end to end: it installs from
   Kind: accessibility.
   Source: in-session-2026-09-25 (ROLO-0017).
 
-- 📋 [ROLO-0092] **Send the website refreshed screenshots once 1.7.0 ships.**
+- ✅ [ROLO-0092] **Send the website refreshed screenshots once 1.7.0 ships.**
   Why: the Ants Projects Hub website session (antsprojectshub.co.za)
   holds a logo and three screenshots taken before the themes landed, and
   asked for refreshed ones after 1.7.0.
@@ -222,6 +222,10 @@ release, which is what proves the in-app updater end to end: it installs from
   recorded on the 1.6.0 dark look. Also owed when 1.7.0 ships: a short
   plain-text description of the themes and the Preferences window, plus
   at least one themes screenshot.
+  Done 2026-11-11: seven pictures on the 2.0.0 look in docs/screenshots
+  (detail, edit, health in dark; theme-light, theme-high-contrast,
+  preferences, narrow), sent to the website session with screen-reader
+  text.
   **Layman:** After the new themes are released, retake the pictures on the project website so they show the current look.
   Kind: chore.
   Source: in-session-2026-09-25 (ants-projects-hub-website session).

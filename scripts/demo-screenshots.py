@@ -12,6 +12,11 @@ narrow and narrow-detail, the list and the entry page of a phone-width window (R
 and select and narrow-select, every entry selected with the bulk bar showing (ROLO-0025).
 Optional second and third arguments pick the theme and the accent (ROLO-0015), e.g.
 `detail light teal`.
+
+`demoreel shot` takes the picture as soon as the main window draws, which is before any scene
+that opens something on a timer has opened it. For those (health, edit, preferences,
+narrow-detail, select, narrow-select) add `-a 'wait 6'`: at two seconds the edit dialog was
+still fading in. The narrow scenes also need a narrow display, `-s 400x800`.
 """
 import os
 import shutil
