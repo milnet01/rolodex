@@ -132,12 +132,12 @@ def test_INV2_unfrozen_build_is_inert(monkeypatch, tmp_path):
     assert fetcher.calls == 0
 
 
-def test_INV2_windows_is_refused_even_when_frozen(monkeypatch, tmp_path):
-    """Windows is deferred (S4) and this mechanism does not work there, so it is refused
-    BEFORE any offer rather than after a download."""
+def test_INV2_arm64_windows_is_refused_even_when_frozen(monkeypatch, tmp_path):
+    """Native ARM64 Windows has no asset (ROLO-0042 S2), so it is refused BEFORE any offer
+    rather than after a download. x64 Windows is ROLO-0042's and has its own tests."""
     monkeypatch.setattr(rolodex.sys, "frozen", True, raising=False)
     monkeypatch.setattr(rolodex.sys, "platform", "win32")
-    monkeypatch.setattr("platform.machine", lambda: "AMD64")
+    monkeypatch.setattr("platform.machine", lambda: "ARM64")
     conf = tmp_path / ".conf"
     conf.write_text(json.dumps({"check_for_updates": True}))
     fetcher = CountingFetcher()
@@ -317,7 +317,7 @@ def test_INV8_good_signature_returns_the_verified_bytes(frozen, tmp_path, signin
         downloader=_downloader(payload, signing_key.sign(payload)),
         target=str(frozen),
     )
-    with open(result, "rb") as fh:
+    with open(result.path, "rb") as fh:
         assert fh.read() == payload
 
 
@@ -468,7 +468,7 @@ def test_INV10_temp_is_staged_beside_the_target(frozen, tmp_path, signing_key):
     result = rolodex.download_and_verify(
         _info(tmp_path), downloader=_downloader(payload, signing_key.sign(payload)), target=str(frozen)
     )
-    assert os.path.dirname(result) == os.path.dirname(str(frozen)), (
+    assert os.path.dirname(result.path) == os.path.dirname(str(frozen)), (
         "the temp must share a filesystem with the target, or os.replace cannot be atomic"
     )
 
@@ -483,7 +483,7 @@ def test_INV10_failure_before_replace_leaves_the_binary_intact(frozen, tmp_path,
 
     monkeypatch.setattr(rolodex.os, "replace", boom)
     with pytest.raises(rolodex.UpdateError):
-        rolodex.apply_update(str(new_file), target=str(frozen))
+        rolodex.apply_update(rolodex.StagedUpdate(str(new_file), ""), target=str(frozen))
 
     assert frozen.read_bytes() == original
     assert not new_file.exists(), "a failed install must not orphan its temp"
@@ -497,7 +497,7 @@ def test_INV14_swap_then_relaunch_then_exit(frozen, tmp_path, monkeypatch):
     monkeypatch.setattr(rolodex.subprocess, "Popen", lambda *a, **kw: order.append("relaunch"))
     monkeypatch.setattr(rolodex.os, "_exit", lambda code: order.append(f"exit{code}"))
 
-    rolodex.apply_update(str(new_file), target=str(frozen), on_before_exec=lambda: order.append("wipe"))
+    rolodex.apply_update(rolodex.StagedUpdate(str(new_file), ""), target=str(frozen), on_before_exec=lambda: order.append("wipe"))
 
     assert frozen.read_bytes() == b"replacement", "the swap must have committed"
     assert order == ["wipe", "relaunch", "exit0"]
@@ -516,7 +516,7 @@ def test_INV14_a_failed_relaunch_still_exits(frozen, tmp_path, monkeypatch):
     monkeypatch.setattr(rolodex.subprocess, "Popen", boom)
     monkeypatch.setattr(rolodex.os, "_exit", lambda code: order.append(f"exit{code}"))
 
-    rolodex.apply_update(str(new_file), target=str(frozen))
+    rolodex.apply_update(rolodex.StagedUpdate(str(new_file), ""), target=str(frozen))
     assert order == ["exit0"]
 
 
@@ -710,7 +710,7 @@ def test_INV15_install_after_cancel_unlinks_and_does_not_apply(tmp_path, monkeyp
     staged.write_bytes(b"x")
     monkeypatch.setattr(rolodex, "apply_update", lambda *a, **k: pytest.fail("installed"))
     win = _CancelledWin()
-    rolodex.MainWindow._install_update(win, str(staged))
+    rolodex.MainWindow._install_update(win, rolodex.StagedUpdate(str(staged), ""))
     assert not staged.exists()
     assert win.busy_released
 
@@ -719,7 +719,7 @@ def test_INV15_download_finishing_after_cancel_unlinks_and_never_schedules_insta
         tmp_path, monkeypatch):
     staged = tmp_path / "staged"
     staged.write_bytes(b"x")
-    monkeypatch.setattr(rolodex, "download_and_verify", lambda info: str(staged))
+    monkeypatch.setattr(rolodex, "download_and_verify", lambda info: rolodex.StagedUpdate(str(staged), ""))
     scheduled = []
     monkeypatch.setattr(rolodex.GLib, "idle_add", lambda fn, *a: scheduled.append(fn))
     win = _CancelledWin()

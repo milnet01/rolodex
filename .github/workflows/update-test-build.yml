@@ -1,0 +1,84 @@
+name: Update test build
+
+# Windows TEST builds for the live in-app update test (ROLO-0042 section 4.6), run only by
+# scripts/wintest-update-e2e.sh. Each build is this source with a throwaway public key, a
+# throwaway feed and a 0.0.x version written in by scripts/make-update-test-source.py. It
+# uploads artifacts and publishes nothing; the e2e script signs them locally with the private
+# half, which never leaves that machine.
+#
+# Kept apart from releases on purpose (INV-11, tests/test_update_test_build.py): no tag
+# trigger, read-only token, no environment, no secret. The MSYS2 step and the pip line are
+# copies of build.yml's Windows job, so the test exercises the code a release would ship.
+
+on:
+  workflow_dispatch:
+    inputs:
+      key:
+        description: "Test public key (base64 raw Ed25519)"
+        required: true
+        type: string
+      feed:
+        description: "Test release feed, OWNER/REPO"
+        required: true
+        type: string
+      versions:
+        description: 'JSON list of versions, e.g. ["0.0.1","0.0.2","0.0.3"]'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: test build ${{ matrix.version }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        version: ${{ fromJSON(inputs.versions) }}
+    env:
+      ASSET: rolodex-windows-x86_64.exe
+      TEST_KEY: ${{ inputs.key }}
+      TEST_FEED: ${{ inputs.feed }}
+      TEST_VERSION: ${{ matrix.version }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up MSYS2 (Windows)
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-python-cryptography
+            mingw-w64-ucrt-x86_64-python-pip
+
+      # The inputs reach the script through the environment, never a ${{ }} expansion inside
+      # run: (zizmor template-injection, ROLO-0055).
+      - name: Write the test source over rolodex.py
+        shell: msys2 {0}
+        run: |
+          python scripts/make-update-test-source.py rolodex.py rolodex-test.py \
+            --key "$TEST_KEY" --feed "$TEST_FEED" --version "$TEST_VERSION"
+          mv rolodex-test.py rolodex.py
+
+      - name: Build + self-test (Windows)
+        shell: msys2 {0}
+        run: |
+          python -m pip install --upgrade pyinstaller certifi
+          bash packaging/windows-build.sh "$ASSET"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rolodex-test-${{ matrix.version }}
+          path: out/rolodex-windows-x86_64.exe
+          if-no-files-found: error

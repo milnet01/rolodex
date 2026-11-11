@@ -23,7 +23,7 @@ import time
 import urllib.parse
 import uuid
 from datetime import datetime
-from typing import IO, TYPE_CHECKING, Any, Callable, ClassVar, Collection, Iterable, NoReturn
+from typing import IO, TYPE_CHECKING, Any, Callable, ClassVar, Collection, Iterable, NamedTuple, NoReturn
 
 if TYPE_CHECKING:  # for annotations only: INV-12 keeps these network modules out at runtime
     import ssl
@@ -1885,12 +1885,13 @@ GITHUB_REPO = "rolodex"
 # under those the release's own required <asset>.sig is a second match, so the ambiguity guard
 # would fire on every well-formed release and no update would ever be offered (INV-5).
 #
-# win32 is deliberately ABSENT. Windows is deferred (S4) and this mechanism does not work
-# there -- os.replace refuses a locked .exe and the relaunch needs /bin/sh -- so it is refused
-# up front by is_update_supported() rather than after a download (INV-2).
+# Windows is x64 only (ROLO-0042 S2). An x64 build emulated on ARM64 Windows reports AMD64
+# and gets the x64 asset, which is what it is running; native ARM64 gets no row. Windows
+# installs through a PowerShell helper after exit (_apply_update_windows), not os.replace.
 PLATFORM_ASSETS = {
     ("linux", "x86_64"): "rolodex-linux-x86_64",
     ("darwin", "arm64"): "rolodex-macos-arm64",
+    ("win32", "AMD64"): "rolodex-windows-x86_64.exe",
 }
 
 # Resource bounds (INV-9). The asset cap has headroom over what build.yml currently produces;
@@ -1967,7 +1968,7 @@ def detect_installer() -> str | None:
     """The path of the binary to replace, or None where self-update cannot run (INV-2).
 
     None off a frozen build (a source checkout or a distro package -- updating those is the
-    packager's job), and None on any platform without an asset, which includes Windows.
+    packager's job), and None on any platform without an asset, such as ARM64 Windows.
     """
     if not getattr(sys, "frozen", False):
         return None
@@ -2235,10 +2236,18 @@ def check_for_update(*, force: bool = False, fetcher: Callable[[], dict] | None 
         return None
 
 
+class StagedUpdate(NamedTuple):
+    """A verified download (ROLO-0042 INV-3). *sha256* is the hex digest of the very buffer
+    the signature was checked over, so the Windows helper can refuse bytes changed since."""
+
+    path: str
+    sha256: str
+
+
 def download_and_verify(info: UpdateInfo, *,
                         downloader: Callable[[str, str, int], None] | None = None,
-                        target: str | None = None) -> str:
-    """Download the asset and its .sig, verify Ed25519 over the exact bytes, return a temp path.
+                        target: str | None = None) -> StagedUpdate:
+    """Download the asset and its .sig, verify Ed25519 over the exact bytes, stage them.
 
     Staged in the target binary's OWN directory so the eventual install is a same-filesystem
     os.replace (INV-10). On any failure every temp is removed and the running binary is left
@@ -2270,7 +2279,7 @@ def download_and_verify(info: UpdateInfo, *,
             raise UpdateVerificationError(_("the update's signature did not verify")) from exc
         os.unlink(sig_tmp)
         sig_tmp = None
-        return asset_tmp
+        return StagedUpdate(asset_tmp, hashlib.sha256(data).hexdigest())
     except BaseException as exc:
         for tmp in (asset_tmp, sig_tmp):
             if tmp:
@@ -2332,10 +2341,131 @@ def _relaunch_command(binary: str, pid: int) -> list:
     ]
 
 
-def apply_update(new_file: str, *, target: str | None = None,
+def _windows_helper_env() -> dict:
+    """The Windows helper's environment, which Start-Process passes on to the relaunched .exe
+    (ROLO-0042 INV-8). Only the bootloader reset flag is added: the LD_* fix-ups in
+    _relaunch_env are POSIX-only."""
+    env = dict(os.environ)
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return env
+
+
+def _powershell_path() -> str:
+    """powershell.exe by absolute path where it exists, so the spawn needs no PATH lookup."""
+    system_root = os.environ.get("SystemRoot")
+    if system_root:
+        import ntpath
+
+        candidate = ntpath.join(system_root, "System32", "WindowsPowerShell", "v1.0",
+                                "powershell.exe")
+        if os.path.isfile(candidate):
+            return candidate
+    return shutil.which("powershell") or "powershell.exe"
+
+
+def _ps_quote(text: str) -> str:
+    """A PowerShell single-quoted literal: inside one, the only escape is a doubled '."""
+    return "'" + text.replace("'", "''") + "'"
+
+
+# The helper (ROLO-0042 section 4.3), one line per statement; joined with "; " below. It waits
+# on the image PATH, not a PID: a one-file build is two processes and Windows reuses PIDs. Every
+# move is a plain rename within one folder and never Move-Item -Force, which deletes the
+# destination first (measured on Windows 10, 2026-11-11). So the original bytes are always at
+# $exe or at $old. A leftover $old is deleted only while $exe exists, since after a failed
+# restore it is the only copy. Tuning: 300 x 200 ms caps the wait at 60 s; 5 x 500 ms rides out
+# an antivirus scan holding a file. Get-FileHash prints upper-case hex; -ne ignores case.
+_WINDOWS_HELPER_SCRIPT = (
+    "function Busy { Get-Process -ErrorAction SilentlyContinue"
+    " | Where-Object { $_.Path -eq $exe } }",
+    "function Drop { Remove-Item -LiteralPath $new -Force -ErrorAction SilentlyContinue }",
+    "function Try5($a, $b) { for ($j = 0; $j -lt 5; $j++) {"
+    " try { Move-Item -LiteralPath $a -Destination $b -ErrorAction Stop; return $true }"
+    " catch { Start-Sleep -Milliseconds 500 } }; return $false }",
+    "for ($i = 0; $i -lt 300; $i++) { if (-not (Busy)) { break }; Start-Sleep -Milliseconds 200 }",
+    "if (Busy) { 'abort: image still running'; Drop; exit 1 }",
+    "if ((Get-FileHash -LiteralPath $new -Algorithm SHA256).Hash -ne $want) {"
+    " 'abort: staged bytes changed'; Drop; Start-Process -FilePath $exe; exit 1 }",
+    "if (Test-Path -LiteralPath $exe) {"
+    " Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue }",
+    "if (-not (Try5 $exe $old)) {"
+    " 'abort: old binary would not move'; Drop; Start-Process -FilePath $exe; exit 1 }",
+    "if (Try5 $new $exe) {"
+    " Remove-Item -LiteralPath $old -Force -ErrorAction SilentlyContinue; 'swapped' }"
+    " elseif (Try5 $old $exe) { 'restored'; Drop }"
+    " else { 'RESTORE FAILED: the old binary is at ' + $old }",
+    "Start-Process -FilePath $exe",
+)
+
+
+def _windows_helper_command(exe: str, new_file: str, sha256: str) -> list:
+    """The PowerShell command that installs *new_file* over *exe* after this process exits,
+    then relaunches *exe* (ROLO-0042 section 4.3).
+
+    -Command, not a .ps1 file: it is not subject to the execution policy and leaves no script
+    for another process to edit during the wait. Paths are joined with ntpath so they come out
+    in Windows form even when a Linux test builds the command. *sha256* must be the hex digest
+    of the verified bytes; anything else is refused rather than spliced into the script.
+    """
+    import ntpath
+
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+        raise ValueError("sha256 must be 64 hex digits")
+    old = ntpath.join(ntpath.dirname(exe), ".rolodex-update-old")
+    head = (f"$exe = {_ps_quote(exe)}; $new = {_ps_quote(new_file)}; "
+            f"$old = {_ps_quote(old)}; $want = '{sha256}'")
+    script = "; ".join((head, *_WINDOWS_HELPER_SCRIPT))
+    return [_powershell_path(), "-NoProfile", "-NonInteractive", "-Command", script]
+
+
+def _apply_update_windows(staged: "StagedUpdate", target: str,
+                          on_before_exec: Callable[[], None] | None) -> NoReturn:
+    """Hand the swap to a PowerShell helper, then exit so it can run (ROLO-0042 INV-4).
+
+    Windows will not replace a running .exe, so nothing is moved in process. The spawn comes
+    BEFORE the wipe: if PowerShell cannot start (antivirus, AppLocker), the error is shown in a
+    window that still works. Never DETACHED_PROCESS -- PowerShell started with it dies before
+    its first line (finbreak FIBR-0444). The flags are looked up by name so this imports on
+    Linux, where they do not exist.
+    """
+    flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0)
+             | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    log_path = os.path.join(os.path.dirname(os.path.abspath(target)),
+                            ".rolodex-update-helper.log")
+    log: IO[bytes] | int
+    try:
+        log = open(log_path, "wb")
+    except OSError:
+        log = subprocess.DEVNULL
+    try:
+        subprocess.Popen(
+            _windows_helper_command(target, staged.path, staged.sha256),
+            env=_windows_helper_env(),
+            creationflags=flags,
+            close_fds=True,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+    except OSError as exc:
+        try:
+            os.unlink(staged.path)
+        except OSError:
+            pass
+        raise UpdateError(_("could not install the update: {error}").format(error=exc)) from exc
+    finally:
+        if not isinstance(log, int):
+            log.close()
+    if on_before_exec is not None:
+        on_before_exec()
+    os._exit(0)
+
+
+def apply_update(staged: "StagedUpdate", *, target: str | None = None,
                  on_before_exec: Callable[[], None] | None = None) -> NoReturn:
     """Swap the verified download into place and relaunch, replacing this process (INV-14).
 
+    On Windows the swap happens after exit, in a helper (_apply_update_windows). Elsewhere:
     chmod then os.replace: any failure before the replace completes leaves the running binary
     byte-for-byte intact, so the temp is dropped and the error surfaced with nothing installed.
     Once the swap HAS committed we never return into a live window whose binary changed
@@ -2345,6 +2475,9 @@ def apply_update(new_file: str, *, target: str | None = None,
     target = target or detect_installer()
     if target is None:
         raise UpdateError(_("self-update is not supported on this build"))
+    if sys.platform == "win32":
+        return _apply_update_windows(staged, str(target), on_before_exec)
+    new_file = staged.path
     try:
         os.chmod(new_file, 0o755)
         os.replace(new_file, target)
@@ -4035,7 +4168,7 @@ class MainWindow(Adw.ApplicationWindow):
         # rather than installing something the user is no longer consenting to.
         if self._update_cancelled:
             try:
-                os.unlink(staged)
+                os.unlink(staged.path)
             except OSError:
                 pass
             GLib.idle_add(self._set_update_busy, False)
@@ -4051,7 +4184,7 @@ class MainWindow(Adw.ApplicationWindow):
         """
         if self._update_cancelled:
             try:
-                os.unlink(staged)
+                os.unlink(staged.path)
             except OSError:
                 pass
             self._set_update_busy(False)
@@ -6418,6 +6551,15 @@ def main():
                        if not os.path.exists(os.path.join(bundled, t))]
             if missing:
                 print(f"rolodex selftest: FAIL — not bundled: {', '.join(missing)}")
+                sys.exit(1)
+            # ROLO-0042 INV-2: a frozen build with no PLATFORM_ASSETS row can never be offered
+            # an update, so CI fails here rather than shipping one. Nobody had checked what
+            # MSYS2's Python reports for platform.machine(); this makes every CI build prove it.
+            if platform_asset_name() is None:
+                import platform
+
+                print("rolodex selftest: FAIL — no update asset for "
+                      f"({sys.platform!r}, {platform.machine()!r})")
                 sys.exit(1)
         print("rolodex selftest: OK (GTK/Adw/cryptography loaded)")
         return
