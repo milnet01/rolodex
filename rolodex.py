@@ -3,6 +3,7 @@
 
 import base64
 import csv
+import gettext
 import hashlib
 import hmac
 import io
@@ -42,6 +43,51 @@ from cryptography.fernet import Fernet, InvalidToken  # noqa: E402
 from cryptography.hazmat.primitives.kdf.argon2 import Argon2id  # noqa: E402
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # noqa: E402
 from cryptography.hazmat.primitives import hashes  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Translations (ROLO-0028)
+# ---------------------------------------------------------------------------
+
+GETTEXT_DOMAIN = "rolodex"
+# Compiled catalogs: locale/<lang>/LC_MESSAGES/rolodex.mo beside the script, or inside a frozen
+# build's bundle. scripts/update-translations.sh builds them from po/*.po.
+LOCALE_DIR = os.path.join(
+    getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))), "locale")
+
+
+def _os_ui_languages() -> list[str] | None:
+    """The language to translate into, or None to let gettext read the environment.
+
+    gettext reads LANGUAGE, LC_ALL, LC_MESSAGES and LANG. A Linux desktop sets them; Windows
+    and a macOS app launched from Finder usually set none, so there the OS is asked instead."""
+    if any(os.environ.get(var) for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG")):
+        return None
+    name = ""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            buf = ctypes.create_unicode_buffer(85)  # LOCALE_NAME_MAX_LENGTH
+            if ctypes.windll.kernel32.GetUserDefaultLocaleName(buf, len(buf)):
+                name = buf.value.replace("-", "_")  # "de-DE" -> "de_DE"
+        elif sys.platform == "darwin":
+            out = subprocess.run(["defaults", "read", "-g", "AppleLocale"],
+                                 capture_output=True, text=True, timeout=5, check=False)
+            if out.returncode == 0:
+                name = out.stdout.strip().split("@")[0]  # "de_DE@rg=dezzzz" -> "de_DE"
+    except (OSError, AttributeError, ValueError, subprocess.SubprocessError):
+        return None
+    return [name] if name else None
+
+
+def _install_translations() -> gettext.NullTranslations:
+    """The catalog for the user's language; English (the msgids themselves) when none ships."""
+    return gettext.translation(GETTEXT_DOMAIN, LOCALE_DIR, languages=_os_ui_languages(),
+                               fallback=True)
+
+
+_translations = _install_translations()
+_ = _translations.gettext
+ngettext = _translations.ngettext
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -112,7 +158,7 @@ LAST_ENTRY_KEY = "last_entry_id"
 # export, and far below what would exhaust memory.
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
 MAX_IMPORT_ENTRIES = 2000  # ROLO-0070: rows the import preview will build in one go
-_IMPORT_TOO_LARGE = "That file is too large to import (the limit is 10 MB)."
+_IMPORT_TOO_LARGE = _("That file is too large to import (the limit is 10 MB).")
 
 # ---------------------------------------------------------------------------
 # Encryption layer
@@ -199,7 +245,7 @@ class VaultTooNewError(ValueError):
 
     def __init__(self) -> None:
         super().__init__(
-            "This vault was made by a newer version of Rolodex. Update Rolodex to open it.")
+            _("This vault was made by a newer version of Rolodex. Update Rolodex to open it."))
 
 
 def vault_fingerprint(path: str) -> tuple[int, int, int] | None:
@@ -241,7 +287,7 @@ class VaultLock:
             _lock_fd(fd)
         except OSError:
             os.close(fd)
-            raise VaultBusyError("This vault is already open in another Rolodex window.") from None
+            raise VaultBusyError(_("This vault is already open in another Rolodex window.")) from None
         self._fd = fd
 
     def release(self) -> None:
@@ -289,7 +335,7 @@ def save_vault(vault_data: dict, password: str, salt: bytes, path: str) -> None:
     save_vault_with_key(vault_data, derive_key(password, salt), salt, path)
 
 
-_CORRUPT = "Vault file is truncated or corrupt"
+_CORRUPT = _("Vault file is truncated or corrupt")
 
 
 def read_vault_header(fp: IO[bytes]) -> tuple[Argon2Params | None, bytes]:
@@ -320,7 +366,7 @@ def read_vault_header(fp: IO[bytes]) -> tuple[Argon2Params | None, bytes]:
           and int(magic[3:]) > NEWEST_FORMAT):
         raise VaultTooNewError()
     else:
-        raise ValueError("Not a valid vault file")
+        raise ValueError(_("Not a valid vault file"))
     salt = fp.read(16)
     if len(salt) != 16:
         raise ValueError(_CORRUPT)
@@ -399,7 +445,7 @@ def create_vault_with_key(password: str, path: str) -> tuple[dict, bytes, bytes]
     -- restored by hand, synced down -- was destroyed (ROLO-0044).
     """
     if os.path.exists(path):
-        raise FileExistsError("A vault already exists here. Restart Rolodex to unlock it.")
+        raise FileExistsError(_("A vault already exists here. Restart Rolodex to unlock it."))
     salt = os.urandom(16)
     key = derive_key(password, salt)
     vault_data = {"version": 2, "categories": [], "entries": {}}
@@ -437,16 +483,16 @@ def adopt_vault_file(source: str, path: str) -> str | None:
     with open(source, "rb") as fp:
         data = fp.read(MAX_IMPORT_BYTES * 10 + 1)
     if len(data) > MAX_IMPORT_BYTES * 10:
-        raise ValueError("That file is too large to be a Rolodex vault.")
+        raise ValueError(_("That file is too large to be a Rolodex vault."))
     header = io.BytesIO(data)
     try:
         read_vault_header(header)
     except VaultTooNewError:
         raise
     except ValueError:
-        raise ValueError("That file is not a Rolodex vault.") from None
+        raise ValueError(_("That file is not a Rolodex vault.")) from None
     if header.tell() == len(data):  # a header and no ciphertext
-        raise ValueError("That file is not a Rolodex vault.")
+        raise ValueError(_("That file is not a Rolodex vault."))
     aside = set_aside_vault(path)
     write_private_file(path, data)
     return aside
@@ -461,12 +507,12 @@ def migrate_vault(vault: dict) -> dict:
     recovering from that.
     """
     if not isinstance(vault, dict) or not isinstance(vault.get("entries"), dict):
-        raise ValueError("Vault contents are not a valid vault")
+        raise ValueError(_("Vault contents are not a valid vault"))
     version = vault.get("version", 1)
     if isinstance(version, int) and version > 2:
         raise ValueError(
-            f"This vault was written by a newer version of Rolodex (format v{version}). "
-            "Upgrade Rolodex to open it."
+            _("This vault was written by a newer version of Rolodex (format v{version}). "
+              "Upgrade Rolodex to open it.").format(version=version)
         )
     if "categories" not in vault:
         vault["categories"] = []
@@ -477,7 +523,7 @@ def migrate_vault(vault: dict) -> dict:
     vault["categories"] = list(dict.fromkeys(c for c in raw if isinstance(c, str) and c))
     for entry in vault["entries"].values():
         if not isinstance(entry, dict):
-            raise ValueError("Vault contents are not a valid vault")
+            raise ValueError(_("Vault contents are not a valid vault"))
         if "category" not in entry:
             entry["category"] = ""
         # A legacy or hand-edited vault can lack a key that the editor, search and the password
@@ -551,12 +597,12 @@ def field_category(label: str) -> str:
 # mechanically — no tool compares two drawings — so changing a name here means rendering
 # the set again and looking at it.
 FIELD_CATEGORY_CUES = {
-    "credential": ("dialog-password-symbolic",   "Credential field"),     # key / padlock
-    "key":        ("emblem-system-symbolic",     "Key or token field"),   # a cog
-    "identity":   ("emoji-people-symbolic",      "Identity field"),       # a face
-    "url":        ("network-workgroup-symbolic", "Link field"),           # a network
-    "date":       ("emoji-recent-symbolic",      "Date field"),           # a clock
-    "other":      ("text-x-generic-symbolic",    "Uncategorised field"),  # a document
+    "credential": ("dialog-password-symbolic",   _("Credential field")),     # key / padlock
+    "key":        ("emblem-system-symbolic",     _("Key or token field")),   # a cog
+    "identity":   ("emoji-people-symbolic",      _("Identity field")),       # a face
+    "url":        ("network-workgroup-symbolic", _("Link field")),           # a network
+    "date":       ("emoji-recent-symbolic",      _("Date field")),           # a clock
+    "other":      ("text-x-generic-symbolic",    _("Uncategorised field")),  # a document
 }
 
 
@@ -823,7 +869,7 @@ def is_common_password(secret: str) -> bool:
     return lowered in COMMON_PASSWORDS or (bool(base) and base in COMMON_PASSWORDS)
 
 
-STRENGTH_LABELS = {0: "Empty", 1: "Weak", 2: "Fair", 3: "Good", 4: "Strong"}
+STRENGTH_LABELS = {0: _("Empty"), 1: _("Weak"), 2: _("Fair"), 3: _("Good"), 4: _("Strong")}
 
 
 def password_strength(secret: str) -> int:
@@ -1231,7 +1277,8 @@ def read_csv_file(filepath: str) -> tuple[list[str], list[list[str]]]:
     try:
         records = list(reader)
     except csv.Error as e:
-        raise ValueError(f"Row {reader.line_num} of the CSV file is malformed: {e}") from None
+        raise ValueError(_("Row {row} of the CSV file is malformed: {error}").format(
+            row=reader.line_num, error=e)) from None
     if not records:
         return [], []
     header, rows = records[0], []
@@ -1239,7 +1286,8 @@ def read_csv_file(filepath: str) -> tuple[list[str], list[list[str]]]:
         if not any(row):
             continue
         if len(row) > len(header):
-            raise ValueError(f"Row {number} of the CSV file has more cells than the header.")
+            raise ValueError(_("Row {row} of the CSV file has more cells than the header.").format(
+                row=number))
         rows.append(row + [""] * (len(header) - len(row)))
     return header, rows
 
@@ -1367,10 +1415,11 @@ def csv_mapping_problem(mapping: list[str]) -> str | None:
     """Why a mapping cannot continue, or None when it can: exactly one Name column, and at
     most one each of Category and Notes."""
     if mapping.count("name") != 1:
-        return "Choose exactly one column as the Name."
-    for target, title in (("category", "Category"), ("notes", "Notes")):
+        return _("Choose exactly one column as the Name.")
+    for target, problem in (("category", _("Choose at most one column as the Category.")),
+                            ("notes", _("Choose at most one column as the Notes."))):
         if mapping.count(target) > 1:
-            return f"Choose at most one column as the {title}."
+            return problem
     return None
 
 
@@ -1603,8 +1652,8 @@ def config_choice(conf: dict, key: str, allowed: Collection[str], default: str) 
 
 THEME_KEY = "theme"
 ACCENT_KEY = "accent"
-THEMES = {"auto": "Automatic", "dark": "Dark", "light": "Light",
-          "high-contrast": "High contrast"}
+THEMES = {"auto": _("Automatic"), "dark": _("Dark"), "light": _("Light"),
+          "high-contrast": _("High contrast")}
 DEFAULT_THEME = "auto"
 # libadwaita's own accent values, so a preset matches what the desktop would draw. Red and
 # yellow are left out on purpose: red reads as "delete" here, and yellow text is unreadable on
@@ -1612,6 +1661,10 @@ DEFAULT_THEME = "auto"
 ACCENT_PRESETS = {"blue": "#3584e4", "teal": "#2190a4", "green": "#3a944a",
                   "orange": "#ed5b00", "pink": "#d56199", "purple": "#9141ac",
                   "slate": "#6f8396"}
+# What the Preferences list shows for each preset; the keys above are what the config stores.
+ACCENT_NAMES = {"blue": _("Blue"), "teal": _("Teal"), "green": _("Green"),
+                "orange": _("Orange"), "pink": _("Pink"), "purple": _("Purple"),
+                "slate": _("Slate")}
 ACCENT_SYSTEM = "system"
 DEFAULT_ACCENT = ACCENT_SYSTEM
 FALLBACK_ACCENT = ACCENT_PRESETS["blue"]
@@ -1983,7 +2036,7 @@ def _require_https(url: str) -> None:
     """Refuse any non-https URL (INV-9). Defence in depth: even a tampered API response
     pointing an asset at http:// or file:// is never opened."""
     if not isinstance(url, str) or not url.startswith("https://"):
-        raise UpdateError("refusing a non-https update URL")
+        raise UpdateError(_("refusing a non-https update URL"))
 
 
 # ROLO-0058: the only hosts the updater talks to. A release's download links point at
@@ -2003,7 +2056,8 @@ def _require_update_url(url: str) -> None:
     _require_https(url)
     host = (urllib.parse.urlsplit(url).hostname or "").lower()
     if host != "github.com" and not host.endswith(_UPDATE_HOST_SUFFIXES):
-        raise UpdateError(f"refusing an update URL outside GitHub ({host or 'no host'})")
+        raise UpdateError(_("refusing an update URL outside GitHub ({host})").format(
+            host=host or _("no host")))
 
 
 def _read_capped(response: Any, max_bytes: int, deadline: float,
@@ -2019,13 +2073,13 @@ def _read_capped(response: Any, max_bytes: int, deadline: float,
     parts = []
     while True:
         if time.monotonic() > deadline:
-            raise UpdateError("the update server is too slow; try again later")
+            raise UpdateError(_("the update server is too slow; try again later"))
         chunk = response.read(_DOWNLOAD_CHUNK)
         if not chunk:
             break
         received += len(chunk)
         if received > max_bytes:
-            raise UpdateError("download exceeds the size cap")
+            raise UpdateError(_("download exceeds the size cap"))
         if sink is None:
             parts.append(chunk)
         else:
@@ -2177,7 +2231,7 @@ def check_for_update(*, force: bool = False, fetcher: Callable[[], dict] | None 
         return UpdateInfo(version, urls[0], urls[1], release.get("body") or "")
     except Exception as exc:
         if force:
-            raise UpdateError(f"could not check for updates: {exc}") from exc
+            raise UpdateError(_("could not check for updates: {error}").format(error=exc)) from exc
         return None
 
 
@@ -2195,7 +2249,7 @@ def download_and_verify(info: UpdateInfo, *,
 
     target = target or detect_installer()
     if target is None:
-        raise UpdateError("self-update is not supported on this build")
+        raise UpdateError(_("self-update is not supported on this build"))
     fetch = downloader or download_to
     directory = os.path.dirname(os.path.abspath(target))
     asset_tmp = sig_tmp = None
@@ -2213,7 +2267,7 @@ def download_and_verify(info: UpdateInfo, *,
         try:
             release_public_key().verify(signature, data)
         except InvalidSignature as exc:
-            raise UpdateVerificationError("the update's signature did not verify") from exc
+            raise UpdateVerificationError(_("the update's signature did not verify")) from exc
         os.unlink(sig_tmp)
         sig_tmp = None
         return asset_tmp
@@ -2231,7 +2285,7 @@ def download_and_verify(info: UpdateInfo, *,
         # HTTPError / SSLError / TimeoutError verbatim. Convert them; let control-flow through.
         if isinstance(exc, (UpdateError, KeyboardInterrupt, SystemExit)):
             raise
-        raise UpdateError(f"could not stage the update: {exc}") from exc
+        raise UpdateError(_("could not stage the update: {error}").format(error=exc)) from exc
 
 
 def _relaunch_env() -> dict:
@@ -2290,7 +2344,7 @@ def apply_update(new_file: str, *, target: str | None = None,
     """
     target = target or detect_installer()
     if target is None:
-        raise UpdateError("self-update is not supported on this build")
+        raise UpdateError(_("self-update is not supported on this build"))
     try:
         os.chmod(new_file, 0o755)
         os.replace(new_file, target)
@@ -2299,7 +2353,7 @@ def apply_update(new_file: str, *, target: str | None = None,
             os.unlink(new_file)
         except OSError:
             pass
-        raise UpdateError(f"could not install the update: {exc}") from exc
+        raise UpdateError(_("could not install the update: {error}").format(error=exc)) from exc
     if on_before_exec is not None:
         on_before_exec()
     try:
@@ -2408,7 +2462,7 @@ def make_file_dialog(title, filter_name, *, pattern=None, mime_type=None):
     chooser = Gtk.FileDialog()
     chooser.set_title(title)
     filters = Gio.ListStore.new(Gtk.FileFilter)
-    for name, glob, mime in ((filter_name, pattern, mime_type), ("All files", "*", None)):
+    for name, glob, mime in ((filter_name, pattern, mime_type), (_("All files"), "*", None)):
         file_filter = Gtk.FileFilter()
         file_filter.set_name(name)
         if glob:
@@ -2489,7 +2543,7 @@ class UnlockDialog(Gtk.Window):
         vbox.append(title)
 
         if is_new:
-            sub = Gtk.Label(label="Create a master password to encrypt your vault.")
+            sub = Gtk.Label(label=_("Create a master password to encrypt your vault."))
             sub.set_wrap(True)
             sub.add_css_class("dim-label")
             vbox.append(sub)
@@ -2503,11 +2557,11 @@ class UnlockDialog(Gtk.Window):
         pw_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         pw_list.add_css_class("boxed-list")
 
-        self.pw_entry = Adw.PasswordEntryRow(title="Master password")
+        self.pw_entry = Adw.PasswordEntryRow(title=_("Master password"))
         pw_list.append(self.pw_entry)
 
         if is_new:
-            self.pw_confirm = Adw.PasswordEntryRow(title="Confirm password")
+            self.pw_confirm = Adw.PasswordEntryRow(title=_("Confirm password"))
             pw_list.append(self.pw_confirm)
 
         vbox.append(pw_list)
@@ -2525,7 +2579,7 @@ class UnlockDialog(Gtk.Window):
         vbox.append(self.status)
 
         # Unlock / Create button
-        btn_label = "Create Vault" if is_new else "Unlock"
+        btn_label = _("Create Vault") if is_new else _("Unlock")
         self.btn = Gtk.Button(label=btn_label)
         self.btn.add_css_class("suggested-action")
         self.btn.add_css_class("pill")
@@ -2539,12 +2593,12 @@ class UnlockDialog(Gtk.Window):
         # (ROLO-0078).
         self.recover_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         restore_btn = Gtk.Button(
-            label="Use an Existing Vault File…" if is_new else "Restore from Backup…")
+            label=_("Use an Existing Vault File…") if is_new else _("Restore from Backup…"))
         restore_btn.add_css_class("flat")
         restore_btn.connect("clicked", self._on_restore_backup)
         self.recover_box.append(restore_btn)
         if not is_new:
-            new_btn = Gtk.Button(label="Start a New Vault…")
+            new_btn = Gtk.Button(label=_("Start a New Vault…"))
             new_btn.add_css_class("flat")
             new_btn.connect("clicked", self._on_start_new)
             self.recover_box.append(new_btn)
@@ -2582,18 +2636,20 @@ class UnlockDialog(Gtk.Window):
     def _on_activate(self, *_args):
         pw = self.pw_entry.get_text()
         if not pw:
-            self._show_error("Please enter a password.")
+            self._show_error(_("Please enter a password."))
             return
         if not self.btn.get_sensitive():
             return  # an unlock is already running
 
         if self.is_new:
             if len(pw) < MIN_PASSWORD_LENGTH:
-                self._show_error(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+                self._show_error(ngettext("Password must be at least {n} character.",
+                                          "Password must be at least {n} characters.",
+                                          MIN_PASSWORD_LENGTH).format(n=MIN_PASSWORD_LENGTH))
                 return
             pw2 = self.pw_confirm.get_text()
             if pw != pw2:
-                self._show_error("Passwords do not match.")
+                self._show_error(_("Passwords do not match."))
                 return
             if not self._take_lock():
                 return
@@ -2601,13 +2657,13 @@ class UnlockDialog(Gtk.Window):
             # main thread the window froze for the whole derivation with the button still live
             # and nothing saying why (ROLO-0070).
             self.btn.set_sensitive(False)
-            self.btn.set_label("Creating...")
+            self.btn.set_label(_("Creating..."))
             threading.Thread(target=self._try_create, args=(pw,), daemon=True).start()
         else:
             if not self._take_lock():
                 return
             self.btn.set_sensitive(False)
-            self.btn.set_label("Unlocking...")
+            self.btn.set_label(_("Unlocking..."))
             # Run decryption in a thread so the UI doesn't freeze
             threading.Thread(target=self._try_unlock, args=(pw,), daemon=True).start()
 
@@ -2619,7 +2675,7 @@ class UnlockDialog(Gtk.Window):
             vault, salt, key, fingerprint = unlock_vault(pw, self.vault_path)
             GLib.idle_add(self._unlock_ok, vault, salt, pw, key, fingerprint)
         except InvalidToken:
-            GLib.idle_add(self._unlock_fail, "Wrong password.")
+            GLib.idle_add(self._unlock_fail, _("Wrong password."))
         except VaultTooNewError as e:
             # Not a damaged file, so no restore or start-fresh offer (INV-21).
             GLib.idle_add(self._unlock_fail, str(e))
@@ -2641,7 +2697,8 @@ class UnlockDialog(Gtk.Window):
             self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock,
                                fingerprint=fingerprint)
         except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
-            self._unlock_fail(f"The vault opened but could not be loaded: {exc}")
+            self._unlock_fail(
+                _("The vault opened but could not be loaded: {error}").format(error=exc))
             return
         self._wipe_password_entries()
         self.close()
@@ -2659,7 +2716,8 @@ class UnlockDialog(Gtk.Window):
         try:
             self.app.open_main(vault, salt, pw, self.vault_path, key, lock=self.lock)
         except Exception as exc:  # noqa: BLE001 - last resort; the alternative is a frozen dialog
-            return self._create_fail(f"The vault was created but could not be opened: {exc}")
+            return self._create_fail(
+                _("The vault was created but could not be opened: {error}").format(error=exc))
         self._wipe_password_entries()
         self.close()
         return False
@@ -2667,7 +2725,7 @@ class UnlockDialog(Gtk.Window):
     def _create_fail(self, msg):
         self.lock.release()
         self.btn.set_sensitive(True)
-        self.btn.set_label("Create Vault")
+        self.btn.set_label(_("Create Vault"))
         self._show_error(msg)
         return False
 
@@ -2683,7 +2741,7 @@ class UnlockDialog(Gtk.Window):
     def _unlock_fail(self, msg, unreadable=False):
         self.lock.release()
         self.btn.set_sensitive(True)
-        self.btn.set_label("Unlock")
+        self.btn.set_label(_("Unlock"))
         self._show_error(msg)
         if unreadable:
             self.recover_box.set_visible(True)
@@ -2699,7 +2757,7 @@ class UnlockDialog(Gtk.Window):
         self.close()
 
     def _on_restore_backup(self, *_args):
-        chooser = make_file_dialog("Choose a Rolodex vault or backup", "Rolodex vaults",
+        chooser = make_file_dialog(_("Choose a Rolodex vault or backup"), _("Rolodex vaults"),
                                    pattern="*.vault")
         backups = os.path.join(os.path.dirname(os.path.abspath(self.vault_path)), "Backups")
         start = backups if os.path.isdir(backups) else GLib.get_home_dir()
@@ -2727,22 +2785,25 @@ class UnlockDialog(Gtk.Window):
             self.lock.release()
             self._show_error(str(exc))
             return
-        notice = "Vault file installed. Enter its master password to unlock it."
+        notice = _("Vault file installed. Enter its master password to unlock it.")
         if aside:
-            notice += f" The unreadable vault was kept as {os.path.basename(aside)}."
+            # Translators: appended, after a space, to "Vault file installed. Enter its master
+            # password to unlock it."
+            notice += " " + _("The unreadable vault was kept as {filename}.").format(
+                filename=os.path.basename(aside))
         self._reopen(False, notice)
 
     def _on_start_new(self, *_args):
         dialog = Adw.AlertDialog(
-            heading="Start a New Vault?",
+            heading=_("Start a New Vault?"),
             body=(
-                "The vault that will not open is kept, renamed beside the original with "
+                _("The vault that will not open is kept, renamed beside the original with "
                 "“.unreadable-” and the date added, so it can still be recovered. A new, "
-                "empty vault is then created with a new master password."
+                "empty vault is then created with a new master password.")
             ),
         )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("new", "Start New Vault")
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("new", _("Start New Vault"))
         dialog.set_response_appearance("new", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
@@ -2758,9 +2819,10 @@ class UnlockDialog(Gtk.Window):
             aside = set_aside_vault(self.vault_path)
         except OSError as exc:
             self.lock.release()
-            self._show_error(f"Could not move the unreadable vault aside: {exc}")
+            self._show_error(_("Could not move the unreadable vault aside: {error}").format(error=exc))
             return
-        notice = f"The unreadable vault was kept as {os.path.basename(aside)}." if aside else ""
+        notice = _("The unreadable vault was kept as {filename}.").format(
+            filename=os.path.basename(aside)) if aside else ""
         self._reopen(True, notice)
 
 
@@ -2794,7 +2856,7 @@ class EntryRow(Gtk.ListBoxRow):
 
     def _on_drag_begin(self, source, drag):
         icon = Gtk.DragIcon.get_for_drag(drag)
-        lbl = Gtk.Label(label=self.label.get_text() or "Entry")
+        lbl = Gtk.Label(label=self.label.get_text() or _("Entry"))
         lbl.add_css_class("caption")
         lbl.set_margin_top(6)
         lbl.set_margin_bottom(6)
@@ -2833,7 +2895,7 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
         box.append(self.arrow)
 
         # Category name
-        display_name = category_name if category_name else "Uncategorised"
+        display_name = category_name if category_name else _("Uncategorised")
         name_label = Gtk.Label(label=display_name.upper(), xalign=0, hexpand=True)
         name_label.add_css_class("category-header-label")
         box.append(name_label)
@@ -2844,7 +2906,9 @@ class CategoryHeaderRow(Gtk.ListBoxRow):
         box.append(count_label)
 
         self.set_child(box)
-        a11y_label(self, f"{display_name}, {count} {entries_noun(count)}")
+        # Translators: what a screen reader says for a category heading, e.g. "Games, 3 entries".
+        a11y_label(self, ngettext("{category}, {n} entry", "{category}, {n} entries",
+                                  count).format(category=display_name, n=count))
         # An int, not a bool: GTK reads this state as an int, and a Python bool arrives as a
         # GValue it cannot read, so the state is dropped with only a console warning.
         self.update_state([Gtk.AccessibleState.EXPANDED], [int(not collapsed)])
@@ -2944,31 +3008,31 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Left side: Add button
         add_btn = a11y_label(
-            Gtk.Button(icon_name="list-add-symbolic", tooltip_text="Add entry (Ctrl+N)"), "Add entry")
+            Gtk.Button(icon_name="list-add-symbolic", tooltip_text=_("Add entry (Ctrl+N)")), _("Add entry"))
         add_btn.connect("clicked", self._on_add)
         header.pack_start(add_btn)
 
         # Right side: menu
         menu = Gio.Menu()
-        menu.append("Preferences...", "win.preferences")
-        menu.append("Password health...", "win.health")
-        menu.append("Manage categories...", "win.manage-categories")
-        menu.append("Import from text file...", "win.import")
-        menu.append("Import from CSV file...", "win.import-csv")
-        menu.append("Backup vault...", "win.backup")
-        menu.append("Restore vault from backup...", "win.restore")
-        menu.append("Export (decrypted plaintext)...", "win.export")
-        menu.append("Export as CSV (decrypted)...", "win.export-csv")
-        menu.append("Change master password...", "win.chpass")
-        menu.append("Check for updates...", "win.check-updates")
-        menu.append("Check for updates automatically", "win.auto-updates")
+        menu.append(_("Preferences..."), "win.preferences")
+        menu.append(_("Password health..."), "win.health")
+        menu.append(_("Manage categories..."), "win.manage-categories")
+        menu.append(_("Import from text file..."), "win.import")
+        menu.append(_("Import from CSV file..."), "win.import-csv")
+        menu.append(_("Backup vault..."), "win.backup")
+        menu.append(_("Restore vault from backup..."), "win.restore")
+        menu.append(_("Export (decrypted plaintext)..."), "win.export")
+        menu.append(_("Export as CSV (decrypted)..."), "win.export-csv")
+        menu.append(_("Change master password..."), "win.chpass")
+        menu.append(_("Check for updates..."), "win.check-updates")
+        menu.append(_("Check for updates automatically"), "win.auto-updates")
         menu_btn = a11y_label(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu),
-                              "Main menu")
+                              _("Main menu"))
         header.pack_end(menu_btn)
 
         # Manual Lock button (ROLO-0002), also on Ctrl+L.
         lock_btn = a11y_label(Gtk.Button(icon_name="changes-prevent-symbolic",
-                                         tooltip_text="Lock vault (Ctrl+L)"), "Lock vault")
+                                         tooltip_text=_("Lock vault (Ctrl+L)")), _("Lock vault"))
         lock_btn.connect("clicked", self._lock)
         header.pack_end(lock_btn)
 
@@ -3024,8 +3088,8 @@ class MainWindow(Adw.ApplicationWindow):
         left_box.add_css_class("sidebar-box")
 
         # Search
-        self.search_entry = a11y_label(Gtk.SearchEntry(placeholder_text="Search entries..."),
-                                       "Search entries")
+        self.search_entry = a11y_label(Gtk.SearchEntry(placeholder_text=_("Search entries...")),
+                                       _("Search entries"))
         self.search_entry.set_margin_top(8)
         self.search_entry.set_margin_start(8)
         self.search_entry.set_margin_end(8)
@@ -3041,11 +3105,11 @@ class MainWindow(Adw.ApplicationWindow):
         self._category_filter = None  # None = all, "" = uncategorised, else a category name
         self._filter_options: list[str | None] = [None]
         self._syncing_filter = False
-        self.category_filter = Gtk.DropDown.new_from_strings(["All categories"])
+        self.category_filter = Gtk.DropDown.new_from_strings([_("All categories")])
         self.category_filter.set_margin_start(8)
         self.category_filter.set_margin_end(8)
         self.category_filter.set_margin_bottom(4)
-        a11y_label(self.category_filter, "Show category")
+        a11y_label(self.category_filter, _("Show category"))
         self.category_filter.connect("notify::selected", self._on_category_filter_changed)
         left_box.append(self.category_filter)
 
@@ -3091,16 +3155,16 @@ class MainWindow(Adw.ApplicationWindow):
         bulk_top = Gtk.Box(spacing=6)
         self.bulk_label = Gtk.Label(xalign=0, hexpand=True)
         bulk_top.append(self.bulk_label)
-        bulk_clear_btn = Gtk.Button(label="Clear")
-        a11y_label(bulk_clear_btn, "Clear selection")
+        bulk_clear_btn = Gtk.Button(label=_("Clear"))
+        a11y_label(bulk_clear_btn, _("Clear selection"))
         bulk_clear_btn.connect("clicked", lambda _b: self.listbox.unselect_all())
         bulk_top.append(bulk_clear_btn)
         self.bulk_bar.append(bulk_top)
         bulk_actions = Gtk.Box(spacing=6)
-        self.bulk_move_btn = Gtk.Button(label="Move to\u2026")
+        self.bulk_move_btn = Gtk.Button(label=_("Move to\u2026"))
         self.bulk_move_btn.connect("clicked", self._on_bulk_move)
         bulk_actions.append(self.bulk_move_btn)
-        bulk_delete_btn = Gtk.Button(label="Delete")
+        bulk_delete_btn = Gtk.Button(label=_("Delete"))
         bulk_delete_btn.add_css_class("destructive-action")
         bulk_delete_btn.connect("clicked", self._on_bulk_delete)
         bulk_actions.append(bulk_delete_btn)
@@ -3141,7 +3205,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.split_view.set_max_sidebar_width(320)
         self.split_view.set_sidebar_width_fraction(0.3)
         self.split_view.set_sidebar(Adw.NavigationPage(title="Rolodex", child=sidebar_view))
-        self.split_view.set_content(Adw.NavigationPage(title="Entry", child=detail_view))
+        self.split_view.set_content(Adw.NavigationPage(title=_("Entry"), child=detail_view))
         # Collapsed, a blank detail page is a dead end: whatever blanked it (a delete, a
         # filter, a lock) also returns to the list. Wide, show-content changes nothing.
         self.detail_stack.connect("notify::visible-child-name", self._on_detail_page_changed)
@@ -3233,7 +3297,8 @@ class MainWindow(Adw.ApplicationWindow):
             self._confirm_overwrite_changed_vault()
             return False
         except OSError as exc:
-            self._show_message("Could Not Save", f"The vault was not written to disk: {exc}")
+            self._show_message(_("Could Not Save"),
+                               _("The vault was not written to disk: {error}").format(error=exc))
             return False
 
     def _write_vault(self, vault, key, salt):
@@ -3252,18 +3317,18 @@ class MainWindow(Adw.ApplicationWindow):
         """Something else rewrote the vault since this session read it. Let the user choose
         which copy survives; the default keeps the file on disk."""
         dialog = Adw.AlertDialog(
-            heading="Vault Changed Elsewhere",
+            heading=_("Vault Changed Elsewhere"),
             body=(
-                "The vault file was changed by something else since you unlocked it — another "
+                _("The vault file was changed by something else since you unlocked it — another "
                 "copy of Rolodex, a sync tool, or a file copied over it. Your latest change was "
                 "NOT saved.\n\n"
                 "Reload locks Rolodex so you can unlock the version on disk; your unsaved change "
                 "is discarded. Overwrite replaces the version on disk with everything open here, "
-                "which discards the other change instead."
+                "which discards the other change instead.")
             ),
         )
-        dialog.add_response("reload", "Reload From Disk")
-        dialog.add_response("overwrite", "Overwrite")
+        dialog.add_response("reload", _("Reload From Disk"))
+        dialog.add_response("overwrite", _("Overwrite"))
         dialog.set_response_appearance("overwrite", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("reload")
         dialog.set_close_response("reload")
@@ -3276,7 +3341,7 @@ class MainWindow(Adw.ApplicationWindow):
         if response == "overwrite":
             self._disk_fingerprint = vault_fingerprint(self.vault_path)
             if self._save():
-                self._toast("Saved over the changed vault")
+                self._toast(_("Saved over the changed vault"))
         else:
             self._lock()
 
@@ -3312,7 +3377,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._category_filter = None
         if options != self._filter_options:
             self._syncing_filter = True
-            labels = ["All categories", *categories, "Uncategorised"]
+            labels = [_("All categories"), *categories, _("Uncategorised")]
             self.category_filter.set_model(Gtk.StringList.new(labels))
             self._filter_options = options
             self._syncing_filter = False
@@ -3347,7 +3412,9 @@ class MainWindow(Adw.ApplicationWindow):
             # Search or a category filter active: flat list, no grouping
             entries = search_entries(self.vault, query, category=cat_filter)
             self._append_entry_rows(entries, rows)
-            self.count_label.set_text(f"{len(entries)} of {total} {entries_noun(total)}")
+            # Translators: the count under the entry list while a search or filter is active.
+            self.count_label.set_text(ngettext("{shown} of {n} entry", "{shown} of {n} entries",
+                                               total).format(shown=len(entries), n=total))
 
         elif categories:
             # Grouped view
@@ -3361,12 +3428,14 @@ class MainWindow(Adw.ApplicationWindow):
                 if not collapsed:
                     self._append_entry_rows(cat_entries, rows)
 
-            self.count_label.set_text(f"{total} {entries_noun(total)}")
+            self.count_label.set_text(
+                ngettext("{n} entry", "{n} entries", total).format(n=total))
 
         else:
             # No categories: flat list (backward-compatible)
             self._append_entry_rows(list_entries(self.vault), rows)
-            self.count_label.set_text(f"{total} {entries_noun(total)}")
+            self.count_label.set_text(
+                ngettext("{n} entry", "{n} entries", total).format(n=total))
 
         # Rebuild finished: from here the select_row() calls below are deliberate, so the
         # handler must see them. The rebuild dropped any multi-selection, so drop its bar too.
@@ -3430,14 +3499,17 @@ class MainWindow(Adw.ApplicationWindow):
         """Show the bulk bar for two or more selected entries, and say so in the empty pane."""
         multi = n >= 2
         self.bulk_bar.set_visible(multi)
-        self.bulk_label.set_text(f"{n} selected" if multi else "")
+        # Translators: how many entries are selected in the list, shown in the bulk-action bar.
+        self.bulk_label.set_text(
+            ngettext("{n} selected", "{n} selected", n).format(n=n) if multi else "")
         self.bulk_move_btn.set_visible(bool(self.vault.get("categories")))
         if multi:
-            self.placeholder.set_title(f"{n} entries selected")
-            self.placeholder.set_description("Move or delete them with the buttons below the list.")
+            self.placeholder.set_title(
+                ngettext("{n} entry selected", "{n} entries selected", n).format(n=n))
+            self.placeholder.set_description(_("Move or delete them with the buttons below the list."))
         else:
-            self.placeholder.set_title("Select an entry")
-            self.placeholder.set_description("Choose an entry from the list, or add a new one.")
+            self.placeholder.set_title(_("Select an entry"))
+            self.placeholder.set_description(_("Choose an entry from the list, or add a new one."))
 
     def _clear_focused_label_selection(self):
         focus = self.get_focus()
@@ -3578,15 +3650,15 @@ class MainWindow(Adw.ApplicationWindow):
             if is_sensitive and not self._revealed:
                 val_label.add_css_class("field-masked")
                 # Otherwise a screen reader spells out eight bullet characters (ROLO-0017).
-                a11y_label(val_label, "Hidden value")
+                a11y_label(val_label, _("Hidden value"))
             elif is_sensitive and self._revealed:
                 val_label.add_css_class("field-revealed-sensitive")
             row.add_suffix(val_label)
 
             # Copy button
             copy_btn = Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
-                                  tooltip_text=f"Copy {field['label']}")
-            a11y_label(copy_btn, f"Copy {field['label']}")
+                                  tooltip_text=_("Copy {label}").format(label=field["label"]))
+            a11y_label(copy_btn, _("Copy {label}").format(label=field["label"]))
             copy_btn.add_css_class("flat")
             copy_btn.add_css_class("copy-btn")
             copy_btn.connect("clicked", self._make_copy_handler(field["value"], field["label"]))
@@ -3602,7 +3674,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         # Notes
         if entry.get("notes"):
-            notes_label_header = Gtk.Label(label="Notes", xalign=0)
+            notes_label_header = Gtk.Label(label=_("Notes"), xalign=0)
             notes_label_header.add_css_class("heading")
             notes_label_header.set_margin_top(8)
             vbox.append(notes_label_header)
@@ -3621,18 +3693,18 @@ class MainWindow(Adw.ApplicationWindow):
         btn_box = Gtk.Box(spacing=8, margin_top=12)
         btn_box.set_halign(Gtk.Align.START)
 
-        toggle_text = "Hide sensitive" if self._revealed else "Reveal sensitive"
+        toggle_text = _("Hide sensitive") if self._revealed else _("Reveal sensitive")
         reveal_btn = Gtk.Button(label=toggle_text)
         reveal_btn.add_css_class("reveal-btn")
         reveal_btn.connect("clicked", self._on_toggle_reveal, entry_id)
         btn_box.append(reveal_btn)
 
-        edit_btn = Gtk.Button(label="Edit")
+        edit_btn = Gtk.Button(label=_("Edit"))
         edit_btn.add_css_class("edit-btn")
         edit_btn.connect("clicked", self._on_edit, entry_id)
         btn_box.append(edit_btn)
 
-        delete_btn = Gtk.Button(label="Delete")
+        delete_btn = Gtk.Button(label=_("Delete"))
         delete_btn.add_css_class("destructive-action")
         delete_btn.connect("clicked", self._on_delete, entry_id)
         btn_box.append(delete_btn)
@@ -3643,9 +3715,9 @@ class MainWindow(Adw.ApplicationWindow):
         ts_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, margin_top=16)
         created = entry.get("created", "")[:19].replace("T", " ")
         modified = entry.get("modified", "")[:19].replace("T", " ")
-        ts_created = Gtk.Label(label=f"Created: {created}", xalign=0)
+        ts_created = Gtk.Label(label=_("Created: {date}").format(date=created), xalign=0)
         ts_created.add_css_class("timestamp")
-        ts_modified = Gtk.Label(label=f"Modified: {modified}", xalign=0)
+        ts_modified = Gtk.Label(label=_("Modified: {date}").format(date=modified), xalign=0)
         ts_modified.add_css_class("timestamp")
         ts_box.append(ts_created)
         ts_box.append(ts_modified)
@@ -3680,7 +3752,7 @@ class MainWindow(Adw.ApplicationWindow):
         """A 'Code' row: grouped live digits, a depleting ring, seconds left, and copy."""
         state = {"code": "", "fraction": 1.0}
         row = Adw.ActionRow()
-        row.set_title("Code")
+        row.set_title(_("Code"))
         row.add_css_class("totp-row")
         # Decorative, and hidden from screen readers on purpose: the row's own "Code" title
         # already says what this is. It exists so the row keeps its left edge with the field
@@ -3691,8 +3763,8 @@ class MainWindow(Adw.ApplicationWindow):
         if self._clock_synced is False:
             # RFC 6238 needs both sides to agree on the time. A drifted clock makes every code
             # wrong, and it looks like "the site rejected my code" (ROLO-0068).
-            row.set_subtitle("Your computer's clock is not synchronised, so this code may be "
-                             "rejected. Turn on automatic time in your system settings.")
+            row.set_subtitle(_("Your computer's clock is not synchronised, so this code may be "
+                             "rejected. Turn on automatic time in your system settings."))
 
         code_label = Gtk.Label(valign=Gtk.Align.CENTER, selectable=True)
         code_label.add_css_class("totp-code")
@@ -3710,10 +3782,10 @@ class MainWindow(Adw.ApplicationWindow):
         row.add_suffix(rem_label)
 
         copy_btn = a11y_label(Gtk.Button(icon_name="edit-copy-symbolic", valign=Gtk.Align.CENTER,
-                                         tooltip_text="Copy 2FA code"), "Copy 2FA code")
+                                         tooltip_text=_("Copy 2FA code")), _("Copy 2FA code"))
         copy_btn.add_css_class("flat")
         copy_btn.add_css_class("copy-btn")
-        copy_btn.connect("clicked", lambda _b: self._copy_value(state["code"], "2FA code"))
+        copy_btn.connect("clicked", lambda _b: self._copy_value(state["code"], _("2FA code")))
         row.add_suffix(copy_btn)
 
         self._totp_widgets.append({
@@ -3733,7 +3805,8 @@ class MainWindow(Adw.ApplicationWindow):
             w["state"]["fraction"] = rem / cfg["period"]
             mid = len(code) // 2  # group as two halves for readability (492 831 / 4920 8317)
             w["code_label"].set_text(f"{code[:mid]} {code[mid:]}")
-            w["rem_label"].set_text(f"{rem}s")
+            # Translators: seconds left before a 2FA code changes; "s" abbreviates "seconds".
+            w["rem_label"].set_text(_("{seconds}s").format(seconds=rem))
             w["ring"].queue_draw()
         return True  # repeat; cancelled explicitly via _cancel_totp_tick
 
@@ -3783,18 +3856,21 @@ class MainWindow(Adw.ApplicationWindow):
         if not ok:
             if self._clipboard_pending_value == value:
                 self._clipboard_pending_value = None
-            self._toast("Clipboard not available")
+            self._toast(_("Clipboard not available"))
             return False
         if self._clipboard_pending_value != value:
             return False  # a later copy superseded this one
         delay = self._clipboard_clear_s
         if delay > 0:
-            self._toast(f"Copied {label} — clipboard clears in {delay}s")
+            # Translators: {label} is a field's name, e.g. "Password"; "s" abbreviates "seconds".
+            self._toast(_("Copied {label} — clipboard clears in {seconds}s").format(
+                label=label, seconds=delay))
             self._clipboard_timer_id = GLib.timeout_add_seconds(
                 delay, self._clear_clipboard_if_unchanged, value
             )
         else:
-            self._toast(f"Copied {label}")
+            # Translators: {label} is a field's name, e.g. "Password".
+            self._toast(_("Copied {label}").format(label=label))
         return False
 
     def _make_copy_handler(self, value, label):
@@ -3856,13 +3932,13 @@ class MainWindow(Adw.ApplicationWindow):
             # ROLO-0063: the write was swallowed, so the setting did not change. Say so and
             # leave the checkbox where it was, rather than toasting a preference that the
             # next launch will not have.
-            self._toast("Couldn't save that setting — the settings file is not writable")
+            self._toast(_("Couldn't save that setting — the settings file is not writable"))
             return
         action.set_state(value)
         self._toast(
-            "Rolodex will check for updates on startup"
+            _("Rolodex will check for updates on startup")
             if enabled
-            else "Automatic update checks turned off"
+            else _("Automatic update checks turned off")
         )
 
     def _start_silent_update_check(self):
@@ -3892,7 +3968,7 @@ class MainWindow(Adw.ApplicationWindow):
         UpdateDialog(self, info).present(self)
         return False
 
-    def _on_check_updates(self, *_):
+    def _on_check_updates(self, *_args):
         """The manual "Check for updates..." action (INV-6).
 
         An explicit click is its own consent, so this runs with force=True even when the
@@ -3902,16 +3978,16 @@ class MainWindow(Adw.ApplicationWindow):
         """
         if not is_update_supported():
             self._show_message(
-                "Updates not available",
-                "In-app updates work only in the packaged Rolodex build. Running from source "
-                "or from a distribution package, updating is handled outside the app.",
+                _("Updates not available"),
+                _("In-app updates work only in the packaged Rolodex build. Running from source "
+                "or from a distribution package, updating is handled outside the app."),
             )
             return
         if self._update_busy:
             return  # a check, an offer or a download is already running (ROLO-0051)
 
         self._set_update_busy(True)
-        self._toast("Checking for updates...")
+        self._toast(_("Checking for updates..."))
         threading.Thread(target=self._check_updates_worker, daemon=True).start()
 
     def _check_updates_worker(self):
@@ -3920,7 +3996,8 @@ class MainWindow(Adw.ApplicationWindow):
             info = check_for_update(force=True)
         except UpdateError as exc:
             # INV-13: a forced failure must not read as "you're up to date".
-            GLib.idle_add(self._toast, f"Couldn't check for updates: {exc}")
+            GLib.idle_add(self._toast,
+                          _("Couldn't check for updates: {error}").format(error=exc))
             GLib.idle_add(self._set_update_busy, False)
             return
         GLib.idle_add(self._finish_check_updates, info)
@@ -3928,14 +4005,14 @@ class MainWindow(Adw.ApplicationWindow):
     def _finish_check_updates(self, info):
         if info is None:
             self._set_update_busy(False)
-            self._toast(f"Rolodex {__version__} is up to date")
+            self._toast(_("Rolodex {version} is up to date").format(version=__version__))
             return
         self._offer_update(info)
 
     def _start_update_download(self, info):
         """Download and verify on a background thread, then install (INV-8/INV-15)."""
 
-        self._toast(f"Downloading Rolodex {info.version}...")
+        self._toast(_("Downloading Rolodex {version}...").format(version=info.version))
         threading.Thread(target=self._update_worker, args=(info,), daemon=True).start()
 
     def _update_worker(self, info):
@@ -3944,14 +4021,14 @@ class MainWindow(Adw.ApplicationWindow):
         except UpdateVerificationError:
             GLib.idle_add(
                 self._show_message,
-                "Update rejected",
-                "The downloaded update was not signed by the Rolodex release key, so it was "
-                "discarded and nothing was installed. Your current version is untouched.",
+                _("Update rejected"),
+                _("The downloaded update was not signed by the Rolodex release key, so it was "
+                "discarded and nothing was installed. Your current version is untouched."),
             )
             GLib.idle_add(self._set_update_busy, False)
             return
         except UpdateError as exc:
-            GLib.idle_add(self._show_message, "Update failed", str(exc))
+            GLib.idle_add(self._show_message, _("Update failed"), str(exc))
             GLib.idle_add(self._set_update_busy, False)
             return
         # INV-15: the window may have been locked or closed while this ran. Drop the download
@@ -3982,7 +4059,7 @@ class MainWindow(Adw.ApplicationWindow):
         try:
             apply_update(staged, on_before_exec=self._wipe_secrets_for_update)
         except UpdateError as exc:
-            self._show_message("Update failed", str(exc))
+            self._show_message(_("Update failed"), str(exc))
             self._set_update_busy(False)
 
     def _wipe_secrets_for_update(self):
@@ -4017,12 +4094,12 @@ class MainWindow(Adw.ApplicationWindow):
         """Copy the selected entry's first sensitive field (Ctrl+Shift+C)."""
         entry_id = self._current_entry_id
         if not entry_id or entry_id not in self.vault["entries"]:
-            self._toast("Select an entry first")
+            self._toast(_("Select an entry first"))
             return
         field = next((f for f in self.vault["entries"][entry_id]["fields"]
                       if field_is_sensitive(f)), None)
         if field is None:
-            self._toast("No sensitive field to copy")
+            self._toast(_("No sensitive field to copy"))
             return
         self._copy_value(field["value"], field["label"])
 
@@ -4109,17 +4186,18 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_delete(self, btn, entry_id):
         entry = self.vault["entries"][entry_id]
-        self._confirm_destructive("Delete entry?",
-                                  f'Delete "{entry["name"]}"? This cannot be undone.',
-                                  "Delete", self._on_delete_response, entry_id)
+        self._confirm_destructive(_("Delete entry?"),
+                                  _('Delete "{name}"? This cannot be undone.').format(
+                                      name=entry["name"]),
+                                  "delete", _("Delete"), self._on_delete_response, entry_id)
 
-    def _confirm_destructive(self, heading, body, action_label, on_response, *payload):
+    def _confirm_destructive(self, heading, body, action, action_label, on_response, *payload):
         """Ask before an action that cannot be undone. *on_response* gets (dialog, response,
-        *payload), where response is "cancel" or *action_label* lower-cased. Cancel is the
-        default and the close response, so Escape or Enter never goes ahead."""
+        *payload), where response is "cancel" or *action*, an untranslated id: *action_label*
+        is translated, so it cannot be the id. Cancel is the default and the close response,
+        so Escape or Enter never goes ahead."""
         dialog = Adw.AlertDialog(heading=heading, body=body)
-        action = action_label.lower()
-        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("cancel", _("Cancel"))
         dialog.add_response(action, action_label)
         dialog.set_response_appearance(action, Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
@@ -4131,11 +4209,19 @@ class MainWindow(Adw.ApplicationWindow):
         ids = self._selected_entry_ids()
         if len(ids) < 2:
             return
-        names = [f'"{self.vault["entries"][eid]["name"]}"' for eid in ids]
-        shown = ", ".join(names[:3]) + (f" and {len(names) - 3} more" if len(names) > 3 else "")
-        self._confirm_destructive(f"Delete {len(ids)} entries?",
-                                  f"Delete {shown}? This cannot be undone.",
-                                  "Delete", self._on_bulk_delete_response, ids)
+        # Translators: one entry's name inside a list of names, quoted.
+        names = [_('"{name}"').format(name=self.vault["entries"][eid]["name"]) for eid in ids]
+        # Translators: the separator between names in a list, e.g. '"A", "B", "C"'.
+        shown = _(", ").join(names[:3])
+        if len(names) > 3:
+            # Translators: {names} is three quoted entry names; {n} is how many more there are.
+            shown = ngettext("{names} and {n} more", "{names} and {n} more",
+                             len(names) - 3).format(names=shown, n=len(names) - 3)
+        self._confirm_destructive(
+            ngettext("Delete {n} entry?", "Delete {n} entries?", len(ids)).format(n=len(ids)),
+            # Translators: {names} is a list of quoted entry names.
+            _("Delete {names}? This cannot be undone.").format(names=shown),
+            "delete", _("Delete"), self._on_bulk_delete_response, ids)
 
     def _on_bulk_delete_response(self, dialog, response, entry_ids):
         if response != "delete" or self.vault is None:
@@ -4147,7 +4233,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._current_entry_id = None
         self.detail_stack.set_visible_child_name("empty")
         self._refresh_list()
-        self._toast(f"{len(gone)} {entries_noun(len(gone))} deleted")
+        self._toast(ngettext("{n} entry deleted", "{n} entries deleted",
+                             len(gone)).format(n=len(gone)))
 
     def _on_bulk_move(self, btn):
         ids = self._selected_entry_ids()
@@ -4157,7 +4244,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _bulk_move_to(self, entry_ids, category):
         n = self._move_entries_to_category(entry_ids, category)
-        self._toast(f"Moved {n} {entries_noun(n)} to {category or 'Uncategorised'}")
+        self._toast(ngettext("Moved {n} entry to {category}", "Moved {n} entries to {category}",
+                             n).format(n=n, category=category or _("Uncategorised")))
 
     def _on_delete_response(self, dialog, response, entry_id):
         if response == "delete":
@@ -4166,21 +4254,21 @@ class MainWindow(Adw.ApplicationWindow):
             self._current_entry_id = None
             self.detail_stack.set_visible_child_name("empty")
             self._refresh_list()
-            self._toast("Entry deleted")
+            self._toast(_("Entry deleted"))
 
     # ------------------------------------------------------------------
     # Add entry dialog
     # ------------------------------------------------------------------
 
     def _on_add(self, *_args):
-        dialog = AddEditDialog(self, "Add Entry")
+        dialog = AddEditDialog(self, _("Add Entry"))
         dialog.present(self)
 
     def _finish_add(self, name, fields, notes, category=""):
         eid = add_entry(self.vault, name, fields, notes, category=category)
         self._save()
         self._refresh_list(select_id=eid)
-        self._toast(f'Added "{name}"')
+        self._toast(_('Added "{name}"').format(name=name))
 
     # ------------------------------------------------------------------
     # Edit entry dialog
@@ -4188,7 +4276,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_edit(self, btn, entry_id):
         entry = self.vault["entries"][entry_id]
-        dialog = AddEditDialog(self, "Edit Entry", entry_id=entry_id, entry=entry)
+        dialog = AddEditDialog(self, _("Edit Entry"), entry_id=entry_id, entry=entry)
         dialog.present(self)
 
     def _finish_edit(self, entry_id, name, fields, notes, category=""):
@@ -4196,14 +4284,14 @@ class MainWindow(Adw.ApplicationWindow):
         self._save()
         self._refresh_list(select_id=entry_id)
         self._show_detail(entry_id)
-        self._toast("Entry updated")
+        self._toast(_("Entry updated"))
 
     # ------------------------------------------------------------------
     # Import
     # ------------------------------------------------------------------
 
     def _on_import(self, *_args):
-        chooser = make_file_dialog("Import from text file", "Text files", mime_type="text/plain")
+        chooser = make_file_dialog(_("Import from text file"), _("Text files"), mime_type="text/plain")
 
         # Start the picker in the user's home directory
         home = GLib.get_home_dir()
@@ -4227,7 +4315,7 @@ class MainWindow(Adw.ApplicationWindow):
         try:
             parsed = parse_text_file(filepath)
         except (OSError, UnicodeDecodeError, ValueError) as e:
-            self._show_message("Import Error", str(e))
+            self._show_message(_("Import Error"), str(e))
             return
 
         if self._import_count_refused(len(parsed)):
@@ -4241,21 +4329,21 @@ class MainWindow(Adw.ApplicationWindow):
         """Say so and return True when a file holds no entries, or more than the preview builds
         in one go. Runs before any dialog is built, for the text and the CSV import alike."""
         if not count:
-            self._show_message("Import", "No entries found in file.")
+            self._show_message(_("Import"), _("No entries found in file."))
             return True
         if count > MAX_IMPORT_ENTRIES:
             # The preview builds one row per entry up front, so an enormous file froze the UI in
             # its constructor (ROLO-0070).
             self._show_message(
-                "Import",
-                f"That file holds {count} entries. Import at most {MAX_IMPORT_ENTRIES} at "
-                "a time — split the file and import each part.",
+                _("Import"),
+                _("That file holds {count} entries. Import at most {limit} at a time — split "
+                  "the file and import each part.").format(count=count, limit=MAX_IMPORT_ENTRIES),
             )
             return True
         return False
 
     def _on_import_csv(self, *_args):
-        chooser = make_file_dialog("Import from CSV file", "CSV files", pattern="*.csv")
+        chooser = make_file_dialog(_("Import from CSV file"), _("CSV files"), pattern="*.csv")
         home = GLib.get_home_dir()
         if home:
             chooser.set_initial_folder(Gio.File.new_for_path(home))
@@ -4273,7 +4361,7 @@ class MainWindow(Adw.ApplicationWindow):
         try:
             header, rows = read_csv_file(filepath)
         except (OSError, UnicodeDecodeError, ValueError) as e:
-            self._show_message("Import Error", str(e))
+            self._show_message(_("Import Error"), str(e))
             return
         if self._import_count_refused(len(rows)):  # one row is one entry
             return
@@ -4295,7 +4383,8 @@ class MainWindow(Adw.ApplicationWindow):
                                             category=category)
         self._save()
         self._refresh_list()
-        self._toast(f"Imported {imported} {entries_noun(imported)}.")
+        self._toast(ngettext("Imported {n} entry.", "Imported {n} entries.",
+                             imported).format(n=imported))
 
     # ------------------------------------------------------------------
     # Backup (encrypted copy)
@@ -4308,7 +4397,7 @@ class MainWindow(Adw.ApplicationWindow):
             return
 
         save_dialog = Gtk.FileDialog()
-        save_dialog.set_title("Backup vault to...")
+        save_dialog.set_title(_("Backup vault to..."))
         default_name = f"contacts_backup_{datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')}.vault"
         save_dialog.set_initial_name(default_name)
         save_dialog.save(self, None, self._on_backup_file_chosen)
@@ -4331,9 +4420,9 @@ class MainWindow(Adw.ApplicationWindow):
             with open(self.vault_path, "rb") as fp:
                 blob = fp.read()
             write_private_file(filepath, blob)
-            self._toast("Vault backed up")
+            self._toast(_("Vault backed up"))
         except OSError as e:
-            self._show_message("Backup Error", str(e))
+            self._show_message(_("Backup Error"), str(e))
 
     # ------------------------------------------------------------------
     # Restore (from encrypted backup)
@@ -4341,16 +4430,16 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_restore(self, *_args):
         self._confirm_destructive(
-            "Restore from backup",
-            "This will replace all current entries with the backup contents. You will need to "
-            "enter the backup's master password.",
-            "Restore", self._on_restore_confirmed,
+            _("Restore from backup"),
+            _("This will replace all current entries with the backup contents. You will need to "
+            "enter the backup's master password."),
+            "restore", _("Restore"), self._on_restore_confirmed,
         )
 
     def _on_restore_confirmed(self, dialog, response):
         if response != "restore":
             return
-        chooser = make_file_dialog("Select vault backup", "Vault files", pattern="*.vault")
+        chooser = make_file_dialog(_("Select vault backup"), _("Vault files"), pattern="*.vault")
         chooser.open(self, None, self._on_restore_file_chosen)
 
     def _on_restore_file_chosen(self, chooser, result):
@@ -4380,12 +4469,13 @@ class MainWindow(Adw.ApplicationWindow):
             self._write_vault(vault, key, salt)
         except (OSError, VaultChangedError) as err:
             exc = (
-                "the vault file was changed elsewhere since you unlocked it"
+                _("the vault file was changed elsewhere since you unlocked it")
                 if isinstance(err, VaultChangedError) else err
             )
             self._show_message(
-                "Restore Failed",
-                f"The backup could not be written to the vault, so nothing changed: {exc}",
+                _("Restore Failed"),
+                _("The backup could not be written to the vault, so nothing changed: "
+                  "{error}").format(error=exc),
             )
             return
         self.vault = vault
@@ -4396,25 +4486,29 @@ class MainWindow(Adw.ApplicationWindow):
         self.detail_stack.set_visible_child_name("empty")
         self._refresh_list()
         count = len(self.vault["entries"])
-        self._toast(f"Restored {count} {entries_noun(count)} from backup")
+        self._toast(ngettext("Restored {n} entry from backup", "Restored {n} entries from backup",
+                             count).format(n=count))
 
     # ------------------------------------------------------------------
     # Export (decrypted plaintext)
     # ------------------------------------------------------------------
 
     def _on_export(self, *_args):
-        self._confirm_destructive("Export decrypted backup",
-                                  "This will export all entries in plaintext. Continue?",
-                                  "Export", self._on_export_confirmed,
+        self._confirm_destructive(_("Export decrypted backup"),
+                                  _("This will export all entries in plaintext. Continue?"),
+                                  "export", _("Export"), self._on_export_confirmed,
                                   "txt", self._on_export_file_chosen)
 
     def _on_export_csv(self, *_args):
-        body = ("This will export all entries to an unencrypted CSV file. Anyone who can read "
-                "the file can read every password.")
         if csv_export_exceeds_import_limits(self.vault):
-            body += (f" The file will be too large for Rolodex to import in one go (the limits "
-                     f"are {MAX_IMPORT_ENTRIES} entries and 10 MB).")
-        self._confirm_destructive("Export as CSV", body + " Continue?", "Export",
+            body = _("This will export all entries to an unencrypted CSV file. Anyone who can "
+                     "read the file can read every password. The file will be too large for "
+                     "Rolodex to import in one go (the limits are {limit} entries and 10 MB). "
+                     "Continue?").format(limit=MAX_IMPORT_ENTRIES)
+        else:
+            body = _("This will export all entries to an unencrypted CSV file. Anyone who can "
+                     "read the file can read every password. Continue?")
+        self._confirm_destructive(_("Export as CSV"), body, "export", _("Export"),
                                   self._on_export_confirmed, "csv", self._on_export_csv_file_chosen)
 
     def _on_export_confirmed(self, dialog, response, extension, on_chosen):
@@ -4422,7 +4516,7 @@ class MainWindow(Adw.ApplicationWindow):
             return
 
         save_dialog = Gtk.FileDialog()
-        save_dialog.set_title("Export to file")
+        save_dialog.set_title(_("Export to file"))
         stamp = datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')
         save_dialog.set_initial_name(f"rolodex_export_{stamp}.{extension}")
         save_dialog.save(self, None, on_chosen)
@@ -4442,9 +4536,9 @@ class MainWindow(Adw.ApplicationWindow):
             write_private_file(filepath, content.encode("utf-8"))
         except OSError as e:
             # Uncaught, this escaped into the GTK callback: no file and no message.
-            self._show_message("Export Error", str(e))
+            self._show_message(_("Export Error"), str(e))
             return
-        self._toast(f"Exported {count} {entries_noun(count)}")
+        self._toast(ngettext("Exported {n} entry", "Exported {n} entries", count).format(n=count))
 
     def _on_export_csv_file_chosen(self, chooser, result):
         filepath = self._export_path(chooser, result)
@@ -4495,18 +4589,19 @@ class MainWindow(Adw.ApplicationWindow):
             self._write_vault(self.vault, new_key, new_salt)
         except (OSError, VaultChangedError) as err:
             exc = (
-                "the vault file was changed elsewhere since you unlocked it"
+                _("the vault file was changed elsewhere since you unlocked it")
                 if isinstance(err, VaultChangedError) else err
             )
             self._show_message(
-                "Password Not Changed",
-                f"The vault could not be written, so your master password is unchanged: {exc}",
+                _("Password Not Changed"),
+                _("The vault could not be written, so your master password is unchanged: "
+                  "{error}").format(error=exc),
             )
             return
         self.password = new_pw
         self.salt = new_salt
         self._key = new_key
-        self._toast("Master password changed")
+        self._toast(_("Master password changed"))
 
     # ------------------------------------------------------------------
     # Category management
@@ -4578,7 +4673,7 @@ class MainWindow(Adw.ApplicationWindow):
         popover = Gtk.Popover()
         popover.set_parent(parent)
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        header = Gtk.Label(label="Move to...", xalign=0)
+        header = Gtk.Label(label=_("Move to..."), xalign=0)
         header.add_css_class("heading")
         header.set_margin_top(6)
         header.set_margin_bottom(4)
@@ -4593,7 +4688,7 @@ class MainWindow(Adw.ApplicationWindow):
                 on_pick(cat)
             return handler
 
-        for cat, label in [("", "Uncategorised")] + [(c, c) for c in self.vault["categories"]]:
+        for cat, label in [("", _("Uncategorised"))] + [(c, c) for c in self.vault["categories"]]:
             if cat != current_cat:
                 btn = Gtk.Button(label=label)
                 btn.add_css_class("flat")
@@ -4609,7 +4704,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _show_message(self, title, body):
         d = Adw.AlertDialog(heading=title, body=body)
-        d.add_response("ok", "OK")
+        d.add_response("ok", _("OK"))
         d.present(self)
 
 
@@ -4634,18 +4729,18 @@ class FieldRow(Gtk.ListBoxRow):
         # Drag handle
         handle = Gtk.Image(icon_name="list-drag-handle-symbolic")
         handle.add_css_class("dim-label")
-        handle.set_tooltip_text("Drag to reorder, or Ctrl+Up / Ctrl+Down")
+        handle.set_tooltip_text(_("Drag to reorder, or Ctrl+Up / Ctrl+Down"))
         box.append(handle)
 
         # A placeholder is not a name: once the box has text a screen reader has nothing to
         # say what the box is for (ROLO-0017).
         self.label_entry = a11y_label(
-            Gtk.Entry(placeholder_text="Label", text=label, hexpand=True), "Field label")
+            Gtk.Entry(placeholder_text=_("Label"), text=label, hexpand=True), _("Field label"))
         self.label_entry.set_size_request(110, -1)
         box.append(self.label_entry)
 
         self.value_entry = a11y_label(
-            Gtk.Entry(placeholder_text="Value", text=value, hexpand=True), "Field value")
+            Gtk.Entry(placeholder_text=_("Value"), text=value, hexpand=True), _("Field value"))
         self.value_entry.set_size_request(160, -1)
         box.append(self.value_entry)
 
@@ -4666,14 +4761,14 @@ class FieldRow(Gtk.ListBoxRow):
         # Password generator (ROLO-0004): only offered on sensitive fields, since generating a
         # strong secret only makes sense for passwords/keys.
         self.gen_btn = a11y_label(Gtk.MenuButton(icon_name="view-refresh-symbolic",
-                                                 tooltip_text="Generate a strong password"),
-                                  "Generate a strong password")
+                                                 tooltip_text=_("Generate a strong password")),
+                                  _("Generate a strong password"))
         self.gen_btn.add_css_class("flat")
         self.gen_btn.set_popover(self._build_generator_popover())
         self.gen_btn.set_visible(sensitive)
         box.append(self.gen_btn)
 
-        self.sens_check = Gtk.CheckButton(label="Hide", active=sensitive)
+        self.sens_check = Gtk.CheckButton(label=_("Hide"), active=sensitive)
         box.append(self.sens_check)
 
         # Sensitive values render masked; the peek button reveals/hides them while editing.
@@ -4707,7 +4802,7 @@ class FieldRow(Gtk.ListBoxRow):
         self.label_entry.connect("changed", on_label_changed)
 
         remove_btn = a11y_label(
-            Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Remove field"), "Remove field")
+            Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text=_("Remove field")), _("Remove field"))
         remove_btn.add_css_class("flat")
         remove_btn.add_css_class("error")
         remove_btn.connect("clicked", lambda b: self.dialog._remove_field_row(self))
@@ -4746,7 +4841,7 @@ class FieldRow(Gtk.ListBoxRow):
             self.value_entry.set_input_purpose(Gtk.InputPurpose.FREE_FORM)
             self.value_entry.set_input_hints(Gtk.InputHints.NONE)
         self.peek_btn.set_visible(sensitive)
-        name = "Hide value" if self._peek else "Show value"
+        name = _("Hide value") if self._peek else _("Show value")
         self.peek_btn.set_icon_name(
             "view-conceal-symbolic" if self._peek else "view-reveal-symbolic")
         self.peek_btn.set_tooltip_text(name)
@@ -4764,7 +4859,7 @@ class FieldRow(Gtk.ListBoxRow):
             getattr(box, f"set_margin_{side}")(12)
 
         len_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        len_row.append(Gtk.Label(label="Length", xalign=0, hexpand=True))
+        len_row.append(Gtk.Label(label=_("Length"), xalign=0, hexpand=True))
         adj = Gtk.Adjustment(value=PW_GEN_LENGTH, lower=MIN_PASSWORD_LENGTH, upper=128,
                              step_increment=1, page_increment=4)
         length_spin = Gtk.SpinButton(adjustment=adj, numeric=True)
@@ -4772,13 +4867,13 @@ class FieldRow(Gtk.ListBoxRow):
         box.append(len_row)
 
         checks = {}
-        for key, lbl in (("lower", "Lowercase (a–z)"), ("upper", "Uppercase (A–Z)"),
-                         ("digits", "Digits (0–9)"), ("symbols", "Symbols (!@#…)")):
+        for key, lbl in (("lower", _("Lowercase (a–z)")), ("upper", _("Uppercase (A–Z)")),
+                         ("digits", _("Digits (0–9)")), ("symbols", _("Symbols (!@#…)"))):
             check = Gtk.CheckButton(label=lbl, active=True)
             checks[key] = check
             box.append(check)
 
-        gen = Gtk.Button(label="Generate")
+        gen = Gtk.Button(label=_("Generate"))
         gen.add_css_class("suggested-action")
         box.append(gen)
 
@@ -4809,7 +4904,7 @@ class FieldRow(Gtk.ListBoxRow):
 
     def _on_drag_begin(self, source, drag):
         icon = Gtk.DragIcon.get_for_drag(drag)
-        lbl = Gtk.Label(label=self.label_entry.get_text() or "Field")
+        lbl = Gtk.Label(label=self.label_entry.get_text() or _("Field"))
         lbl.add_css_class("caption")
         lbl.set_margin_top(6)
         lbl.set_margin_bottom(6)
@@ -4833,11 +4928,11 @@ class AddEditDialog(Adw.Dialog):
         header, clamp = make_dialog_scaffold(
             self, title, width=520, height=560, clamp_max=500, margin=16, scrolled=True)
 
-        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn = Gtk.Button(label=_("Cancel"))
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
 
-        save_btn = Gtk.Button(label="Save")
+        save_btn = Gtk.Button(label=_("Save"))
         save_btn.add_css_class("suggested-action")
         save_btn.connect("clicked", self._on_save)
         header.pack_end(save_btn)
@@ -4845,8 +4940,8 @@ class AddEditDialog(Adw.Dialog):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
 
         # Name
-        name_group = Adw.PreferencesGroup(title="Name")
-        self.name_entry = Adw.EntryRow(title="System / service name")
+        name_group = Adw.PreferencesGroup(title=_("Name"))
+        self.name_entry = Adw.EntryRow(title=_("System / service name"))
         if entry:
             self.name_entry.set_text(entry["name"])
         self.name_entry.connect("changed", lambda e: e.remove_css_class("error"))
@@ -4856,10 +4951,10 @@ class AddEditDialog(Adw.Dialog):
         # Category dropdown
         categories = main_win.vault.get("categories", [])
         if categories:
-            cat_group = Adw.PreferencesGroup(title="Category")
-            cat_items = ["(None)"] + categories
+            cat_group = Adw.PreferencesGroup(title=_("Category"))
+            cat_items = [_("(None)")] + categories
             string_list = Gtk.StringList.new(cat_items)
-            self.category_row = Adw.ComboRow(title="Category", model=string_list)
+            self.category_row = Adw.ComboRow(title=_("Category"), model=string_list)
             # Pre-select current category
             if entry and entry.get("category"):
                 try:
@@ -4875,12 +4970,12 @@ class AddEditDialog(Adw.Dialog):
             self.category_row = None
 
         # Fields header
-        fields_header = Gtk.Label(label="Fields", xalign=0)
+        fields_header = Gtk.Label(label=_("Fields"), xalign=0)
         fields_header.add_css_class("heading")
         fields_header.set_margin_start(4)
         vbox.append(fields_header)
 
-        hint = Gtk.Label(label="Drag the handle to reorder", xalign=0)
+        hint = Gtk.Label(label=_("Drag the handle to reorder"), xalign=0)
         hint.add_css_class("dim-label")
         hint.add_css_class("caption")
         hint.set_margin_start(4)
@@ -4902,14 +4997,14 @@ class AddEditDialog(Adw.Dialog):
 
         vbox.append(self.fields_listbox)
 
-        add_field_btn = Gtk.Button(label="Add Field", halign=Gtk.Align.START)
+        add_field_btn = Gtk.Button(label=_("Add Field"), halign=Gtk.Align.START)
         add_field_btn.add_css_class("flat")
         add_field_btn.connect("clicked", self._on_add_field)
         vbox.append(add_field_btn)
 
         # Notes
-        notes_group = Adw.PreferencesGroup(title="Notes")
-        self.notes_view = a11y_label(Gtk.TextView(), "Notes")
+        notes_group = Adw.PreferencesGroup(title=_("Notes"))
+        self.notes_view = a11y_label(Gtk.TextView(), _("Notes"))
         self.notes_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.notes_view.set_top_margin(8)
         self.notes_view.set_bottom_margin(8)
@@ -4953,9 +5048,9 @@ class AddEditDialog(Adw.Dialog):
             self._close_wiped()
             return
         self._confirm(
-            "Discard changes?",
-            "This entry has unsaved changes. Discard them?",
-            "Discard", Adw.ResponseAppearance.DESTRUCTIVE, self._close_wiped,
+            _("Discard changes?"),
+            _("This entry has unsaved changes. Discard them?"),
+            _("Discard"), Adw.ResponseAppearance.DESTRUCTIVE, self._close_wiped,
         )
 
     def _close_wiped(self):
@@ -4971,7 +5066,7 @@ class AddEditDialog(Adw.Dialog):
         on_confirm only when the user picks the action. Shared by the discard and
         duplicate-name prompts."""
         dlg = Adw.AlertDialog(heading=heading, body=body)
-        dlg.add_response("cancel", "Cancel")
+        dlg.add_response("cancel", _("Cancel"))
         dlg.add_response("ok", action_label)
         dlg.set_response_appearance("ok", appearance)
         dlg.set_default_response("cancel")
@@ -5048,9 +5143,9 @@ class AddEditDialog(Adw.Dialog):
         dup = find_entry_by_name(self.main_win.vault, name, exclude_id=self.entry_id)
         if dup is not None:
             self._confirm(
-                "Duplicate name",
-                f'Another entry is already named "{name}". Save anyway?',
-                "Save Anyway", Adw.ResponseAppearance.DEFAULT,
+                _("Duplicate name"),
+                _('Another entry is already named "{name}". Save anyway?').format(name=name),
+                _("Save Anyway"), Adw.ResponseAppearance.DEFAULT,
                 lambda: self._commit(name, fields, notes, category),
             )
             return
@@ -5079,20 +5174,21 @@ class ImportPreviewDialog(Adw.Dialog):
         self.checks = []
 
         header, clamp = make_dialog_scaffold(
-            self, "Import Preview", width=500, height=480, clamp_max=460, margin=12, scrolled=True)
+            self, _("Import Preview"), width=500, height=480, clamp_max=460, margin=12, scrolled=True)
 
-        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn = Gtk.Button(label=_("Cancel"))
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
 
-        import_btn = Gtk.Button(label="Import Selected")
+        import_btn = Gtk.Button(label=_("Import Selected"))
         import_btn.add_css_class("suggested-action")
         import_btn.connect("clicked", self._on_import)
         header.pack_end(import_btn)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
 
-        info = Gtk.Label(label=f"Found {len(parsed)} entries in file.", xalign=0)
+        info = Gtk.Label(label=ngettext("Found {n} entry in file.", "Found {n} entries in file.",
+                                        len(parsed)).format(n=len(parsed)), xalign=0)
         info.add_css_class("heading")
         vbox.append(info)
         self.status = Gtk.Label(xalign=0)
@@ -5102,10 +5198,10 @@ class ImportPreviewDialog(Adw.Dialog):
 
         # Select all / none
         ctrl_box = Gtk.Box(spacing=8)
-        sel_all = Gtk.Button(label="Select All")
+        sel_all = Gtk.Button(label=_("Select All"))
         sel_all.add_css_class("flat")
         sel_all.connect("clicked", lambda b: self._set_all(True))
-        sel_none = Gtk.Button(label="Select None")
+        sel_none = Gtk.Button(label=_("Select None"))
         sel_none.add_css_class("flat")
         sel_none.connect("clicked", lambda b: self._set_all(False))
         ctrl_box.append(sel_all)
@@ -5117,11 +5213,11 @@ class ImportPreviewDialog(Adw.Dialog):
         # defaults to, filing each under its own -- the None choice import_entries reads.
         self.categories = list(main_win.vault["categories"])
         self.choices: list[str | None] = ["", *self.categories]
-        labels = ["No category", *self.categories]
+        labels = [_("No category"), *self.categories]
         if any(entry.get("category") for entry in parsed):
             self.choices.insert(0, None)
-            labels.insert(0, "Categories from file")
-        cat_row = Adw.ComboRow(title="Add to category")
+            labels.insert(0, _("Categories from file"))
+        cat_row = Adw.ComboRow(title=_("Add to category"))
         cat_row.set_model(Gtk.StringList.new(labels))
         cat_group = Gtk.ListBox()
         cat_group.set_selection_mode(Gtk.SelectionMode.NONE)
@@ -5143,10 +5239,17 @@ class ImportPreviewDialog(Adw.Dialog):
             row = Adw.ActionRow()
             row.set_title(GLib.markup_escape_text(entry["name"]))
             field_count = len(entry["fields"])
-            notes_flag = " +notes" if entry.get("notes") else ""
-            subtitle = f"{field_count} field{'' if field_count == 1 else 's'}{notes_flag}"
+            if entry.get("notes"):
+                # Translators: an import preview row's summary: how many fields, and "+notes"
+                # when the entry carries notes.
+                subtitle = ngettext("{n} field +notes", "{n} fields +notes", field_count)
+            else:
+                subtitle = ngettext("{n} field", "{n} fields", field_count)
+            subtitle = subtitle.format(n=field_count)
             if is_dup:
-                subtitle += "  (duplicate name — tick to import it anyway)"
+                # Translators: {summary} is the field count, e.g. "3 fields +notes".
+                subtitle = _("{summary}  (duplicate name — tick to import it anyway)").format(
+                    summary=subtitle)
             row.set_subtitle(subtitle)
 
             check = Gtk.CheckButton(active=not is_dup)
@@ -5160,13 +5263,13 @@ class ImportPreviewDialog(Adw.Dialog):
         clamp.set_child(vbox)
 
     def _set_all(self, state):
-        for check, _ in self.checks:
+        for check, _entry in self.checks:
             check.set_active(state)
 
     def _on_import(self, btn):
         selected = [self.parsed[i] for check, i in self.checks if check.get_active()]
         if not selected:
-            self.status.set_text("Tick at least one entry to import.")  # ROLO-0070
+            self.status.set_text(_("Tick at least one entry to import."))  # ROLO-0070
             self.status.set_visible(True)
             return
         self.main_win._finish_import(selected, self.choices[self.cat_row.get_selected()])
@@ -5177,8 +5280,8 @@ class CsvMappingDialog(Adw.Dialog):
     """Which column is which, for a CSV whose header matches no single known format
     (ROLO-0012 spec § 4.5). Continue builds the entries and opens the import preview."""
 
-    TITLES: ClassVar[dict[str, str]] = {"name": "Name", "category": "Category", "notes": "Notes", "field": "Field",
-                                        "skip": "Skip"}
+    TITLES: ClassVar[dict[str, str]] = {"name": _("Name"), "category": _("Category"), "notes": _("Notes"), "field": _("Field"),
+                                        "skip": _("Skip")}
 
     def __init__(self, main_win, header, rows, filepath):
         super().__init__()
@@ -5188,21 +5291,21 @@ class CsvMappingDialog(Adw.Dialog):
         self.filepath = filepath
 
         header_bar, clamp = make_dialog_scaffold(
-            self, "Match CSV Columns", width=500, height=520, clamp_max=460, margin=12,
+            self, _("Match CSV Columns"), width=500, height=520, clamp_max=460, margin=12,
             scrolled=True)
 
-        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn = Gtk.Button(label=_("Cancel"))
         cancel_btn.connect("clicked", lambda b: self.close())
         header_bar.pack_start(cancel_btn)
 
-        self.continue_btn = Gtk.Button(label="Continue")
+        self.continue_btn = Gtk.Button(label=_("Continue"))
         self.continue_btn.add_css_class("suggested-action")
         self.continue_btn.connect("clicked", self._on_continue)
         header_bar.pack_end(self.continue_btn)
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        info = Gtk.Label(label="Rolodex does not recognise this file's columns. Say what each "
-                               "one holds.", xalign=0, wrap=True)
+        info = Gtk.Label(label=_("Rolodex does not recognise this file's columns. Say what each "
+                               "one holds."), xalign=0, wrap=True)
         vbox.append(info)
         self.status = Gtk.Label(xalign=0, wrap=True)
         self.status.add_css_class("error")
@@ -5218,7 +5321,8 @@ class CsvMappingDialog(Adw.Dialog):
             if sample and _csv_field(column, sample)["sensitive"]:
                 sample = MASK  # import's own secrecy rule; never shown in clear (INV-14)
             # Both strings come from an untrusted file and the row renders markup (INV-11).
-            row = Adw.ComboRow(title=GLib.markup_escape_text(column or f"Column {i + 1}"),
+            row = Adw.ComboRow(title=GLib.markup_escape_text(
+                column or _("Column {number}").format(number=i + 1)),
                                subtitle=GLib.markup_escape_text(sample))
             row.set_model(Gtk.StringList.new(choice_labels))
             row.set_selected(CSV_MAPPING_TARGETS.index(default))
@@ -5257,13 +5361,13 @@ class ChangePasswordDialog(Adw.Dialog):
         self.main_win = main_win
 
         header, clamp = make_dialog_scaffold(
-            self, "Change Master Password", width=380, height=-1, clamp_max=340, margin=24)
+            self, _("Change Master Password"), width=380, height=-1, clamp_max=340, margin=24)
 
-        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn = Gtk.Button(label=_("Cancel"))
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
 
-        save_btn = Gtk.Button(label="Change")
+        save_btn = Gtk.Button(label=_("Change"))
         save_btn.add_css_class("suggested-action")
         save_btn.connect("clicked", self._on_save)
         header.pack_end(save_btn)
@@ -5273,7 +5377,7 @@ class ChangePasswordDialog(Adw.Dialog):
         pw_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         pw_list.add_css_class("boxed-list")
 
-        self.current_pw = Adw.PasswordEntryRow(title="Current password")
+        self.current_pw = Adw.PasswordEntryRow(title=_("Current password"))
         pw_list.append(self.current_pw)
 
         vbox.append(pw_list)
@@ -5282,10 +5386,10 @@ class ChangePasswordDialog(Adw.Dialog):
         new_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         new_list.add_css_class("boxed-list")
 
-        self.new_pw = Adw.PasswordEntryRow(title="New password")
+        self.new_pw = Adw.PasswordEntryRow(title=_("New password"))
         new_list.append(self.new_pw)
 
-        self.confirm_pw = Adw.PasswordEntryRow(title="Confirm new password")
+        self.confirm_pw = Adw.PasswordEntryRow(title=_("Confirm new password"))
         new_list.append(self.confirm_pw)
 
         # Enter submits, as it does in the unlock and restore dialogs (ROLO-0070).
@@ -5304,19 +5408,21 @@ class ChangePasswordDialog(Adw.Dialog):
     def _on_save(self, btn):
         current = self.current_pw.get_text()
         if current != self.main_win.password:
-            self.status.set_text("Incorrect current password.")
+            self.status.set_text(_("Incorrect current password."))
             self.status.set_visible(True)
             return
 
         new = self.new_pw.get_text()
         if len(new) < MIN_PASSWORD_LENGTH:
-            self.status.set_text(f"Password must be at least {MIN_PASSWORD_LENGTH} characters.")
+            self.status.set_text(ngettext("Password must be at least {n} character.",
+                                          "Password must be at least {n} characters.",
+                                          MIN_PASSWORD_LENGTH).format(n=MIN_PASSWORD_LENGTH))
             self.status.set_visible(True)
             return
 
         confirm = self.confirm_pw.get_text()
         if new != confirm:
-            self.status.set_text("Passwords do not match.")
+            self.status.set_text(_("Passwords do not match."))
             self.status.set_visible(True)
             return
 
@@ -5335,13 +5441,13 @@ class RestorePasswordDialog(Adw.Dialog):
         self.main_win = main_win
 
         header, clamp = make_dialog_scaffold(
-            self, "Restore from Backup", width=380, height=-1, clamp_max=340, margin=24)
+            self, _("Restore from Backup"), width=380, height=-1, clamp_max=340, margin=24)
 
-        cancel_btn = Gtk.Button(label="Cancel")
+        cancel_btn = Gtk.Button(label=_("Cancel"))
         cancel_btn.connect("clicked", lambda b: self.close())
         header.pack_start(cancel_btn)
 
-        unlock_btn = Gtk.Button(label="Restore")
+        unlock_btn = Gtk.Button(label=_("Restore"))
         unlock_btn.add_css_class("suggested-action")
         unlock_btn.connect("clicked", self._on_unlock)
         self._unlock_btn = unlock_btn
@@ -5350,7 +5456,7 @@ class RestorePasswordDialog(Adw.Dialog):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
 
         info = Gtk.Label(
-            label="Enter the master password for the backup vault.",
+            label=_("Enter the master password for the backup vault."),
             wrap=True, xalign=0,
         )
         info.add_css_class("dim-label")
@@ -5358,7 +5464,7 @@ class RestorePasswordDialog(Adw.Dialog):
 
         pw_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         pw_list.add_css_class("boxed-list")
-        self.pw_entry = Adw.PasswordEntryRow(title="Backup password")
+        self.pw_entry = Adw.PasswordEntryRow(title=_("Backup password"))
         self.pw_entry.connect("activate", self._on_unlock)
         pw_list.append(self.pw_entry)
         vbox.append(pw_list)
@@ -5373,12 +5479,12 @@ class RestorePasswordDialog(Adw.Dialog):
     def _on_unlock(self, *_args):
         pw = self.pw_entry.get_text()
         if not pw:
-            self.status.set_text("Please enter the backup password.")
+            self.status.set_text(_("Please enter the backup password."))
             self.status.set_visible(True)
             return
 
         self._unlock_btn.set_sensitive(False)
-        self._unlock_btn.set_label("Decrypting...")
+        self._unlock_btn.set_label(_("Decrypting..."))
 
         threading.Thread(
             target=self._try_unlock, args=(pw,), daemon=True
@@ -5389,16 +5495,16 @@ class RestorePasswordDialog(Adw.Dialog):
             vault, salt, key = load_vault_with_key(pw, self.main_win._restore_path)
             GLib.idle_add(self._unlock_ok, vault, salt, pw, key)
         except InvalidToken:
-            GLib.idle_add(self._unlock_fail, "Wrong password for this backup.")
+            GLib.idle_add(self._unlock_fail, _("Wrong password for this backup."))
         except ValueError as e:
             # Our own messages ("Not a valid vault file", "truncated or corrupt") carry no path.
             GLib.idle_add(self._unlock_fail, str(e))
         except OSError:
             # An OSError's text carries the full path of the file, and this dialog is not the
             # place to print it (ROLO-0072).
-            GLib.idle_add(self._unlock_fail, "Could not read that backup file.")
+            GLib.idle_add(self._unlock_fail, _("Could not read that backup file."))
         except Exception:  # noqa: BLE001 - anything else would leave the dialog on "Decrypting..."
-            GLib.idle_add(self._unlock_fail, "Could not restore that backup file.")
+            GLib.idle_add(self._unlock_fail, _("Could not restore that backup file."))
 
     def _unlock_ok(self, vault, salt, pw, key):
         # The KDF runs on a background thread and Cancel/Esc only closes this dialog -- it does
@@ -5412,7 +5518,7 @@ class RestorePasswordDialog(Adw.Dialog):
 
     def _unlock_fail(self, msg):
         self._unlock_btn.set_sensitive(True)
-        self._unlock_btn.set_label("Restore")
+        self._unlock_btn.set_label(_("Restore"))
         self.status.set_text(msg)
         self.status.set_visible(True)
 
@@ -5439,7 +5545,7 @@ class CategoryRow(Gtk.ListBoxRow):
         # Drag handle
         handle = Gtk.Image(icon_name="list-drag-handle-symbolic")
         handle.add_css_class("dim-label")
-        handle.set_tooltip_text("Drag to reorder, or Ctrl+Up / Ctrl+Down")
+        handle.set_tooltip_text(_("Drag to reorder, or Ctrl+Up / Ctrl+Down"))
         box.append(handle)
 
         # Category name label
@@ -5448,20 +5554,21 @@ class CategoryRow(Gtk.ListBoxRow):
         box.append(self.name_label)
 
         # Count badge
-        count_lbl = a11y_label(Gtk.Label(label=str(count)), f"{count} {entries_noun(count)}")
+        count_lbl = a11y_label(Gtk.Label(label=str(count)),
+                               ngettext("{n} entry", "{n} entries", count).format(n=count))
         count_lbl.add_css_class("category-count")
         box.append(count_lbl)
 
         # Rename button
-        rename_btn = a11y_label(Gtk.Button(icon_name="document-edit-symbolic", tooltip_text="Rename"),
-                                f"Rename category {name}")
+        rename_btn = a11y_label(Gtk.Button(icon_name="document-edit-symbolic", tooltip_text=_("Rename")),
+                                _("Rename category {name}").format(name=name))
         rename_btn.add_css_class("flat")
         rename_btn.connect("clicked", lambda b: self.dialog._rename_category(self))
         box.append(rename_btn)
 
         # Delete button
-        del_btn = a11y_label(Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text="Delete"),
-                             f"Delete category {name}")
+        del_btn = a11y_label(Gtk.Button(icon_name="edit-delete-symbolic", tooltip_text=_("Delete")),
+                             _("Delete category {name}").format(name=name))
         del_btn.add_css_class("flat")
         del_btn.add_css_class("error")
         del_btn.connect("clicked", lambda b: self.dialog._delete_category(self))
@@ -5516,9 +5623,9 @@ class ManageCategoriesDialog(Adw.Dialog):
         self.main_win = main_win
 
         header, clamp = make_dialog_scaffold(
-            self, "Manage Categories", width=420, height=460, clamp_max=400, margin=12, scrolled=True)
+            self, _("Manage Categories"), width=420, height=460, clamp_max=400, margin=12, scrolled=True)
 
-        done_btn = Gtk.Button(label="Done")
+        done_btn = Gtk.Button(label=_("Done"))
         done_btn.add_css_class("suggested-action")
         done_btn.connect("clicked", lambda b: self.close())
         header.pack_end(done_btn)
@@ -5528,10 +5635,10 @@ class ManageCategoriesDialog(Adw.Dialog):
         # Add new category row
         add_box = Gtk.Box(spacing=8)
         self.new_cat_entry = a11y_label(
-            Gtk.Entry(placeholder_text="New category name...", hexpand=True), "New category name")
+            Gtk.Entry(placeholder_text=_("New category name..."), hexpand=True), _("New category name"))
         self.new_cat_entry.connect("activate", lambda e: self._add_category())
         add_box.append(self.new_cat_entry)
-        add_btn = Gtk.Button(label="Add")
+        add_btn = Gtk.Button(label=_("Add"))
         add_btn.add_css_class("suggested-action")
         add_btn.connect("clicked", lambda b: self._add_category())
         add_box.append(add_btn)
@@ -5575,10 +5682,10 @@ class ManageCategoriesDialog(Adw.Dialog):
     def _add_category(self):
         name = self.new_cat_entry.get_text().strip()
         if not name:
-            self._show_status("Type a name for the new category.")
+            self._show_status(_("Type a name for the new category."))
             return
         if not add_category(self.main_win.vault, name):
-            self._show_status(f"A category named “{name}” already exists.")
+            self._show_status(_("A category named “{name}” already exists.").format(name=name))
             return
         self._show_status("")
         self.main_win._save()
@@ -5587,9 +5694,9 @@ class ManageCategoriesDialog(Adw.Dialog):
         self.main_win._refresh_list()
 
     def _rename_category(self, row):
-        dialog = Adw.AlertDialog(heading="Rename category", body=f'Enter a new name for "{row.cat_name}":')
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("rename", "Rename")
+        dialog = Adw.AlertDialog(heading=_("Rename category"), body=_('Enter a new name for "{name}":').format(name=row.cat_name))
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("rename", _("Rename"))
         dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
         dialog.set_default_response("rename")
         dialog.set_close_response("cancel")
@@ -5603,11 +5710,12 @@ class ManageCategoriesDialog(Adw.Dialog):
             if response == "rename":
                 new_name = entry.get_text().strip()
                 if not new_name:
-                    self._show_status("A category name cannot be empty.")
+                    self._show_status(_("A category name cannot be empty."))
                 elif new_name != row.cat_name and new_name in self.main_win.vault["categories"]:
                     self._show_status(
-                        f"A category named “{new_name}” already exists. Categories cannot be "
-                        "merged by renaming — move the entries, then delete the empty one.")
+                        _("A category named “{name}” already exists. Categories cannot be "
+                          "merged by renaming — move the entries, then delete the empty "
+                          "one.").format(name=new_name))
                 elif new_name != row.cat_name:
                     self._show_status("")
                     old_name = row.cat_name
@@ -5626,13 +5734,15 @@ class ManageCategoriesDialog(Adw.Dialog):
     def _delete_category(self, row):
         groups = entries_by_category(self.main_win.vault)
         count = len(groups.get(row.cat_name, []))
-        body = f'Delete category "{row.cat_name}"?'
+        body = _('Delete category "{name}"?').format(name=row.cat_name)
         if count:
-            body += f"\n{count} {entries_noun(count)} will be moved to Uncategorised."
+            body += "\n" + ngettext("{n} entry will be moved to Uncategorised.",
+                                    "{n} entries will be moved to Uncategorised.",
+                                    count).format(n=count)
 
-        dialog = Adw.AlertDialog(heading="Delete category", body=body)
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("delete", "Delete")
+        dialog = Adw.AlertDialog(heading=_("Delete category"), body=body)
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("delete", _("Delete"))
         dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
@@ -5688,14 +5798,15 @@ class UpdateDialog(Adw.AlertDialog):
         if len(notes) > 1500:
             notes = notes[:1500].rstrip() + "\n\n(...)"
         super().__init__(
-            heading=f"Rolodex {info.version} is available",
-            body=(f"You have {__version__}.\n\n{notes}" if notes else f"You have {__version__}."),
+            heading=_("Rolodex {version} is available").format(version=info.version),
+            body=(_("You have {version}.").format(version=__version__)
+                  + (f"\n\n{notes}" if notes else "")),
         )
         self.main_win = main_win
         self.info = info
-        self.add_response("later", "Later")
-        self.add_response("skip", "Skip This Version")
-        self.add_response("update", "Update Now")
+        self.add_response("later", _("Later"))
+        self.add_response("skip", _("Skip This Version"))
+        self.add_response("update", _("Update Now"))
         self.set_response_appearance("update", Adw.ResponseAppearance.SUGGESTED)
         self.set_default_response("later")
         self.set_close_response("later")
@@ -5708,7 +5819,7 @@ class UpdateDialog(Adw.AlertDialog):
             return
         if response == "skip":
             skip_update_version(self.info.version)
-            self.main_win._toast(f"Skipping Rolodex {self.info.version}")
+            self.main_win._toast(_("Skipping Rolodex {version}").format(version=self.info.version))
         self.main_win._set_update_busy(False)
 
 
@@ -6035,8 +6146,8 @@ class PasswordHealthDialog(Adw.Dialog):
 
     def __init__(self, main_win):
         super().__init__()
-        _, clamp = make_dialog_scaffold(
-            self, "Password Health", width=460, height=520, clamp_max=440, margin=16, scrolled=True)
+        _header, clamp = make_dialog_scaffold(
+            self, _("Password Health"), width=460, height=520, clamp_max=440, margin=16, scrolled=True)
 
         findings = audit_passwords(main_win.vault)
         weak = [f for f in findings if f["strength"] <= 2]
@@ -6045,15 +6156,17 @@ class PasswordHealthDialog(Adw.Dialog):
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
 
         if not findings:
-            summary = "No passwords stored yet."
+            summary = _("No passwords stored yet.")
         elif not weak and not reused:
-            summary = f"All {len(findings)} passwords look strong."
+            summary = ngettext("The {n} password looks strong.", "All {n} passwords look strong.",
+                               len(findings)).format(n=len(findings))
         else:
             parts = []
             if weak:
-                parts.append(f"{len(weak)} weak or fair")
+                parts.append(ngettext("{n} weak or fair", "{n} weak or fair",
+                                      len(weak)).format(n=len(weak)))
             if reused:
-                parts.append(f"{len(reused)} reused")
+                parts.append(ngettext("{n} reused", "{n} reused", len(reused)).format(n=len(reused)))
             summary = "   ·   ".join(parts)
         summary_lbl = Gtk.Label(label=summary, xalign=0, wrap=True)
         summary_lbl.add_css_class("title-4")
@@ -6075,7 +6188,7 @@ class PasswordHealthDialog(Adw.Dialog):
                     "warning" if f["strength"] == 2 else "success")
                 chips.append(strength_chip)
                 if f["reused"]:
-                    reuse_chip = Gtk.Label(label="Reused")
+                    reuse_chip = Gtk.Label(label=_("Reused"))
                     reuse_chip.add_css_class("caption")
                     reuse_chip.add_css_class("warning")
                     chips.append(reuse_chip)
@@ -6091,20 +6204,20 @@ class ShortcutsDialog(Adw.Dialog):
     deprecated as of GTK 4.18 (this ships against 4.22)."""
 
     SHORTCUTS: ClassVar[list[tuple[str, str]]] = [
-        ("<Control>f", "Focus search"),
-        ("<Control>n", "Add entry"),
-        ("<Control><Shift>c", "Copy password / secret"),
-        ("<Control>l", "Lock vault"),
-        ("Escape", "Clear search"),
-        ("<Control>a", "Select every entry in the list"),
-        ("<Control>question", "Keyboard shortcuts"),
-        ("<Control>comma", "Preferences"),
+        ("<Control>f", _("Focus search")),
+        ("<Control>n", _("Add entry")),
+        ("<Control><Shift>c", _("Copy password / secret")),
+        ("<Control>l", _("Lock vault")),
+        ("Escape", _("Clear search")),
+        ("<Control>a", _("Select every entry in the list")),
+        ("<Control>question", _("Keyboard shortcuts")),
+        ("<Control>comma", _("Preferences")),
     ]
 
     def __init__(self):
         super().__init__()
-        _, clamp = make_dialog_scaffold(
-            self, "Keyboard Shortcuts", width=380, height=-1, clamp_max=340, margin=24)
+        _header, clamp = make_dialog_scaffold(
+            self, _("Keyboard Shortcuts"), width=380, height=-1, clamp_max=340, margin=24)
 
         listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         listbox.add_css_class("boxed-list")
@@ -6182,17 +6295,18 @@ class PreferencesDialog(Adw.PreferencesDialog):
     at once and is saved to .rolodex.conf."""
 
     ACCENT_CHOICES: ClassVar[list[tuple[str, str]]] = (
-        [(ACCENT_SYSTEM, "Follow desktop")] + [(k, k.capitalize()) for k in ACCENT_PRESETS])
+        [(ACCENT_SYSTEM, _("Follow desktop"))]
+        + [(k, ACCENT_NAMES.get(k, k.capitalize())) for k in ACCENT_PRESETS])
 
     def __init__(self, themes: ThemeManager):
-        super().__init__(title="Preferences")
+        super().__init__(title=_("Preferences"))
         self._themes = themes
-        page = Adw.PreferencesPage(title="Appearance", icon_name="preferences-desktop-symbolic")
-        group = Adw.PreferencesGroup(title="Appearance")
+        page = Adw.PreferencesPage(title=_("Appearance"), icon_name="preferences-desktop-symbolic")
+        group = Adw.PreferencesGroup(title=_("Appearance"))
 
         theme_keys = list(THEMES)
         self.theme_row = Adw.ComboRow(
-            title="Theme", subtitle="Automatic follows your desktop's light or dark setting",
+            title=_("Theme"), subtitle=_("Automatic follows your desktop's light or dark setting"),
             model=Gtk.StringList.new(list(THEMES.values())))
         self.theme_row.set_selected(theme_keys.index(themes.theme))
         self.theme_row.connect(
@@ -6202,9 +6316,9 @@ class PreferencesDialog(Adw.PreferencesDialog):
 
         accent_keys = [k for k, _ in self.ACCENT_CHOICES]
         subtitle = ("" if themes.follows_system_accent_supported() else
-                    "Your desktop does not share an accent colour, so Follow desktop uses blue")
+                    _("Your desktop does not share an accent colour, so Follow desktop uses blue"))
         self.accent_row = Adw.ComboRow(
-            title="Accent colour", subtitle=subtitle,
+            title=_("Accent colour"), subtitle=subtitle,
             model=Gtk.StringList.new([label for _, label in self.ACCENT_CHOICES]))
         self.accent_row.set_selected(accent_keys.index(themes.accent))
         self.accent_row.connect(
@@ -6218,7 +6332,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
     def _saved(self, ok: bool) -> None:
         if not ok:
             self.add_toast(Adw.Toast(
-                title="Could not save this setting. It applies until Rolodex closes."))
+                title=_("Could not save this setting. It applies until Rolodex closes.")))
 
 
 class RolodexApp(Adw.Application):
