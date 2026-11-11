@@ -2,8 +2,9 @@
 # each GitHub release as rolodex.flatpak. Not submitted to Flathub: Flathub does not accept
 # AI-assisted applications.
 #
-# Sources are named file by file, never as the whole directory: a `dir` source would copy
-# contacts.vault and .rolodex.conf from a developer's checkout into the build tree.
+# Sources are named file by file, plus the locale/ folder; never the repository root: a `dir`
+# source there would copy contacts.vault and .rolodex.conf from a developer's checkout into the
+# build tree.
 #
 # Inside the sandbox FLATPAK_ID is set, so rolodex.py keeps its data in
 # ~/.var/app/com.rolodex.Contacts/data/Rolodex. Import, export and backup go through the
@@ -72,6 +73,8 @@ modules:
     buildsystem: simple
     build-commands:
       - install -Dm644 rolodex.py /app/share/rolodex/rolodex.py
+      # The compiled translations (ROLO-0028). rolodex.py looks for them beside itself.
+      - cp -r locale /app/share/rolodex/locale
       - printf '#!/bin/sh\nexec python3 /app/share/rolodex/rolodex.py "$@"\n' > rolodex
       - install -Dm755 rolodex /app/bin/rolodex
       - install -Dm644 com.rolodex.Contacts.desktop /app/share/applications/com.rolodex.Contacts.desktop
@@ -82,6 +85,9 @@ modules:
     sources:
       - type: file
         path: ../../rolodex.py
+      - type: dir
+        path: ../../locale
+        dest: locale
       - type: file
         path: com.rolodex.Contacts.png
       - type: file

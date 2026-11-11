@@ -3499,8 +3499,8 @@ class MainWindow(Adw.ApplicationWindow):
         """Show the bulk bar for two or more selected entries, and say so in the empty pane."""
         multi = n >= 2
         self.bulk_bar.set_visible(multi)
-        # Translators: how many entries are selected in the list, shown in the bulk-action bar.
         self.bulk_label.set_text(
+            # Translators: how many entries are selected in the list, shown in the bulk-action bar.
             ngettext("{n} selected", "{n} selected", n).format(n=n) if multi else "")
         self.bulk_move_btn.set_visible(bool(self.vault.get("categories")))
         if multi:

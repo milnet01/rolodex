@@ -20,6 +20,14 @@ All notable changes to Rolodex are documented here. The format is based on
   The Flatpak carries a description, screenshots and release history, so
   GNOME Software and Discover show Rolodex properly.
 
+- **German, French and Spanish.** (ROLO-0028)
+  Rolodex now follows the system language. Other languages show English.
+  Contributors can add a language; see "Translations" in `CONTRIBUTING.md`.
+
+### Changed
+
+- **Password Health with one password** now reads "The 1 password looks strong.", not "All 1 passwords look strong." (ROLO-0028)
+
 ## [2.0.0] - 2026-11-08
 
 **Theme:** Accessibility, layout and Argon2id

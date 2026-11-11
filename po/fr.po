@@ -1,0 +1,1365 @@
+# French translations for Rolodex package
+# Traductions françaises du paquet Rolodex.
+# Copyright (C) 2026 THE Rolodex'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the Rolodex package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Rolodex 2.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-11 20:40+0200\n"
+"PO-Revision-Date: 2026-11-11 18:12+0200\n"
+"Last-Translator: Rolodex contributors\n"
+"Language-Team: none\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: rolodex.py
+msgid "That file is too large to import (the limit is 10 MB)."
+msgstr "Ce fichier est trop volumineux pour être importé (la limite est de 10 Mo)."
+
+#: rolodex.py
+msgid ""
+"This vault was made by a newer version of Rolodex. Update Rolodex to open it."
+msgstr "Ce coffre a été créé par une version plus récente de Rolodex. Mettez à jour Rolodex pour l’ouvrir."
+
+#: rolodex.py
+msgid "This vault is already open in another Rolodex window."
+msgstr "Ce coffre est déjà ouvert dans une autre fenêtre de Rolodex."
+
+#: rolodex.py
+msgid "Vault file is truncated or corrupt"
+msgstr "Le fichier du coffre est tronqué ou corrompu"
+
+#: rolodex.py
+msgid "Not a valid vault file"
+msgstr "Fichier de coffre non valide"
+
+#: rolodex.py
+msgid "A vault already exists here. Restart Rolodex to unlock it."
+msgstr "Un coffre existe déjà ici. Redémarrez Rolodex pour le déverrouiller."
+
+#: rolodex.py
+msgid "That file is too large to be a Rolodex vault."
+msgstr "Ce fichier est trop volumineux pour être un coffre Rolodex."
+
+#: rolodex.py
+msgid "That file is not a Rolodex vault."
+msgstr "Ce fichier n’est pas un coffre Rolodex."
+
+#: rolodex.py
+msgid "Vault contents are not a valid vault"
+msgstr "Le contenu du coffre n’est pas valide"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"This vault was written by a newer version of Rolodex (format v{version}). "
+"Upgrade Rolodex to open it."
+msgstr "Ce coffre a été écrit par une version plus récente de Rolodex (format v{version}). Mettez à jour Rolodex pour l’ouvrir."
+
+#: rolodex.py
+msgid "Credential field"
+msgstr "Champ d’identifiants"
+
+#: rolodex.py
+msgid "Key or token field"
+msgstr "Champ de clé ou de jeton"
+
+#: rolodex.py
+msgid "Identity field"
+msgstr "Champ d’identité"
+
+#: rolodex.py
+msgid "Link field"
+msgstr "Champ de lien"
+
+#: rolodex.py
+msgid "Date field"
+msgstr "Champ de date"
+
+#: rolodex.py
+msgid "Uncategorised field"
+msgstr "Champ non classé"
+
+#: rolodex.py
+msgid "Empty"
+msgstr "Vide"
+
+#: rolodex.py
+msgid "Weak"
+msgstr "Faible"
+
+#: rolodex.py
+msgid "Fair"
+msgstr "Moyen"
+
+#: rolodex.py
+msgid "Good"
+msgstr "Bon"
+
+#: rolodex.py
+msgid "Strong"
+msgstr "Fort"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Row {row} of the CSV file is malformed: {error}"
+msgstr "La ligne {row} du fichier CSV est mal formée : {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Row {row} of the CSV file has more cells than the header."
+msgstr "La ligne {row} du fichier CSV contient plus de cellules que l’en-tête."
+
+#: rolodex.py
+msgid "Choose exactly one column as the Name."
+msgstr "Choisissez exactement une colonne comme Nom."
+
+#: rolodex.py
+msgid "Choose at most one column as the Category."
+msgstr "Choisissez au plus une colonne comme Catégorie."
+
+#: rolodex.py
+msgid "Choose at most one column as the Notes."
+msgstr "Choisissez au plus une colonne comme Notes."
+
+#: rolodex.py
+msgid "Automatic"
+msgstr "Automatique"
+
+#: rolodex.py
+msgid "Dark"
+msgstr "Sombre"
+
+#: rolodex.py
+msgid "Light"
+msgstr "Clair"
+
+#: rolodex.py
+msgid "High contrast"
+msgstr "Contraste élevé"
+
+#: rolodex.py
+msgid "Blue"
+msgstr "Bleu"
+
+#: rolodex.py
+msgid "Teal"
+msgstr "Bleu sarcelle"
+
+#: rolodex.py
+msgid "Green"
+msgstr "Vert"
+
+#: rolodex.py
+msgid "Orange"
+msgstr "Orange"
+
+#: rolodex.py
+msgid "Pink"
+msgstr "Rose"
+
+#: rolodex.py
+msgid "Purple"
+msgstr "Violet"
+
+#: rolodex.py
+msgid "Slate"
+msgstr "Ardoise"
+
+#: rolodex.py
+msgid "refusing a non-https update URL"
+msgstr "refus d’une URL de mise à jour non https"
+
+#: rolodex.py
+#, python-brace-format
+msgid "refusing an update URL outside GitHub ({host})"
+msgstr "refus d’une URL de mise à jour hors de GitHub ({host})"
+
+#: rolodex.py
+msgid "no host"
+msgstr "aucun hôte"
+
+#: rolodex.py
+msgid "the update server is too slow; try again later"
+msgstr "le serveur de mise à jour est trop lent ; réessayez plus tard"
+
+#: rolodex.py
+msgid "download exceeds the size cap"
+msgstr "le téléchargement dépasse la taille maximale"
+
+#: rolodex.py
+#, python-brace-format
+msgid "could not check for updates: {error}"
+msgstr "impossible de rechercher des mises à jour : {error}"
+
+#: rolodex.py
+msgid "self-update is not supported on this build"
+msgstr "la mise à jour automatique n’est pas prise en charge par cette version"
+
+#: rolodex.py
+msgid "the update's signature did not verify"
+msgstr "la signature de la mise à jour n’a pas pu être vérifiée"
+
+#: rolodex.py
+#, python-brace-format
+msgid "could not stage the update: {error}"
+msgstr "impossible de préparer la mise à jour : {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "could not install the update: {error}"
+msgstr "impossible d’installer la mise à jour : {error}"
+
+#: rolodex.py
+msgid "All files"
+msgstr "Tous les fichiers"
+
+#: rolodex.py
+msgid "Create a master password to encrypt your vault."
+msgstr "Créez un mot de passe principal pour chiffrer votre coffre."
+
+#: rolodex.py
+msgid "Master password"
+msgstr "Mot de passe principal"
+
+#: rolodex.py
+msgid "Confirm password"
+msgstr "Confirmer le mot de passe"
+
+#: rolodex.py
+msgid "Create Vault"
+msgstr "Créer le coffre"
+
+#: rolodex.py
+msgid "Unlock"
+msgstr "Déverrouiller"
+
+#: rolodex.py
+msgid "Use an Existing Vault File…"
+msgstr "Utiliser un fichier de coffre existant…"
+
+#: rolodex.py
+msgid "Restore from Backup…"
+msgstr "Restaurer depuis une sauvegarde…"
+
+#: rolodex.py
+msgid "Start a New Vault…"
+msgstr "Créer un nouveau coffre…"
+
+#: rolodex.py
+msgid "Please enter a password."
+msgstr "Veuillez saisir un mot de passe."
+
+#: rolodex.py
+#, python-brace-format
+msgid "Password must be at least {n} character."
+msgid_plural "Password must be at least {n} characters."
+msgstr[0] "Le mot de passe doit comporter au moins {n} caractère."
+msgstr[1] "Le mot de passe doit comporter au moins {n} caractères."
+
+#: rolodex.py
+msgid "Passwords do not match."
+msgstr "Les mots de passe ne correspondent pas."
+
+#: rolodex.py
+msgid "Creating..."
+msgstr "Création…"
+
+#: rolodex.py
+msgid "Unlocking..."
+msgstr "Déverrouillage…"
+
+#: rolodex.py
+msgid "Wrong password."
+msgstr "Mot de passe incorrect."
+
+#: rolodex.py
+#, python-brace-format
+msgid "The vault opened but could not be loaded: {error}"
+msgstr "Le coffre s’est ouvert mais n’a pas pu être chargé : {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "The vault was created but could not be opened: {error}"
+msgstr "Le coffre a été créé mais n’a pas pu être ouvert : {error}"
+
+#: rolodex.py
+msgid "Choose a Rolodex vault or backup"
+msgstr "Choisir un coffre ou une sauvegarde Rolodex"
+
+#: rolodex.py
+msgid "Rolodex vaults"
+msgstr "Coffres Rolodex"
+
+#: rolodex.py
+msgid "Vault file installed. Enter its master password to unlock it."
+msgstr "Fichier de coffre installé. Saisissez son mot de passe principal pour le déverrouiller."
+
+#. Translators: appended, after a space, to "Vault file installed. Enter its master
+#. password to unlock it."
+#: rolodex.py
+#, python-brace-format
+msgid "The unreadable vault was kept as {filename}."
+msgstr "Le coffre illisible a été conservé sous le nom {filename}."
+
+#: rolodex.py
+msgid "Start a New Vault?"
+msgstr "Créer un nouveau coffre ?"
+
+#: rolodex.py
+msgid ""
+"The vault that will not open is kept, renamed beside the original with "
+"“.unreadable-” and the date added, so it can still be recovered. A new, "
+"empty vault is then created with a new master password."
+msgstr "Le coffre qui ne s’ouvre pas est conservé, renommé à côté de l’original avec « .unreadable- » et la date ajoutés, afin de pouvoir encore être récupéré. Un nouveau coffre vide est ensuite créé avec un nouveau mot de passe principal."
+
+#: rolodex.py
+msgid "Cancel"
+msgstr "Annuler"
+
+#: rolodex.py
+msgid "Start New Vault"
+msgstr "Créer un nouveau coffre"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Could not move the unreadable vault aside: {error}"
+msgstr "Impossible de mettre de côté le coffre illisible : {error}"
+
+#: rolodex.py
+msgid "Entry"
+msgstr "Entrée"
+
+#: rolodex.py
+msgid "Uncategorised"
+msgstr "Non classé"
+
+#. Translators: what a screen reader says for a category heading, e.g. "Games, 3 entries".
+#: rolodex.py
+#, python-brace-format
+msgid "{category}, {n} entry"
+msgid_plural "{category}, {n} entries"
+msgstr[0] "{category}, {n} entrée"
+msgstr[1] "{category}, {n} entrées"
+
+#: rolodex.py
+msgid "Add entry (Ctrl+N)"
+msgstr "Ajouter une entrée (Ctrl+N)"
+
+#: rolodex.py
+msgid "Add entry"
+msgstr "Ajouter une entrée"
+
+#: rolodex.py
+msgid "Preferences..."
+msgstr "Préférences…"
+
+#: rolodex.py
+msgid "Password health..."
+msgstr "Santé des mots de passe…"
+
+#: rolodex.py
+msgid "Manage categories..."
+msgstr "Gérer les catégories…"
+
+#: rolodex.py
+msgid "Import from text file..."
+msgstr "Importer depuis un fichier texte…"
+
+#: rolodex.py
+msgid "Import from CSV file..."
+msgstr "Importer depuis un fichier CSV…"
+
+#: rolodex.py
+msgid "Backup vault..."
+msgstr "Sauvegarder le coffre…"
+
+#: rolodex.py
+msgid "Restore vault from backup..."
+msgstr "Restaurer le coffre depuis une sauvegarde…"
+
+#: rolodex.py
+msgid "Export (decrypted plaintext)..."
+msgstr "Exporter (texte en clair déchiffré)…"
+
+#: rolodex.py
+msgid "Export as CSV (decrypted)..."
+msgstr "Exporter en CSV (déchiffré)…"
+
+#: rolodex.py
+msgid "Change master password..."
+msgstr "Changer le mot de passe principal…"
+
+#: rolodex.py
+msgid "Check for updates..."
+msgstr "Rechercher des mises à jour…"
+
+#: rolodex.py
+msgid "Check for updates automatically"
+msgstr "Rechercher automatiquement les mises à jour"
+
+#: rolodex.py
+msgid "Main menu"
+msgstr "Menu principal"
+
+#: rolodex.py
+msgid "Lock vault (Ctrl+L)"
+msgstr "Verrouiller le coffre (Ctrl+L)"
+
+#: rolodex.py
+msgid "Lock vault"
+msgstr "Verrouiller le coffre"
+
+#: rolodex.py
+msgid "Search entries..."
+msgstr "Rechercher des entrées…"
+
+#: rolodex.py
+msgid "Search entries"
+msgstr "Rechercher des entrées"
+
+#: rolodex.py
+msgid "All categories"
+msgstr "Toutes les catégories"
+
+#: rolodex.py
+msgid "Show category"
+msgstr "Afficher la catégorie"
+
+#: rolodex.py
+msgid "Clear"
+msgstr "Effacer"
+
+#: rolodex.py
+msgid "Clear selection"
+msgstr "Effacer la sélection"
+
+#: rolodex.py
+msgid "Move to…"
+msgstr "Déplacer vers…"
+
+#: rolodex.py
+msgid "Delete"
+msgstr "Supprimer"
+
+#: rolodex.py
+msgid "Could Not Save"
+msgstr "Enregistrement impossible"
+
+#: rolodex.py
+#, python-brace-format
+msgid "The vault was not written to disk: {error}"
+msgstr "Le coffre n’a pas été écrit sur le disque : {error}"
+
+#: rolodex.py
+msgid "Vault Changed Elsewhere"
+msgstr "Coffre modifié ailleurs"
+
+#: rolodex.py
+msgid ""
+"The vault file was changed by something else since you unlocked it — another "
+"copy of Rolodex, a sync tool, or a file copied over it. Your latest change "
+"was NOT saved.\n"
+"\n"
+"Reload locks Rolodex so you can unlock the version on disk; your unsaved "
+"change is discarded. Overwrite replaces the version on disk with everything "
+"open here, which discards the other change instead."
+msgstr "Le fichier du coffre a été modifié par autre chose depuis son déverrouillage — une autre copie de Rolodex, un outil de synchronisation ou un fichier copié par-dessus. Votre dernière modification n’a PAS été enregistrée.\n\nRecharger verrouille Rolodex pour que vous puissiez déverrouiller la version sur le disque ; votre modification non enregistrée est perdue. Écraser remplace la version sur le disque par tout ce qui est ouvert ici, ce qui fait perdre l’autre modification à la place."
+
+#: rolodex.py
+msgid "Reload From Disk"
+msgstr "Recharger depuis le disque"
+
+#: rolodex.py
+msgid "Overwrite"
+msgstr "Écraser"
+
+#: rolodex.py
+msgid "Saved over the changed vault"
+msgstr "Coffre modifié écrasé"
+
+#. Translators: the count under the entry list while a search or filter is active.
+#: rolodex.py
+#, python-brace-format
+msgid "{shown} of {n} entry"
+msgid_plural "{shown} of {n} entries"
+msgstr[0] "{shown} sur {n} entrée"
+msgstr[1] "{shown} sur {n} entrées"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry"
+msgid_plural "{n} entries"
+msgstr[0] "{n} entrée"
+msgstr[1] "{n} entrées"
+
+#. Translators: how many entries are selected in the list, shown in the bulk-action bar.
+#: rolodex.py
+#, python-brace-format
+msgid "{n} selected"
+msgid_plural "{n} selected"
+msgstr[0] "{n} sélectionnée"
+msgstr[1] "{n} sélectionnées"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry selected"
+msgid_plural "{n} entries selected"
+msgstr[0] "{n} entrée sélectionnée"
+msgstr[1] "{n} entrées sélectionnées"
+
+#: rolodex.py
+msgid "Move or delete them with the buttons below the list."
+msgstr "Déplacez-les ou supprimez-les avec les boutons sous la liste."
+
+#: rolodex.py
+msgid "Select an entry"
+msgstr "Sélectionnez une entrée"
+
+#: rolodex.py
+msgid "Choose an entry from the list, or add a new one."
+msgstr "Choisissez une entrée dans la liste ou ajoutez-en une nouvelle."
+
+#: rolodex.py
+msgid "Hidden value"
+msgstr "Valeur masquée"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Copy {label}"
+msgstr "Copier {label}"
+
+#: rolodex.py
+msgid "Notes"
+msgstr "Notes"
+
+#: rolodex.py
+msgid "Hide sensitive"
+msgstr "Masquer les données sensibles"
+
+#: rolodex.py
+msgid "Reveal sensitive"
+msgstr "Afficher les données sensibles"
+
+#: rolodex.py
+msgid "Edit"
+msgstr "Modifier"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Created: {date}"
+msgstr "Créée le : {date}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Modified: {date}"
+msgstr "Modifiée le : {date}"
+
+#: rolodex.py
+msgid "Code"
+msgstr "Code"
+
+#: rolodex.py
+msgid ""
+"Your computer's clock is not synchronised, so this code may be rejected. "
+"Turn on automatic time in your system settings."
+msgstr "L’horloge de votre ordinateur n’est pas synchronisée, ce code risque donc d’être refusé. Activez l’heure automatique dans les paramètres du système."
+
+#: rolodex.py
+msgid "Copy 2FA code"
+msgstr "Copier le code 2FA"
+
+#: rolodex.py
+msgid "2FA code"
+msgstr "Code 2FA"
+
+#. Translators: seconds left before a 2FA code changes; "s" abbreviates "seconds".
+#: rolodex.py
+#, python-brace-format
+msgid "{seconds}s"
+msgstr "{seconds} s"
+
+#: rolodex.py
+msgid "Clipboard not available"
+msgstr "Presse-papiers indisponible"
+
+#. Translators: {label} is a field's name, e.g. "Password"; "s" abbreviates "seconds".
+#: rolodex.py
+#, python-brace-format
+msgid "Copied {label} — clipboard clears in {seconds}s"
+msgstr "{label} copié — presse-papiers effacé dans {seconds} s"
+
+#. Translators: {label} is a field's name, e.g. "Password".
+#: rolodex.py
+#, python-brace-format
+msgid "Copied {label}"
+msgstr "{label} copié"
+
+#: rolodex.py
+msgid "Couldn't save that setting — the settings file is not writable"
+msgstr "Impossible d’enregistrer ce paramètre — le fichier de paramètres n’est pas accessible en écriture"
+
+#: rolodex.py
+msgid "Rolodex will check for updates on startup"
+msgstr "Rolodex recherchera des mises à jour au démarrage"
+
+#: rolodex.py
+msgid "Automatic update checks turned off"
+msgstr "Recherche automatique des mises à jour désactivée"
+
+#: rolodex.py
+msgid "Updates not available"
+msgstr "Mises à jour indisponibles"
+
+#: rolodex.py
+msgid ""
+"In-app updates work only in the packaged Rolodex build. Running from source "
+"or from a distribution package, updating is handled outside the app."
+msgstr "Les mises à jour intégrées ne fonctionnent que dans la version empaquetée de Rolodex. Depuis les sources ou un paquet de distribution, les mises à jour se font en dehors de l’application."
+
+#: rolodex.py
+msgid "Checking for updates..."
+msgstr "Recherche de mises à jour…"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Couldn't check for updates: {error}"
+msgstr "Impossible de rechercher des mises à jour : {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Rolodex {version} is up to date"
+msgstr "Rolodex {version} est à jour"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Downloading Rolodex {version}..."
+msgstr "Téléchargement de Rolodex {version}…"
+
+#: rolodex.py
+msgid "Update rejected"
+msgstr "Mise à jour refusée"
+
+#: rolodex.py
+msgid ""
+"The downloaded update was not signed by the Rolodex release key, so it was "
+"discarded and nothing was installed. Your current version is untouched."
+msgstr "La mise à jour téléchargée n’était pas signée par la clé de publication de Rolodex ; elle a donc été supprimée et rien n’a été installé. Votre version actuelle est intacte."
+
+#: rolodex.py
+msgid "Update failed"
+msgstr "Échec de la mise à jour"
+
+#: rolodex.py
+msgid "Select an entry first"
+msgstr "Sélectionnez d’abord une entrée"
+
+#: rolodex.py
+msgid "No sensitive field to copy"
+msgstr "Aucun champ sensible à copier"
+
+#: rolodex.py
+msgid "Delete entry?"
+msgstr "Supprimer l’entrée ?"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete \"{name}\"? This cannot be undone."
+msgstr "Supprimer « {name} » ? Cette action est irréversible."
+
+#. Translators: one entry's name inside a list of names, quoted.
+#: rolodex.py
+#, python-brace-format
+msgid "\"{name}\""
+msgstr "« {name} »"
+
+#. Translators: the separator between names in a list, e.g. '"A", "B", "C"'.
+#: rolodex.py
+msgid ", "
+msgstr ", "
+
+#. Translators: {names} is three quoted entry names; {n} is how many more there are.
+#: rolodex.py
+#, python-brace-format
+msgid "{names} and {n} more"
+msgid_plural "{names} and {n} more"
+msgstr[0] "{names} et {n} autre"
+msgstr[1] "{names} et {n} autres"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete {n} entry?"
+msgid_plural "Delete {n} entries?"
+msgstr[0] "Supprimer {n} entrée ?"
+msgstr[1] "Supprimer {n} entrées ?"
+
+#. Translators: {names} is a list of quoted entry names.
+#: rolodex.py
+#, python-brace-format
+msgid "Delete {names}? This cannot be undone."
+msgstr "Supprimer {names} ? Cette action est irréversible."
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry deleted"
+msgid_plural "{n} entries deleted"
+msgstr[0] "{n} entrée supprimée"
+msgstr[1] "{n} entrées supprimées"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Moved {n} entry to {category}"
+msgid_plural "Moved {n} entries to {category}"
+msgstr[0] "{n} entrée déplacée vers {category}"
+msgstr[1] "{n} entrées déplacées vers {category}"
+
+#: rolodex.py
+msgid "Entry deleted"
+msgstr "Entrée supprimée"
+
+#: rolodex.py
+msgid "Add Entry"
+msgstr "Ajouter une entrée"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Added \"{name}\""
+msgstr "« {name} » ajoutée"
+
+#: rolodex.py
+msgid "Edit Entry"
+msgstr "Modifier l’entrée"
+
+#: rolodex.py
+msgid "Entry updated"
+msgstr "Entrée mise à jour"
+
+#: rolodex.py
+msgid "Import from text file"
+msgstr "Importer depuis un fichier texte"
+
+#: rolodex.py
+msgid "Text files"
+msgstr "Fichiers texte"
+
+#: rolodex.py
+msgid "Import Error"
+msgstr "Erreur d’importation"
+
+#: rolodex.py
+msgid "Import"
+msgstr "Importer"
+
+#: rolodex.py
+msgid "No entries found in file."
+msgstr "Aucune entrée trouvée dans le fichier."
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"That file holds {count} entries. Import at most {limit} at a time — split "
+"the file and import each part."
+msgstr "Ce fichier contient {count} entrées. Importez-en au plus {limit} à la fois — divisez le fichier et importez chaque partie."
+
+#: rolodex.py
+msgid "Import from CSV file"
+msgstr "Importer depuis un fichier CSV"
+
+#: rolodex.py
+msgid "CSV files"
+msgstr "Fichiers CSV"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Imported {n} entry."
+msgid_plural "Imported {n} entries."
+msgstr[0] "{n} entrée importée."
+msgstr[1] "{n} entrées importées."
+
+#: rolodex.py
+msgid "Backup vault to..."
+msgstr "Sauvegarder le coffre vers…"
+
+#: rolodex.py
+msgid "Vault backed up"
+msgstr "Coffre sauvegardé"
+
+#: rolodex.py
+msgid "Backup Error"
+msgstr "Erreur de sauvegarde"
+
+#: rolodex.py
+msgid "Restore from backup"
+msgstr "Restaurer depuis une sauvegarde"
+
+#: rolodex.py
+msgid ""
+"This will replace all current entries with the backup contents. You will "
+"need to enter the backup's master password."
+msgstr "Toutes les entrées actuelles seront remplacées par le contenu de la sauvegarde. Vous devrez saisir le mot de passe principal de la sauvegarde."
+
+#: rolodex.py
+msgid "Restore"
+msgstr "Restaurer"
+
+#: rolodex.py
+msgid "Select vault backup"
+msgstr "Sélectionner la sauvegarde du coffre"
+
+#: rolodex.py
+msgid "Vault files"
+msgstr "Fichiers de coffre"
+
+#: rolodex.py
+msgid "the vault file was changed elsewhere since you unlocked it"
+msgstr "le fichier du coffre a été modifié ailleurs depuis son déverrouillage"
+
+#: rolodex.py
+msgid "Restore Failed"
+msgstr "Échec de la restauration"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"The backup could not be written to the vault, so nothing changed: {error}"
+msgstr "La sauvegarde n’a pas pu être écrite dans le coffre, rien n’a donc changé : {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Restored {n} entry from backup"
+msgid_plural "Restored {n} entries from backup"
+msgstr[0] "{n} entrée restaurée depuis la sauvegarde"
+msgstr[1] "{n} entrées restaurées depuis la sauvegarde"
+
+#: rolodex.py
+msgid "Export decrypted backup"
+msgstr "Exporter une sauvegarde déchiffrée"
+
+#: rolodex.py
+msgid "This will export all entries in plaintext. Continue?"
+msgstr "Toutes les entrées seront exportées en texte clair. Continuer ?"
+
+#: rolodex.py
+msgid "Export"
+msgstr "Exporter"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"This will export all entries to an unencrypted CSV file. Anyone who can read "
+"the file can read every password. The file will be too large for Rolodex to "
+"import in one go (the limits are {limit} entries and 10 MB). Continue?"
+msgstr "Toutes les entrées seront exportées dans un fichier CSV non chiffré. Quiconque peut lire le fichier peut lire tous les mots de passe. Le fichier sera trop volumineux pour que Rolodex l’importe en une fois (les limites sont de {limit} entrées et 10 Mo). Continuer ?"
+
+#: rolodex.py
+msgid ""
+"This will export all entries to an unencrypted CSV file. Anyone who can read "
+"the file can read every password. Continue?"
+msgstr "Toutes les entrées seront exportées dans un fichier CSV non chiffré. Quiconque peut lire le fichier peut lire tous les mots de passe. Continuer ?"
+
+#: rolodex.py
+msgid "Export as CSV"
+msgstr "Exporter en CSV"
+
+#: rolodex.py
+msgid "Export to file"
+msgstr "Exporter vers un fichier"
+
+#: rolodex.py
+msgid "Export Error"
+msgstr "Erreur d’exportation"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Exported {n} entry"
+msgid_plural "Exported {n} entries"
+msgstr[0] "{n} entrée exportée"
+msgstr[1] "{n} entrées exportées"
+
+#: rolodex.py
+msgid "Password Not Changed"
+msgstr "Mot de passe non modifié"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"The vault could not be written, so your master password is unchanged: {error}"
+msgstr "Le coffre n’a pas pu être écrit, votre mot de passe principal reste donc inchangé : {error}"
+
+#: rolodex.py
+msgid "Master password changed"
+msgstr "Mot de passe principal modifié"
+
+#: rolodex.py
+msgid "Move to..."
+msgstr "Déplacer vers…"
+
+#: rolodex.py
+msgid "OK"
+msgstr "Valider"
+
+#: rolodex.py
+msgid "Drag to reorder, or Ctrl+Up / Ctrl+Down"
+msgstr "Glissez pour réordonner, ou Ctrl+Haut / Ctrl+Bas"
+
+#: rolodex.py
+msgid "Label"
+msgstr "Libellé"
+
+#: rolodex.py
+msgid "Field label"
+msgstr "Libellé du champ"
+
+#: rolodex.py
+msgid "Value"
+msgstr "Valeur"
+
+#: rolodex.py
+msgid "Field value"
+msgstr "Valeur du champ"
+
+#: rolodex.py
+msgid "Generate a strong password"
+msgstr "Générer un mot de passe fort"
+
+#: rolodex.py
+msgid "Hide"
+msgstr "Masquer"
+
+#: rolodex.py
+msgid "Remove field"
+msgstr "Retirer le champ"
+
+#: rolodex.py
+msgid "Hide value"
+msgstr "Masquer la valeur"
+
+#: rolodex.py
+msgid "Show value"
+msgstr "Afficher la valeur"
+
+#: rolodex.py
+msgid "Length"
+msgstr "Longueur"
+
+#: rolodex.py
+msgid "Lowercase (a–z)"
+msgstr "Minuscules (a–z)"
+
+#: rolodex.py
+msgid "Uppercase (A–Z)"
+msgstr "Majuscules (A–Z)"
+
+#: rolodex.py
+msgid "Digits (0–9)"
+msgstr "Chiffres (0–9)"
+
+#: rolodex.py
+msgid "Symbols (!@#…)"
+msgstr "Symboles (!@#…)"
+
+#: rolodex.py
+msgid "Generate"
+msgstr "Générer"
+
+#: rolodex.py
+msgid "Field"
+msgstr "Champ"
+
+#: rolodex.py
+msgid "Save"
+msgstr "Enregistrer"
+
+#: rolodex.py
+msgid "Name"
+msgstr "Nom"
+
+#: rolodex.py
+msgid "System / service name"
+msgstr "Nom du système ou du service"
+
+#: rolodex.py
+msgid "Category"
+msgstr "Catégorie"
+
+#: rolodex.py
+msgid "(None)"
+msgstr "(Aucune)"
+
+#: rolodex.py
+msgid "Fields"
+msgstr "Champs"
+
+#: rolodex.py
+msgid "Drag the handle to reorder"
+msgstr "Glissez la poignée pour réordonner"
+
+#: rolodex.py
+msgid "Add Field"
+msgstr "Ajouter un champ"
+
+#: rolodex.py
+msgid "Discard changes?"
+msgstr "Abandonner les modifications ?"
+
+#: rolodex.py
+msgid "This entry has unsaved changes. Discard them?"
+msgstr "Cette entrée comporte des modifications non enregistrées. Les abandonner ?"
+
+#: rolodex.py
+msgid "Discard"
+msgstr "Abandonner"
+
+#: rolodex.py
+msgid "Duplicate name"
+msgstr "Nom en double"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Another entry is already named \"{name}\". Save anyway?"
+msgstr "Une autre entrée s’appelle déjà « {name} ». Enregistrer quand même ?"
+
+#: rolodex.py
+msgid "Save Anyway"
+msgstr "Enregistrer quand même"
+
+#: rolodex.py
+msgid "Import Preview"
+msgstr "Aperçu de l’importation"
+
+#: rolodex.py
+msgid "Import Selected"
+msgstr "Importer la sélection"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Found {n} entry in file."
+msgid_plural "Found {n} entries in file."
+msgstr[0] "{n} entrée trouvée dans le fichier."
+msgstr[1] "{n} entrées trouvées dans le fichier."
+
+#: rolodex.py
+msgid "Select All"
+msgstr "Tout sélectionner"
+
+#: rolodex.py
+msgid "Select None"
+msgstr "Ne rien sélectionner"
+
+#: rolodex.py
+msgid "No category"
+msgstr "Aucune catégorie"
+
+#: rolodex.py
+msgid "Categories from file"
+msgstr "Catégories du fichier"
+
+#: rolodex.py
+msgid "Add to category"
+msgstr "Ajouter à la catégorie"
+
+#. Translators: an import preview row's summary: how many fields, and "+notes"
+#. when the entry carries notes.
+#: rolodex.py
+#, python-brace-format
+msgid "{n} field +notes"
+msgid_plural "{n} fields +notes"
+msgstr[0] "{n} champ +notes"
+msgstr[1] "{n} champs +notes"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} field"
+msgid_plural "{n} fields"
+msgstr[0] "{n} champ"
+msgstr[1] "{n} champs"
+
+#. Translators: {summary} is the field count, e.g. "3 fields +notes".
+#: rolodex.py
+#, python-brace-format
+msgid "{summary}  (duplicate name — tick to import it anyway)"
+msgstr "{summary}  (nom en double — cochez pour l’importer quand même)"
+
+#: rolodex.py
+msgid "Tick at least one entry to import."
+msgstr "Cochez au moins une entrée à importer."
+
+#: rolodex.py
+msgid "Skip"
+msgstr "Ignorer"
+
+#: rolodex.py
+msgid "Match CSV Columns"
+msgstr "Associer les colonnes CSV"
+
+#: rolodex.py
+msgid "Continue"
+msgstr "Continuer"
+
+#: rolodex.py
+msgid ""
+"Rolodex does not recognise this file's columns. Say what each one holds."
+msgstr "Rolodex ne reconnaît pas les colonnes de ce fichier. Indiquez le contenu de chacune."
+
+#: rolodex.py
+#, python-brace-format
+msgid "Column {number}"
+msgstr "Colonne {number}"
+
+#: rolodex.py
+msgid "Change Master Password"
+msgstr "Changer le mot de passe principal"
+
+#: rolodex.py
+msgid "Change"
+msgstr "Changer"
+
+#: rolodex.py
+msgid "Current password"
+msgstr "Mot de passe actuel"
+
+#: rolodex.py
+msgid "New password"
+msgstr "Nouveau mot de passe"
+
+#: rolodex.py
+msgid "Confirm new password"
+msgstr "Confirmer le nouveau mot de passe"
+
+#: rolodex.py
+msgid "Incorrect current password."
+msgstr "Mot de passe actuel incorrect."
+
+#: rolodex.py
+msgid "Restore from Backup"
+msgstr "Restaurer depuis une sauvegarde"
+
+#: rolodex.py
+msgid "Enter the master password for the backup vault."
+msgstr "Saisissez le mot de passe principal du coffre de sauvegarde."
+
+#: rolodex.py
+msgid "Backup password"
+msgstr "Mot de passe de la sauvegarde"
+
+#: rolodex.py
+msgid "Please enter the backup password."
+msgstr "Veuillez saisir le mot de passe de la sauvegarde."
+
+#: rolodex.py
+msgid "Decrypting..."
+msgstr "Déchiffrement…"
+
+#: rolodex.py
+msgid "Wrong password for this backup."
+msgstr "Mot de passe incorrect pour cette sauvegarde."
+
+#: rolodex.py
+msgid "Could not read that backup file."
+msgstr "Impossible de lire ce fichier de sauvegarde."
+
+#: rolodex.py
+msgid "Could not restore that backup file."
+msgstr "Impossible de restaurer ce fichier de sauvegarde."
+
+#: rolodex.py
+msgid "Rename"
+msgstr "Renommer"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Rename category {name}"
+msgstr "Renommer la catégorie {name}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete category {name}"
+msgstr "Supprimer la catégorie {name}"
+
+#: rolodex.py
+msgid "Manage Categories"
+msgstr "Gérer les catégories"
+
+#: rolodex.py
+msgid "Done"
+msgstr "Terminé"
+
+#: rolodex.py
+msgid "New category name..."
+msgstr "Nom de la nouvelle catégorie…"
+
+#: rolodex.py
+msgid "New category name"
+msgstr "Nom de la nouvelle catégorie"
+
+#: rolodex.py
+msgid "Add"
+msgstr "Ajouter"
+
+#: rolodex.py
+msgid "Type a name for the new category."
+msgstr "Saisissez un nom pour la nouvelle catégorie."
+
+#: rolodex.py
+#, python-brace-format
+msgid "A category named “{name}” already exists."
+msgstr "Une catégorie nommée « {name} » existe déjà."
+
+#: rolodex.py
+msgid "Rename category"
+msgstr "Renommer la catégorie"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Enter a new name for \"{name}\":"
+msgstr "Saisissez un nouveau nom pour « {name} » :"
+
+#: rolodex.py
+msgid "A category name cannot be empty."
+msgstr "Le nom d’une catégorie ne peut pas être vide."
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"A category named “{name}” already exists. Categories cannot be merged by "
+"renaming — move the entries, then delete the empty one."
+msgstr "Une catégorie nommée « {name} » existe déjà. Les catégories ne peuvent pas être fusionnées en les renommant — déplacez les entrées, puis supprimez la catégorie vide."
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete category \"{name}\"?"
+msgstr "Supprimer la catégorie « {name} » ?"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry will be moved to Uncategorised."
+msgid_plural "{n} entries will be moved to Uncategorised."
+msgstr[0] "{n} entrée sera déplacée vers Non classé."
+msgstr[1] "{n} entrées seront déplacées vers Non classé."
+
+#: rolodex.py
+msgid "Delete category"
+msgstr "Supprimer la catégorie"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Rolodex {version} is available"
+msgstr "Rolodex {version} est disponible"
+
+#: rolodex.py
+#, python-brace-format
+msgid "You have {version}."
+msgstr "Vous avez la version {version}."
+
+#: rolodex.py
+msgid "Later"
+msgstr "Plus tard"
+
+#: rolodex.py
+msgid "Skip This Version"
+msgstr "Ignorer cette version"
+
+#: rolodex.py
+msgid "Update Now"
+msgstr "Mettre à jour"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Skipping Rolodex {version}"
+msgstr "Rolodex {version} ignoré"
+
+#: rolodex.py
+msgid "Password Health"
+msgstr "Santé des mots de passe"
+
+#: rolodex.py
+msgid "No passwords stored yet."
+msgstr "Aucun mot de passe enregistré pour l’instant."
+
+#: rolodex.py
+#, python-brace-format
+msgid "The {n} password looks strong."
+msgid_plural "All {n} passwords look strong."
+msgstr[0] "{n} mot de passe : il semble fort."
+msgstr[1] "Les {n} mots de passe semblent forts."
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} weak or fair"
+msgid_plural "{n} weak or fair"
+msgstr[0] "{n} faible ou moyen"
+msgstr[1] "{n} faibles ou moyens"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} reused"
+msgid_plural "{n} reused"
+msgstr[0] "{n} réutilisé"
+msgstr[1] "{n} réutilisés"
+
+#: rolodex.py
+msgid "Reused"
+msgstr "Réutilisé"
+
+#: rolodex.py
+msgid "Focus search"
+msgstr "Activer la recherche"
+
+#: rolodex.py
+msgid "Copy password / secret"
+msgstr "Copier le mot de passe ou le secret"
+
+#: rolodex.py
+msgid "Clear search"
+msgstr "Effacer la recherche"
+
+#: rolodex.py
+msgid "Select every entry in the list"
+msgstr "Sélectionner toutes les entrées de la liste"
+
+#: rolodex.py
+msgid "Keyboard shortcuts"
+msgstr "Raccourcis clavier"
+
+#: rolodex.py
+msgid "Preferences"
+msgstr "Préférences"
+
+#: rolodex.py
+msgid "Keyboard Shortcuts"
+msgstr "Raccourcis clavier"
+
+#: rolodex.py
+msgid "Follow desktop"
+msgstr "Suivre le bureau"
+
+#: rolodex.py
+msgid "Appearance"
+msgstr "Apparence"
+
+#: rolodex.py
+msgid "Theme"
+msgstr "Thème"
+
+#: rolodex.py
+msgid "Automatic follows your desktop's light or dark setting"
+msgstr "Automatique suit le réglage clair ou sombre de votre bureau"
+
+#: rolodex.py
+msgid ""
+"Your desktop does not share an accent colour, so Follow desktop uses blue"
+msgstr "Votre bureau ne fournit pas de couleur d’accentuation, Suivre le bureau utilise donc le bleu"
+
+#: rolodex.py
+msgid "Accent colour"
+msgstr "Couleur d’accentuation"
+
+#: rolodex.py
+msgid "Could not save this setting. It applies until Rolodex closes."
+msgstr "Impossible d’enregistrer ce paramètre. Il s’applique jusqu’à la fermeture de Rolodex."

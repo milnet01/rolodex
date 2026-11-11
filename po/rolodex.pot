@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Rolodex 2.0.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-11 18:12+0200\n"
+"POT-Creation-Date: 2026-11-11 20:40+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,453 +18,450 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 
-#: rolodex.py:161
+#: rolodex.py
 msgid "That file is too large to import (the limit is 10 MB)."
 msgstr ""
 
-#: rolodex.py:248
+#: rolodex.py
 msgid ""
 "This vault was made by a newer version of Rolodex. Update Rolodex to open it."
 msgstr ""
 
-#: rolodex.py:290
+#: rolodex.py
 msgid "This vault is already open in another Rolodex window."
 msgstr ""
 
-#: rolodex.py:338
+#: rolodex.py
 msgid "Vault file is truncated or corrupt"
 msgstr ""
 
-#: rolodex.py:369
+#: rolodex.py
 msgid "Not a valid vault file"
 msgstr ""
 
-#: rolodex.py:448
+#: rolodex.py
 msgid "A vault already exists here. Restart Rolodex to unlock it."
 msgstr ""
 
-#: rolodex.py:486
+#: rolodex.py
 msgid "That file is too large to be a Rolodex vault."
 msgstr ""
 
-#: rolodex.py:493 rolodex.py:495
+#: rolodex.py
 msgid "That file is not a Rolodex vault."
 msgstr ""
 
-#: rolodex.py:510 rolodex.py:526
+#: rolodex.py
 msgid "Vault contents are not a valid vault"
 msgstr ""
 
-#: rolodex.py:514
+#: rolodex.py
 #, python-brace-format
 msgid ""
 "This vault was written by a newer version of Rolodex (format v{version}). "
 "Upgrade Rolodex to open it."
 msgstr ""
 
-#: rolodex.py:600
+#: rolodex.py
 msgid "Credential field"
 msgstr ""
 
-#: rolodex.py:601
+#: rolodex.py
 msgid "Key or token field"
 msgstr ""
 
-#: rolodex.py:602
+#: rolodex.py
 msgid "Identity field"
 msgstr ""
 
-#: rolodex.py:603
+#: rolodex.py
 msgid "Link field"
 msgstr ""
 
-#: rolodex.py:604
+#: rolodex.py
 msgid "Date field"
 msgstr ""
 
-#: rolodex.py:605
+#: rolodex.py
 msgid "Uncategorised field"
 msgstr ""
 
-#: rolodex.py:872
+#: rolodex.py
 msgid "Empty"
 msgstr ""
 
-#: rolodex.py:872
+#: rolodex.py
 msgid "Weak"
 msgstr ""
 
-#: rolodex.py:872
+#: rolodex.py
 msgid "Fair"
 msgstr ""
 
-#: rolodex.py:872
+#: rolodex.py
 msgid "Good"
 msgstr ""
 
-#: rolodex.py:872
+#: rolodex.py
 msgid "Strong"
 msgstr ""
 
-#: rolodex.py:1280
+#: rolodex.py
 #, python-brace-format
 msgid "Row {row} of the CSV file is malformed: {error}"
 msgstr ""
 
-#: rolodex.py:1289
+#: rolodex.py
 #, python-brace-format
 msgid "Row {row} of the CSV file has more cells than the header."
 msgstr ""
 
-#: rolodex.py:1418
+#: rolodex.py
 msgid "Choose exactly one column as the Name."
 msgstr ""
 
-#: rolodex.py:1419
+#: rolodex.py
 msgid "Choose at most one column as the Category."
 msgstr ""
 
-#: rolodex.py:1420
+#: rolodex.py
 msgid "Choose at most one column as the Notes."
 msgstr ""
 
-#: rolodex.py:1655
+#: rolodex.py
 msgid "Automatic"
 msgstr ""
 
-#: rolodex.py:1655
+#: rolodex.py
 msgid "Dark"
 msgstr ""
 
-#: rolodex.py:1655
+#: rolodex.py
 msgid "Light"
 msgstr ""
 
-#: rolodex.py:1656
+#: rolodex.py
 msgid "High contrast"
 msgstr ""
 
-#: rolodex.py:1665
+#: rolodex.py
 msgid "Blue"
 msgstr ""
 
-#: rolodex.py:1665
+#: rolodex.py
 msgid "Teal"
 msgstr ""
 
-#: rolodex.py:1665
+#: rolodex.py
 msgid "Green"
 msgstr ""
 
-#: rolodex.py:1666
+#: rolodex.py
 msgid "Orange"
 msgstr ""
 
-#: rolodex.py:1666
+#: rolodex.py
 msgid "Pink"
 msgstr ""
 
-#: rolodex.py:1666
+#: rolodex.py
 msgid "Purple"
 msgstr ""
 
-#: rolodex.py:1667
+#: rolodex.py
 msgid "Slate"
 msgstr ""
 
-#: rolodex.py:2039
+#: rolodex.py
 msgid "refusing a non-https update URL"
 msgstr ""
 
-#: rolodex.py:2059
+#: rolodex.py
 #, python-brace-format
 msgid "refusing an update URL outside GitHub ({host})"
 msgstr ""
 
-#: rolodex.py:2060
+#: rolodex.py
 msgid "no host"
 msgstr ""
 
-#: rolodex.py:2076
+#: rolodex.py
 msgid "the update server is too slow; try again later"
 msgstr ""
 
-#: rolodex.py:2082
+#: rolodex.py
 msgid "download exceeds the size cap"
 msgstr ""
 
-#: rolodex.py:2234
+#: rolodex.py
 #, python-brace-format
 msgid "could not check for updates: {error}"
 msgstr ""
 
-#: rolodex.py:2252 rolodex.py:2347
+#: rolodex.py
 msgid "self-update is not supported on this build"
 msgstr ""
 
-#: rolodex.py:2270
+#: rolodex.py
 msgid "the update's signature did not verify"
 msgstr ""
 
-#: rolodex.py:2288
+#: rolodex.py
 #, python-brace-format
 msgid "could not stage the update: {error}"
 msgstr ""
 
-#: rolodex.py:2356
+#: rolodex.py
 #, python-brace-format
 msgid "could not install the update: {error}"
 msgstr ""
 
-#: rolodex.py:2465
+#: rolodex.py
 msgid "All files"
 msgstr ""
 
-#: rolodex.py:2546
+#: rolodex.py
 msgid "Create a master password to encrypt your vault."
 msgstr ""
 
-#: rolodex.py:2560
+#: rolodex.py
 msgid "Master password"
 msgstr ""
 
-#: rolodex.py:2564
+#: rolodex.py
 msgid "Confirm password"
 msgstr ""
 
-#: rolodex.py:2582 rolodex.py:2728
+#: rolodex.py
 msgid "Create Vault"
 msgstr ""
 
-#: rolodex.py:2582 rolodex.py:2744
+#: rolodex.py
 msgid "Unlock"
 msgstr ""
 
-#: rolodex.py:2596
+#: rolodex.py
 msgid "Use an Existing Vault File…"
 msgstr ""
 
-#: rolodex.py:2596
+#: rolodex.py
 msgid "Restore from Backup…"
 msgstr ""
 
-#: rolodex.py:2601
+#: rolodex.py
 msgid "Start a New Vault…"
 msgstr ""
 
-#: rolodex.py:2639
+#: rolodex.py
 msgid "Please enter a password."
 msgstr ""
 
-#: rolodex.py:2646 rolodex.py:5417
+#: rolodex.py
 #, python-brace-format
 msgid "Password must be at least {n} character."
 msgid_plural "Password must be at least {n} characters."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:2652 rolodex.py:5425
+#: rolodex.py
 msgid "Passwords do not match."
 msgstr ""
 
-#: rolodex.py:2660
+#: rolodex.py
 msgid "Creating..."
 msgstr ""
 
-#: rolodex.py:2666
+#: rolodex.py
 msgid "Unlocking..."
 msgstr ""
 
-#: rolodex.py:2678
+#: rolodex.py
 msgid "Wrong password."
 msgstr ""
 
-#: rolodex.py:2701
+#: rolodex.py
 #, python-brace-format
 msgid "The vault opened but could not be loaded: {error}"
 msgstr ""
 
-#: rolodex.py:2720
+#: rolodex.py
 #, python-brace-format
 msgid "The vault was created but could not be opened: {error}"
 msgstr ""
 
-#: rolodex.py:2760
+#: rolodex.py
 msgid "Choose a Rolodex vault or backup"
 msgstr ""
 
-#: rolodex.py:2760
+#: rolodex.py
 msgid "Rolodex vaults"
 msgstr ""
 
-#: rolodex.py:2788
+#: rolodex.py
 msgid "Vault file installed. Enter its master password to unlock it."
 msgstr ""
 
 #. Translators: appended, after a space, to "Vault file installed. Enter its master
 #. password to unlock it."
-#: rolodex.py:2792 rolodex.py:2824
+#: rolodex.py
 #, python-brace-format
 msgid "The unreadable vault was kept as {filename}."
 msgstr ""
 
-#: rolodex.py:2798
+#: rolodex.py
 msgid "Start a New Vault?"
 msgstr ""
 
-#: rolodex.py:2800
+#: rolodex.py
 msgid ""
 "The vault that will not open is kept, renamed beside the original with "
 "“.unreadable-” and the date added, so it can still be recovered. A new, "
 "empty vault is then created with a new master password."
 msgstr ""
 
-#: rolodex.py:2805 rolodex.py:4200 rolodex.py:4931 rolodex.py:5069
-#: rolodex.py:5179 rolodex.py:5297 rolodex.py:5366 rolodex.py:5446
-#: rolodex.py:5698 rolodex.py:5744
+#: rolodex.py
 msgid "Cancel"
 msgstr ""
 
-#: rolodex.py:2806
+#: rolodex.py
 msgid "Start New Vault"
 msgstr ""
 
-#: rolodex.py:2822
+#: rolodex.py
 #, python-brace-format
 msgid "Could not move the unreadable vault aside: {error}"
 msgstr ""
 
-#: rolodex.py:2859 rolodex.py:3208
+#: rolodex.py
 msgid "Entry"
 msgstr ""
 
-#: rolodex.py:2898 rolodex.py:3380 rolodex.py:4248 rolodex.py:4691
+#: rolodex.py
 msgid "Uncategorised"
 msgstr ""
 
 #. Translators: what a screen reader says for a category heading, e.g. "Games, 3 entries".
-#: rolodex.py:2910
+#: rolodex.py
 #, python-brace-format
 msgid "{category}, {n} entry"
 msgid_plural "{category}, {n} entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:3011
+#: rolodex.py
 msgid "Add entry (Ctrl+N)"
 msgstr ""
 
-#: rolodex.py:3011 rolodex.py:6208
+#: rolodex.py
 msgid "Add entry"
 msgstr ""
 
-#: rolodex.py:3017
+#: rolodex.py
 msgid "Preferences..."
 msgstr ""
 
-#: rolodex.py:3018
+#: rolodex.py
 msgid "Password health..."
 msgstr ""
 
-#: rolodex.py:3019
+#: rolodex.py
 msgid "Manage categories..."
 msgstr ""
 
-#: rolodex.py:3020
+#: rolodex.py
 msgid "Import from text file..."
 msgstr ""
 
-#: rolodex.py:3021
+#: rolodex.py
 msgid "Import from CSV file..."
 msgstr ""
 
-#: rolodex.py:3022
+#: rolodex.py
 msgid "Backup vault..."
 msgstr ""
 
-#: rolodex.py:3023
+#: rolodex.py
 msgid "Restore vault from backup..."
 msgstr ""
 
-#: rolodex.py:3024
+#: rolodex.py
 msgid "Export (decrypted plaintext)..."
 msgstr ""
 
-#: rolodex.py:3025
+#: rolodex.py
 msgid "Export as CSV (decrypted)..."
 msgstr ""
 
-#: rolodex.py:3026
+#: rolodex.py
 msgid "Change master password..."
 msgstr ""
 
-#: rolodex.py:3027
+#: rolodex.py
 msgid "Check for updates..."
 msgstr ""
 
-#: rolodex.py:3028
+#: rolodex.py
 msgid "Check for updates automatically"
 msgstr ""
 
-#: rolodex.py:3030
+#: rolodex.py
 msgid "Main menu"
 msgstr ""
 
-#: rolodex.py:3035
+#: rolodex.py
 msgid "Lock vault (Ctrl+L)"
 msgstr ""
 
-#: rolodex.py:3035 rolodex.py:6210
+#: rolodex.py
 msgid "Lock vault"
 msgstr ""
 
-#: rolodex.py:3091
+#: rolodex.py
 msgid "Search entries..."
 msgstr ""
 
-#: rolodex.py:3092
+#: rolodex.py
 msgid "Search entries"
 msgstr ""
 
-#: rolodex.py:3108 rolodex.py:3380
+#: rolodex.py
 msgid "All categories"
 msgstr ""
 
-#: rolodex.py:3112
+#: rolodex.py
 msgid "Show category"
 msgstr ""
 
-#: rolodex.py:3158
+#: rolodex.py
 msgid "Clear"
 msgstr ""
 
-#: rolodex.py:3159
+#: rolodex.py
 msgid "Clear selection"
 msgstr ""
 
-#: rolodex.py:3164
+#: rolodex.py
 msgid "Move to…"
 msgstr ""
 
-#: rolodex.py:3167 rolodex.py:3707 rolodex.py:4192 rolodex.py:4224
-#: rolodex.py:5570 rolodex.py:5745
+#: rolodex.py
 msgid "Delete"
 msgstr ""
 
-#: rolodex.py:3300
+#: rolodex.py
 msgid "Could Not Save"
 msgstr ""
 
-#: rolodex.py:3301
+#: rolodex.py
 #, python-brace-format
 msgid "The vault was not written to disk: {error}"
 msgstr ""
 
-#: rolodex.py:3320
+#: rolodex.py
 msgid "Vault Changed Elsewhere"
 msgstr ""
 
-#: rolodex.py:3322
+#: rolodex.py
 msgid ""
 "The vault file was changed by something else since you unlocked it — another "
 "copy of Rolodex, a sync tool, or a file copied over it. Your latest change "
@@ -475,226 +472,227 @@ msgid ""
 "open here, which discards the other change instead."
 msgstr ""
 
-#: rolodex.py:3330
+#: rolodex.py
 msgid "Reload From Disk"
 msgstr ""
 
-#: rolodex.py:3331
+#: rolodex.py
 msgid "Overwrite"
 msgstr ""
 
-#: rolodex.py:3344
+#: rolodex.py
 msgid "Saved over the changed vault"
 msgstr ""
 
 #. Translators: the count under the entry list while a search or filter is active.
-#: rolodex.py:3416
+#: rolodex.py
 #, python-brace-format
 msgid "{shown} of {n} entry"
 msgid_plural "{shown} of {n} entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:3432 rolodex.py:3438 rolodex.py:5558
+#: rolodex.py
 #, python-brace-format
 msgid "{n} entry"
 msgid_plural "{n} entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:3504
+#. Translators: how many entries are selected in the list, shown in the bulk-action bar.
+#: rolodex.py
 #, python-brace-format
 msgid "{n} selected"
 msgid_plural "{n} selected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:3508
+#: rolodex.py
 #, python-brace-format
 msgid "{n} entry selected"
 msgid_plural "{n} entries selected"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:3509
+#: rolodex.py
 msgid "Move or delete them with the buttons below the list."
 msgstr ""
 
-#: rolodex.py:3511
+#: rolodex.py
 msgid "Select an entry"
 msgstr ""
 
-#: rolodex.py:3512
+#: rolodex.py
 msgid "Choose an entry from the list, or add a new one."
 msgstr ""
 
-#: rolodex.py:3653
+#: rolodex.py
 msgid "Hidden value"
 msgstr ""
 
-#: rolodex.py:3660 rolodex.py:3661
+#: rolodex.py
 #, python-brace-format
 msgid "Copy {label}"
 msgstr ""
 
-#: rolodex.py:3677 rolodex.py:5006 rolodex.py:5007 rolodex.py:5283
+#: rolodex.py
 msgid "Notes"
 msgstr ""
 
-#: rolodex.py:3696
+#: rolodex.py
 msgid "Hide sensitive"
 msgstr ""
 
-#: rolodex.py:3696
+#: rolodex.py
 msgid "Reveal sensitive"
 msgstr ""
 
-#: rolodex.py:3702
+#: rolodex.py
 msgid "Edit"
 msgstr ""
 
-#: rolodex.py:3718
+#: rolodex.py
 #, python-brace-format
 msgid "Created: {date}"
 msgstr ""
 
-#: rolodex.py:3720
+#: rolodex.py
 #, python-brace-format
 msgid "Modified: {date}"
 msgstr ""
 
-#: rolodex.py:3755
+#: rolodex.py
 msgid "Code"
 msgstr ""
 
-#: rolodex.py:3766
+#: rolodex.py
 msgid ""
 "Your computer's clock is not synchronised, so this code may be rejected. "
 "Turn on automatic time in your system settings."
 msgstr ""
 
-#: rolodex.py:3785
+#: rolodex.py
 msgid "Copy 2FA code"
 msgstr ""
 
-#: rolodex.py:3788
+#: rolodex.py
 msgid "2FA code"
 msgstr ""
 
 #. Translators: seconds left before a 2FA code changes; "s" abbreviates "seconds".
-#: rolodex.py:3809
+#: rolodex.py
 #, python-brace-format
 msgid "{seconds}s"
 msgstr ""
 
-#: rolodex.py:3859
+#: rolodex.py
 msgid "Clipboard not available"
 msgstr ""
 
 #. Translators: {label} is a field's name, e.g. "Password"; "s" abbreviates "seconds".
-#: rolodex.py:3866
+#: rolodex.py
 #, python-brace-format
 msgid "Copied {label} — clipboard clears in {seconds}s"
 msgstr ""
 
 #. Translators: {label} is a field's name, e.g. "Password".
-#: rolodex.py:3873
+#: rolodex.py
 #, python-brace-format
 msgid "Copied {label}"
 msgstr ""
 
-#: rolodex.py:3935
+#: rolodex.py
 msgid "Couldn't save that setting — the settings file is not writable"
 msgstr ""
 
-#: rolodex.py:3939
+#: rolodex.py
 msgid "Rolodex will check for updates on startup"
 msgstr ""
 
-#: rolodex.py:3941
+#: rolodex.py
 msgid "Automatic update checks turned off"
 msgstr ""
 
-#: rolodex.py:3981
+#: rolodex.py
 msgid "Updates not available"
 msgstr ""
 
-#: rolodex.py:3982
+#: rolodex.py
 msgid ""
 "In-app updates work only in the packaged Rolodex build. Running from source "
 "or from a distribution package, updating is handled outside the app."
 msgstr ""
 
-#: rolodex.py:3990
+#: rolodex.py
 msgid "Checking for updates..."
 msgstr ""
 
-#: rolodex.py:4000
+#: rolodex.py
 #, python-brace-format
 msgid "Couldn't check for updates: {error}"
 msgstr ""
 
-#: rolodex.py:4008
+#: rolodex.py
 #, python-brace-format
 msgid "Rolodex {version} is up to date"
 msgstr ""
 
-#: rolodex.py:4015
+#: rolodex.py
 #, python-brace-format
 msgid "Downloading Rolodex {version}..."
 msgstr ""
 
-#: rolodex.py:4024
+#: rolodex.py
 msgid "Update rejected"
 msgstr ""
 
-#: rolodex.py:4025
+#: rolodex.py
 msgid ""
 "The downloaded update was not signed by the Rolodex release key, so it was "
 "discarded and nothing was installed. Your current version is untouched."
 msgstr ""
 
-#: rolodex.py:4031 rolodex.py:4062
+#: rolodex.py
 msgid "Update failed"
 msgstr ""
 
-#: rolodex.py:4097
+#: rolodex.py
 msgid "Select an entry first"
 msgstr ""
 
-#: rolodex.py:4102
+#: rolodex.py
 msgid "No sensitive field to copy"
 msgstr ""
 
-#: rolodex.py:4189
+#: rolodex.py
 msgid "Delete entry?"
 msgstr ""
 
-#: rolodex.py:4190
+#: rolodex.py
 #, python-brace-format
 msgid "Delete \"{name}\"? This cannot be undone."
 msgstr ""
 
 #. Translators: one entry's name inside a list of names, quoted.
-#: rolodex.py:4213
+#: rolodex.py
 #, python-brace-format
 msgid "\"{name}\""
 msgstr ""
 
 #. Translators: the separator between names in a list, e.g. '"A", "B", "C"'.
-#: rolodex.py:4215
+#: rolodex.py
 msgid ", "
 msgstr ""
 
 #. Translators: {names} is three quoted entry names; {n} is how many more there are.
-#: rolodex.py:4218
+#: rolodex.py
 #, python-brace-format
 msgid "{names} and {n} more"
 msgid_plural "{names} and {n} more"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:4221
+#: rolodex.py
 #, python-brace-format
 msgid "Delete {n} entry?"
 msgid_plural "Delete {n} entries?"
@@ -702,156 +700,156 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. Translators: {names} is a list of quoted entry names.
-#: rolodex.py:4223
+#: rolodex.py
 #, python-brace-format
 msgid "Delete {names}? This cannot be undone."
 msgstr ""
 
-#: rolodex.py:4236
+#: rolodex.py
 #, python-brace-format
 msgid "{n} entry deleted"
 msgid_plural "{n} entries deleted"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:4247
+#: rolodex.py
 #, python-brace-format
 msgid "Moved {n} entry to {category}"
 msgid_plural "Moved {n} entries to {category}"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:4257
+#: rolodex.py
 msgid "Entry deleted"
 msgstr ""
 
-#: rolodex.py:4264
+#: rolodex.py
 msgid "Add Entry"
 msgstr ""
 
-#: rolodex.py:4271
+#: rolodex.py
 #, python-brace-format
 msgid "Added \"{name}\""
 msgstr ""
 
-#: rolodex.py:4279
+#: rolodex.py
 msgid "Edit Entry"
 msgstr ""
 
-#: rolodex.py:4287
+#: rolodex.py
 msgid "Entry updated"
 msgstr ""
 
-#: rolodex.py:4294
+#: rolodex.py
 msgid "Import from text file"
 msgstr ""
 
-#: rolodex.py:4294
+#: rolodex.py
 msgid "Text files"
 msgstr ""
 
-#: rolodex.py:4318 rolodex.py:4364
+#: rolodex.py
 msgid "Import Error"
 msgstr ""
 
-#: rolodex.py:4332 rolodex.py:4338
+#: rolodex.py
 msgid "Import"
 msgstr ""
 
-#: rolodex.py:4332
+#: rolodex.py
 msgid "No entries found in file."
 msgstr ""
 
-#: rolodex.py:4339
+#: rolodex.py
 #, python-brace-format
 msgid ""
 "That file holds {count} entries. Import at most {limit} at a time — split "
 "the file and import each part."
 msgstr ""
 
-#: rolodex.py:4346
+#: rolodex.py
 msgid "Import from CSV file"
 msgstr ""
 
-#: rolodex.py:4346
+#: rolodex.py
 msgid "CSV files"
 msgstr ""
 
-#: rolodex.py:4386
+#: rolodex.py
 #, python-brace-format
 msgid "Imported {n} entry."
 msgid_plural "Imported {n} entries."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:4400
+#: rolodex.py
 msgid "Backup vault to..."
 msgstr ""
 
-#: rolodex.py:4423
+#: rolodex.py
 msgid "Vault backed up"
 msgstr ""
 
-#: rolodex.py:4425
+#: rolodex.py
 msgid "Backup Error"
 msgstr ""
 
-#: rolodex.py:4433
+#: rolodex.py
 msgid "Restore from backup"
 msgstr ""
 
-#: rolodex.py:4434
+#: rolodex.py
 msgid ""
 "This will replace all current entries with the backup contents. You will "
 "need to enter the backup's master password."
 msgstr ""
 
-#: rolodex.py:4436 rolodex.py:5450 rolodex.py:5521
+#: rolodex.py
 msgid "Restore"
 msgstr ""
 
-#: rolodex.py:4442
+#: rolodex.py
 msgid "Select vault backup"
 msgstr ""
 
-#: rolodex.py:4442
+#: rolodex.py
 msgid "Vault files"
 msgstr ""
 
-#: rolodex.py:4472 rolodex.py:4592
+#: rolodex.py
 msgid "the vault file was changed elsewhere since you unlocked it"
 msgstr ""
 
-#: rolodex.py:4476
+#: rolodex.py
 msgid "Restore Failed"
 msgstr ""
 
-#: rolodex.py:4477
+#: rolodex.py
 #, python-brace-format
 msgid ""
 "The backup could not be written to the vault, so nothing changed: {error}"
 msgstr ""
 
-#: rolodex.py:4489
+#: rolodex.py
 #, python-brace-format
 msgid "Restored {n} entry from backup"
 msgid_plural "Restored {n} entries from backup"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:4497
+#: rolodex.py
 msgid "Export decrypted backup"
 msgstr ""
 
-#: rolodex.py:4498
+#: rolodex.py
 msgid "This will export all entries in plaintext. Continue?"
 msgstr ""
 
-#: rolodex.py:4499 rolodex.py:4511
+#: rolodex.py
 msgid "Export"
 msgstr ""
 
-#: rolodex.py:4504
+#: rolodex.py
 #, python-brace-format
 msgid ""
 "This will export all entries to an unencrypted CSV file. Anyone who can read "
@@ -859,223 +857,223 @@ msgid ""
 "import in one go (the limits are {limit} entries and 10 MB). Continue?"
 msgstr ""
 
-#: rolodex.py:4509
+#: rolodex.py
 msgid ""
 "This will export all entries to an unencrypted CSV file. Anyone who can read "
 "the file can read every password. Continue?"
 msgstr ""
 
-#: rolodex.py:4511
+#: rolodex.py
 msgid "Export as CSV"
 msgstr ""
 
-#: rolodex.py:4519
+#: rolodex.py
 msgid "Export to file"
 msgstr ""
 
-#: rolodex.py:4539
+#: rolodex.py
 msgid "Export Error"
 msgstr ""
 
-#: rolodex.py:4541
+#: rolodex.py
 #, python-brace-format
 msgid "Exported {n} entry"
 msgid_plural "Exported {n} entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:4596
+#: rolodex.py
 msgid "Password Not Changed"
 msgstr ""
 
-#: rolodex.py:4597
+#: rolodex.py
 #, python-brace-format
 msgid ""
 "The vault could not be written, so your master password is unchanged: {error}"
 msgstr ""
 
-#: rolodex.py:4604
+#: rolodex.py
 msgid "Master password changed"
 msgstr ""
 
-#: rolodex.py:4676
+#: rolodex.py
 msgid "Move to..."
 msgstr ""
 
-#: rolodex.py:4707
+#: rolodex.py
 msgid "OK"
 msgstr ""
 
-#: rolodex.py:4732 rolodex.py:5548
+#: rolodex.py
 msgid "Drag to reorder, or Ctrl+Up / Ctrl+Down"
 msgstr ""
 
-#: rolodex.py:4738
+#: rolodex.py
 msgid "Label"
 msgstr ""
 
-#: rolodex.py:4738
+#: rolodex.py
 msgid "Field label"
 msgstr ""
 
-#: rolodex.py:4743
+#: rolodex.py
 msgid "Value"
 msgstr ""
 
-#: rolodex.py:4743
+#: rolodex.py
 msgid "Field value"
 msgstr ""
 
-#: rolodex.py:4764 rolodex.py:4765
+#: rolodex.py
 msgid "Generate a strong password"
 msgstr ""
 
-#: rolodex.py:4771
+#: rolodex.py
 msgid "Hide"
 msgstr ""
 
-#: rolodex.py:4805
+#: rolodex.py
 msgid "Remove field"
 msgstr ""
 
-#: rolodex.py:4844
+#: rolodex.py
 msgid "Hide value"
 msgstr ""
 
-#: rolodex.py:4844
+#: rolodex.py
 msgid "Show value"
 msgstr ""
 
-#: rolodex.py:4862
+#: rolodex.py
 msgid "Length"
 msgstr ""
 
-#: rolodex.py:4870
+#: rolodex.py
 msgid "Lowercase (a–z)"
 msgstr ""
 
-#: rolodex.py:4870
+#: rolodex.py
 msgid "Uppercase (A–Z)"
 msgstr ""
 
-#: rolodex.py:4871
+#: rolodex.py
 msgid "Digits (0–9)"
 msgstr ""
 
-#: rolodex.py:4871
+#: rolodex.py
 msgid "Symbols (!@#…)"
 msgstr ""
 
-#: rolodex.py:4876
+#: rolodex.py
 msgid "Generate"
 msgstr ""
 
-#: rolodex.py:4907 rolodex.py:5283
+#: rolodex.py
 msgid "Field"
 msgstr ""
 
-#: rolodex.py:4935
+#: rolodex.py
 msgid "Save"
 msgstr ""
 
-#: rolodex.py:4943 rolodex.py:5283
+#: rolodex.py
 msgid "Name"
 msgstr ""
 
-#: rolodex.py:4944
+#: rolodex.py
 msgid "System / service name"
 msgstr ""
 
-#: rolodex.py:4954 rolodex.py:4957 rolodex.py:5283
+#: rolodex.py
 msgid "Category"
 msgstr ""
 
-#: rolodex.py:4955
+#: rolodex.py
 msgid "(None)"
 msgstr ""
 
-#: rolodex.py:4973
+#: rolodex.py
 msgid "Fields"
 msgstr ""
 
-#: rolodex.py:4978
+#: rolodex.py
 msgid "Drag the handle to reorder"
 msgstr ""
 
-#: rolodex.py:5000
+#: rolodex.py
 msgid "Add Field"
 msgstr ""
 
-#: rolodex.py:5051
+#: rolodex.py
 msgid "Discard changes?"
 msgstr ""
 
-#: rolodex.py:5052
+#: rolodex.py
 msgid "This entry has unsaved changes. Discard them?"
 msgstr ""
 
-#: rolodex.py:5053
+#: rolodex.py
 msgid "Discard"
 msgstr ""
 
-#: rolodex.py:5146
+#: rolodex.py
 msgid "Duplicate name"
 msgstr ""
 
-#: rolodex.py:5147
+#: rolodex.py
 #, python-brace-format
 msgid "Another entry is already named \"{name}\". Save anyway?"
 msgstr ""
 
-#: rolodex.py:5148
+#: rolodex.py
 msgid "Save Anyway"
 msgstr ""
 
-#: rolodex.py:5177
+#: rolodex.py
 msgid "Import Preview"
 msgstr ""
 
-#: rolodex.py:5183
+#: rolodex.py
 msgid "Import Selected"
 msgstr ""
 
-#: rolodex.py:5190
+#: rolodex.py
 #, python-brace-format
 msgid "Found {n} entry in file."
 msgid_plural "Found {n} entries in file."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:5201
+#: rolodex.py
 msgid "Select All"
 msgstr ""
 
-#: rolodex.py:5204
+#: rolodex.py
 msgid "Select None"
 msgstr ""
 
-#: rolodex.py:5216
+#: rolodex.py
 msgid "No category"
 msgstr ""
 
-#: rolodex.py:5219
+#: rolodex.py
 msgid "Categories from file"
 msgstr ""
 
-#: rolodex.py:5220
+#: rolodex.py
 msgid "Add to category"
 msgstr ""
 
 #. Translators: an import preview row's summary: how many fields, and "+notes"
 #. when the entry carries notes.
-#: rolodex.py:5245
+#: rolodex.py
 #, python-brace-format
 msgid "{n} field +notes"
 msgid_plural "{n} fields +notes"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:5247
+#: rolodex.py
 #, python-brace-format
 msgid "{n} field"
 msgid_plural "{n} fields"
@@ -1083,285 +1081,285 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. Translators: {summary} is the field count, e.g. "3 fields +notes".
-#: rolodex.py:5251
+#: rolodex.py
 #, python-brace-format
 msgid "{summary}  (duplicate name — tick to import it anyway)"
 msgstr ""
 
-#: rolodex.py:5272
+#: rolodex.py
 msgid "Tick at least one entry to import."
 msgstr ""
 
-#: rolodex.py:5284
+#: rolodex.py
 msgid "Skip"
 msgstr ""
 
-#: rolodex.py:5294
+#: rolodex.py
 msgid "Match CSV Columns"
 msgstr ""
 
-#: rolodex.py:5301
+#: rolodex.py
 msgid "Continue"
 msgstr ""
 
-#: rolodex.py:5307
+#: rolodex.py
 msgid ""
 "Rolodex does not recognise this file's columns. Say what each one holds."
 msgstr ""
 
-#: rolodex.py:5325
+#: rolodex.py
 #, python-brace-format
 msgid "Column {number}"
 msgstr ""
 
-#: rolodex.py:5364
+#: rolodex.py
 msgid "Change Master Password"
 msgstr ""
 
-#: rolodex.py:5370
+#: rolodex.py
 msgid "Change"
 msgstr ""
 
-#: rolodex.py:5380
+#: rolodex.py
 msgid "Current password"
 msgstr ""
 
-#: rolodex.py:5389
+#: rolodex.py
 msgid "New password"
 msgstr ""
 
-#: rolodex.py:5392
+#: rolodex.py
 msgid "Confirm new password"
 msgstr ""
 
-#: rolodex.py:5411
+#: rolodex.py
 msgid "Incorrect current password."
 msgstr ""
 
-#: rolodex.py:5444
+#: rolodex.py
 msgid "Restore from Backup"
 msgstr ""
 
-#: rolodex.py:5459
+#: rolodex.py
 msgid "Enter the master password for the backup vault."
 msgstr ""
 
-#: rolodex.py:5467
+#: rolodex.py
 msgid "Backup password"
 msgstr ""
 
-#: rolodex.py:5482
+#: rolodex.py
 msgid "Please enter the backup password."
 msgstr ""
 
-#: rolodex.py:5487
+#: rolodex.py
 msgid "Decrypting..."
 msgstr ""
 
-#: rolodex.py:5498
+#: rolodex.py
 msgid "Wrong password for this backup."
 msgstr ""
 
-#: rolodex.py:5505
+#: rolodex.py
 msgid "Could not read that backup file."
 msgstr ""
 
-#: rolodex.py:5507
+#: rolodex.py
 msgid "Could not restore that backup file."
 msgstr ""
 
-#: rolodex.py:5563 rolodex.py:5699
+#: rolodex.py
 msgid "Rename"
 msgstr ""
 
-#: rolodex.py:5564
+#: rolodex.py
 #, python-brace-format
 msgid "Rename category {name}"
 msgstr ""
 
-#: rolodex.py:5571
+#: rolodex.py
 #, python-brace-format
 msgid "Delete category {name}"
 msgstr ""
 
-#: rolodex.py:5626
+#: rolodex.py
 msgid "Manage Categories"
 msgstr ""
 
-#: rolodex.py:5628
+#: rolodex.py
 msgid "Done"
 msgstr ""
 
-#: rolodex.py:5638
+#: rolodex.py
 msgid "New category name..."
 msgstr ""
 
-#: rolodex.py:5638
+#: rolodex.py
 msgid "New category name"
 msgstr ""
 
-#: rolodex.py:5641
+#: rolodex.py
 msgid "Add"
 msgstr ""
 
-#: rolodex.py:5685
+#: rolodex.py
 msgid "Type a name for the new category."
 msgstr ""
 
-#: rolodex.py:5688
+#: rolodex.py
 #, python-brace-format
 msgid "A category named “{name}” already exists."
 msgstr ""
 
-#: rolodex.py:5697
+#: rolodex.py
 msgid "Rename category"
 msgstr ""
 
-#: rolodex.py:5697
+#: rolodex.py
 #, python-brace-format
 msgid "Enter a new name for \"{name}\":"
 msgstr ""
 
-#: rolodex.py:5713
+#: rolodex.py
 msgid "A category name cannot be empty."
 msgstr ""
 
-#: rolodex.py:5716
+#: rolodex.py
 #, python-brace-format
 msgid ""
 "A category named “{name}” already exists. Categories cannot be merged by "
 "renaming — move the entries, then delete the empty one."
 msgstr ""
 
-#: rolodex.py:5737
+#: rolodex.py
 #, python-brace-format
 msgid "Delete category \"{name}\"?"
 msgstr ""
 
-#: rolodex.py:5739
+#: rolodex.py
 #, python-brace-format
 msgid "{n} entry will be moved to Uncategorised."
 msgid_plural "{n} entries will be moved to Uncategorised."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:5743
+#: rolodex.py
 msgid "Delete category"
 msgstr ""
 
-#: rolodex.py:5801
+#: rolodex.py
 #, python-brace-format
 msgid "Rolodex {version} is available"
 msgstr ""
 
-#: rolodex.py:5802
+#: rolodex.py
 #, python-brace-format
 msgid "You have {version}."
 msgstr ""
 
-#: rolodex.py:5807
+#: rolodex.py
 msgid "Later"
 msgstr ""
 
-#: rolodex.py:5808
+#: rolodex.py
 msgid "Skip This Version"
 msgstr ""
 
-#: rolodex.py:5809
+#: rolodex.py
 msgid "Update Now"
 msgstr ""
 
-#: rolodex.py:5822
+#: rolodex.py
 #, python-brace-format
 msgid "Skipping Rolodex {version}"
 msgstr ""
 
-#: rolodex.py:6150
+#: rolodex.py
 msgid "Password Health"
 msgstr ""
 
-#: rolodex.py:6159
+#: rolodex.py
 msgid "No passwords stored yet."
 msgstr ""
 
-#: rolodex.py:6161
+#: rolodex.py
 #, python-brace-format
 msgid "The {n} password looks strong."
 msgid_plural "All {n} passwords look strong."
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:6166
+#: rolodex.py
 #, python-brace-format
 msgid "{n} weak or fair"
 msgid_plural "{n} weak or fair"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:6169
+#: rolodex.py
 #, python-brace-format
 msgid "{n} reused"
 msgid_plural "{n} reused"
 msgstr[0] ""
 msgstr[1] ""
 
-#: rolodex.py:6191
+#: rolodex.py
 msgid "Reused"
 msgstr ""
 
-#: rolodex.py:6207
+#: rolodex.py
 msgid "Focus search"
 msgstr ""
 
-#: rolodex.py:6209
+#: rolodex.py
 msgid "Copy password / secret"
 msgstr ""
 
-#: rolodex.py:6211
+#: rolodex.py
 msgid "Clear search"
 msgstr ""
 
-#: rolodex.py:6212
+#: rolodex.py
 msgid "Select every entry in the list"
 msgstr ""
 
-#: rolodex.py:6213
+#: rolodex.py
 msgid "Keyboard shortcuts"
 msgstr ""
 
-#: rolodex.py:6214 rolodex.py:6302
+#: rolodex.py
 msgid "Preferences"
 msgstr ""
 
-#: rolodex.py:6220
+#: rolodex.py
 msgid "Keyboard Shortcuts"
 msgstr ""
 
-#: rolodex.py:6298
+#: rolodex.py
 msgid "Follow desktop"
 msgstr ""
 
-#: rolodex.py:6304 rolodex.py:6305
+#: rolodex.py
 msgid "Appearance"
 msgstr ""
 
-#: rolodex.py:6309
+#: rolodex.py
 msgid "Theme"
 msgstr ""
 
-#: rolodex.py:6309
+#: rolodex.py
 msgid "Automatic follows your desktop's light or dark setting"
 msgstr ""
 
-#: rolodex.py:6319
+#: rolodex.py
 msgid ""
 "Your desktop does not share an accent colour, so Follow desktop uses blue"
 msgstr ""
 
-#: rolodex.py:6321
+#: rolodex.py
 msgid "Accent colour"
 msgstr ""
 
-#: rolodex.py:6335
+#: rolodex.py
 msgid "Could not save this setting. It applies until Rolodex closes."
 msgstr ""

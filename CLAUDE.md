@@ -186,6 +186,11 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
   local run returns green for a pipeline that will fail. A docs-only push runs its `--docs`
   mode, a markdown link check. That holds only while no leg reads a document
   (`~/.claude/standards/local-gate.md` § 6.1).
+- **`_` is gettext in `rolodex.py` (ROLO-0028), never a throwaway name.** A `for x, _ in …`
+  or `a, _ = …` inside a function makes `_` local there, and every `_("…")` in that function
+  then raises. Wrapping, editing or adding UI text turns `tests/test_translations.py` red
+  until `scripts/update-translations.sh` has run and each `po/*.po` is translated; that is
+  deliberate. The workflow is in `CONTRIBUTING.md` § Translations.
 - Privileged commands follow `/mnt/Games/CLAUDE.md` (never bare `sudo`).
 
 ---

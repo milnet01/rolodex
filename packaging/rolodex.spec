@@ -23,6 +23,9 @@ CONSOLE = os.environ.get("ROLODEX_CONSOLE") == "1"
 # hidden gi.repository.* submodules. The gi runtime hook then points GI_TYPELIB_PATH at them.
 datas, binaries, hiddenimports = collect_all("gi")
 
+# The compiled translations (ROLO-0028). rolodex.py looks for them at <bundle>/locale.
+datas += [(os.path.join(SPECPATH, "..", "locale"), "locale")]
+
 # On Windows/MSYS2 the automatic typelib collection misses the GTK stack, so `gi.require_version`
 # fails at runtime with "Namespace Gtk not available". Explicitly bundle every MSYS2 typelib into
 # the `gi_typelibs` dir where the gi runtime hook points GI_TYPELIB_PATH. ROLODEX_MINGW is the

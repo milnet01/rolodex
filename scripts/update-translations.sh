@@ -12,7 +12,7 @@ version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' rolodex.py)
 
 mkdir -p po
 xgettext --language=Python --keyword=_ --keyword=ngettext:1,2 \
-    --add-comments=Translators: --from-code=UTF-8 \
+    --add-comments=Translators: --add-location=file --from-code=UTF-8 \
     --package-name=Rolodex --package-version="$version" \
     -o po/rolodex.pot rolodex.py
 

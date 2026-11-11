@@ -75,6 +75,23 @@ build+self-test using the same script CI uses, catching failures before they rea
 5. Update `CHANGELOG.md` under an *Unreleased* heading.
 6. Open a pull request describing what changed and how you verified it.
 
+## Translations
+
+User-visible text in `rolodex.py` goes inside `_("…")`, or `ngettext("…", "…", n)` for a
+count. Put variable parts in named placeholders and fill them after translation:
+`_("Deleted {name}").format(name=name)`. Never translate what is saved to the vault, the
+config or an export file.
+
+After changing any wrapped text, run `scripts/update-translations.sh` (needs GNU gettext). It
+refreshes `po/rolodex.pot`, merges it into each `po/<lang>.po` and recompiles
+`locale/<lang>/LC_MESSAGES/rolodex.mo`, which is what the app loads. Then translate any new or
+fuzzy entries in each `.po` and run the script again. `tests/test_translations.py` fails
+until every catalog covers the template and every `.mo` matches its `.po`.
+
+To add a language:
+`msginit --input=po/rolodex.pot --locale=<lang> --output=po/<lang>.po`, translate it, run the
+script, and add the code to `LANGUAGES` in `tests/test_translations.py`.
+
 ## Commit messages
 
 - One logical change per commit.
