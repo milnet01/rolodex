@@ -101,6 +101,26 @@ Checked by web search only, 2026-11-18. No trademark register was searched.
 Before adopting a finalist, search the USPTO, EUIPO and South African (CIPC) registers, GitHub,
 Flathub and distro package lists for it.
 
+### Tinbox, checked 2026-11-18 (ROLO-0105)
+
+- Flathub search API (`POST https://flathub.org/api/v2/search`): no app of that name.
+- Repology (`/api/v1/projects/?search=tinbox`) and openSUSE (`zypper search tinbox`): no
+  package.
+- GitHub (`gh search repos tinbox`): small unrelated projects. The largest is a translation
+  tool, `strickvl/tinbox`.
+- PyPI: the project name `tinbox` is taken. Rolodex does not publish to PyPI.
+- Web search found no TINBOX word mark. It found brands using the word:
+  [Tinbox Transfers](https://tinbox.app/), a Canadian money-transfer service with an app
+  that says its trademarks are protected; Tinbox Energy Software Inc., a Canadian maker of
+  oil-well monitoring software
+  ([Justia](https://trademarks.justia.com/owners/tinbox-energy-software-inc-3168189)); and
+  a Paris charity app.
+- The USPTO, EUIPO, CIPC and WIPO registers were not searched: their search pages need a
+  browser.
+
+No password manager or vault uses the name. The nearest risk is Tinbox Transfers, a
+finance app in a different trade.
+
 ## Recommendation
 
 1. **Change the app ID now, whatever the name**, to `io.github.milnet01.<Name>`. Do it

@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=104 -->
+<!-- ants-roadmap-id-high-water: ROLO=106 -->
 
 # Rolodex Roadmap
 
@@ -729,7 +729,7 @@ Wanted work not yet promised to any release.
   **Layman:** Rolodex shows up in KDE Discover after one click on an "Add to Discover" link, and the .flatpak download keeps itself up to date.
   Kind: package.
   Source: user-request-2026-11-18.
-  Blocked-by: ROLO-0104.
+  Blocked-by: ROLO-0104, ROLO-0106.
 
 - ✅ [ROLO-0104] **Check whether the name "Rolodex" and the app ID com.rolodex.Contacts are safe to keep.**
   Raised while checking store rules for ROLO-0102: Flathub's
@@ -756,6 +756,29 @@ Wanted work not yet promised to any release.
   **Layman:** "Rolodex" is a brand name for card files; find out whether using it for a free app is a risk, and what renaming would cost existing users.
   Kind: investigate.
   Source: user-request-2026-11-18.
+
+- 📋 [ROLO-0105] **Clear the name "Tinbox" before adopting it.**
+  User chose on 2026-11-18 to rename and take a new app ID
+  (docs/name-and-app-id.md § Recommendation), with Tinbox as the
+  candidate. Search the trademark registers (USPTO, EUIPO, South Africa's
+  CIPC, WIPO), GitHub, Flathub and distro package lists for it.
+
+  Done when: the findings are added to docs/name-and-app-id.md and the
+  user confirms Tinbox or picks another name.
+  **Layman:** Make sure nobody else already owns or uses the name Tinbox for software.
+  Kind: investigate.
+  Source: user-decision-2026-11-18.
+
+- 📋 [ROLO-0106] **Rename Rolodex and change its app ID to io.github.milnet01.<Name> in one release.**
+  Plan: docs/name-and-app-id.md § What a change touches and
+  § Recommendation step 3. Keep the internal names that section lists, so
+  no user data moves. Publish each binary and its .sig under both old
+  and new asset names for a transition period, and test the updater
+  against the renamed repository's redirect before release.
+  **Layman:** Give the app its new name and a proper ID, without anyone losing their vault or their updates.
+  Kind: implement.
+  Source: user-decision-2026-11-18.
+  Blocked-by: ROLO-0105.
 
 ## High priority
 
