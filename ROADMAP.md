@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=101 -->
+<!-- ants-roadmap-id-high-water: ROLO=102 -->
 
 # Rolodex Roadmap
 
@@ -645,6 +645,29 @@ Wanted work not yet promised to any release.
   Kind: accessibility.
   Source: user-decision-2026-11-18 (split from ROLO-0028 at the 2.1.0 release).
   Splits-from: ROLO-0028.
+
+- 📋 [ROLO-0102] **Find a way for KDE Discover to list and update Rolodex without Flathub.**
+  Discover searches only the sources configured on a machine. Rolodex
+  ships as a single-file bundle (`rolodex.flatpak`, built by
+  `packaging/flatpak/build.sh`) attached to each GitHub release, and
+  Flathub is ruled out (it refuses AI-assisted apps). A search for
+  "rolodex" in Discover finds nothing (user, 2026-11-18).
+
+  Investigate:
+  - A self-hosted Flatpak repository (for example on GitHub Pages),
+    signed with a GPG key, plus a `.flatpakrepo` file the user adds
+    once. Cost of hosting, signing and publishing it from CI.
+  - Whether `build-bundle --repo-url` lets an installed bundle take
+    updates through Discover.
+  - How this sits beside the app's own signed updater: one update path
+    per install, not two.
+  - Any other route Discover searches (a distro package, an OBS repo).
+
+  Done when: a written recommendation with its cost, and a follow-up
+  item to build it if the user agrees.
+  **Layman:** Searching for Rolodex in KDE Discover finds nothing today; work out how to make it show up and update there without using Flathub.
+  Kind: investigate.
+  Source: user-request-2026-11-18.
 
 ## High priority
 
