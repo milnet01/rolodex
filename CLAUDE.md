@@ -113,9 +113,9 @@ border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CA
 ## Conventions
 
 - Keep the pure logic layer GTK-free so it stays trivially testable/reasoned-about.
-- **To exercise the GUI headlessly, start `Xvfb` yourself — `xvfb-run` is not installed here.**
-  `Xvfb :99 -screen 0 1280x1024x24 &` then
-  `env -u WAYLAND_DISPLAY GDK_BACKEND=x11 DISPLAY=:99 python3 …`. Setting `DISPLAY` alone is
+- **To exercise the GUI headlessly, hide the Wayland session from GTK.**
+  `env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET GDK_BACKEND=x11 xvfb-run -a python3 …`, or start
+  `Xvfb :99 -screen 0 1280x1024x24 &` yourself and pass `DISPLAY=:99`. Setting `DISPLAY` alone is
   not enough on a Wayland desktop: GTK prefers the session's Wayland socket, so the "headless"
   windows open on the user's real screen, and a stopped Xvfb goes unnoticed. Do NOT reach for
   `GDK_BACKEND=broadway`: `Gtk.init_check()` returns **True** under it and window construction
