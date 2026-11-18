@@ -1,7 +1,8 @@
 # The name "Rolodex" and the app ID `com.rolodex.Contacts`
 
 Genre: investigation
-Status: awaiting the user's decision
+Status: decided — the user chose on 2026-11-18 to rename to Tinbox, with app ID
+`io.github.milnet01.Tinbox`, in one release (ROLO-0106)
 
 Answers ROLO-0104: is the name safe to keep, is the app ID, and what would a change cost?
 ROLO-0103 publishes the app ID to users, so this decision comes first.

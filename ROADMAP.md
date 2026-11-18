@@ -757,7 +757,7 @@ Wanted work not yet promised to any release.
   Kind: investigate.
   Source: user-request-2026-11-18.
 
-- 📋 [ROLO-0105] **Clear the name "Tinbox" before adopting it.**
+- ✅ [ROLO-0105] **Clear the name "Tinbox" before adopting it.**
   User chose on 2026-11-18 to rename and take a new app ID
   (docs/name-and-app-id.md § Recommendation), with Tinbox as the
   candidate. Search the trademark registers (USPTO, EUIPO, South Africa's
@@ -765,11 +765,14 @@ Wanted work not yet promised to any release.
 
   Done when: the findings are added to docs/name-and-app-id.md and the
   user confirms Tinbox or picks another name.
+  User adopted Tinbox on 2026-11-18 after the web checks in
+  docs/name-and-app-id.md § Tinbox; the official registers stay
+  unsearched.
   **Layman:** Make sure nobody else already owns or uses the name Tinbox for software.
   Kind: investigate.
   Source: user-decision-2026-11-18.
 
-- 📋 [ROLO-0106] **Rename Rolodex and change its app ID to io.github.milnet01.<Name> in one release.**
+- 📋 [ROLO-0106] **Rename Rolodex to Tinbox and change its app ID to io.github.milnet01.Tinbox in one release.**
   Plan: docs/name-and-app-id.md § What a change touches and
   § Recommendation step 3. Keep the internal names that section lists, so
   no user data moves. Publish each binary and its .sig under both old
