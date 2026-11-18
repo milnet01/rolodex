@@ -14,6 +14,10 @@ All notable changes to Rolodex are documented here. The format is based on
 - **Simplified Chinese and Japanese.** (ROLO-0100)
   Rolodex shows them when the system language is set to either. On macOS, a system language
   written with a script, such as `zh-Hans`, now finds its translation too.
+- **Hebrew and Arabic, with the window laid out right to left.** (ROLO-0101)
+  In either language the sidebar moves to the right, and the colour bars on each field and the
+  notes sit on the right-hand edge. The layout follows the language Rolodex shows, so it
+  mirrors on Windows and macOS too.
 
 ## [2.1.0] - 2026-11-18
 

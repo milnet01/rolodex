@@ -1,0 +1,1364 @@
+# Hebrew translations for Rolodex package.
+# Copyright (C) 2026 THE Rolodex'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the Rolodex package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Rolodex 2.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-18 14:19+0200\n"
+"PO-Revision-Date: 2026-11-18 14:19+0200\n"
+"Last-Translator: Rolodex contributors\n"
+"Language-Team: none\n"
+"Language: he\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: rolodex.py
+msgid "That file is too large to import (the limit is 10 MB)."
+msgstr "הקובץ גדול מכדי לייבא אותו (המגבלה היא 10 MB)."
+
+#: rolodex.py
+msgid ""
+"This vault was made by a newer version of Rolodex. Update Rolodex to open it."
+msgstr "כספת זו נוצרה בגרסה חדשה יותר של Rolodex. יש לעדכן את Rolodex כדי לפתוח אותה."
+
+#: rolodex.py
+msgid "This vault is already open in another Rolodex window."
+msgstr "כספת זו כבר פתוחה בחלון Rolodex אחר."
+
+#: rolodex.py
+msgid "Vault file is truncated or corrupt"
+msgstr "קובץ הכספת קטוע או פגום"
+
+#: rolodex.py
+msgid "Not a valid vault file"
+msgstr "אינו קובץ כספת תקין"
+
+#: rolodex.py
+msgid "A vault already exists here. Restart Rolodex to unlock it."
+msgstr "כבר קיימת כאן כספת. יש להפעיל מחדש את Rolodex כדי לפתוח אותה."
+
+#: rolodex.py
+msgid "That file is too large to be a Rolodex vault."
+msgstr "הקובץ גדול מכדי להיות כספת Rolodex."
+
+#: rolodex.py
+msgid "That file is not a Rolodex vault."
+msgstr "הקובץ אינו כספת Rolodex."
+
+#: rolodex.py
+msgid "Vault contents are not a valid vault"
+msgstr "תוכן הכספת אינו כספת תקינה"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"This vault was written by a newer version of Rolodex (format v{version}). "
+"Upgrade Rolodex to open it."
+msgstr "כספת זו נכתבה בגרסה חדשה יותר של Rolodex (תבנית v{version}). יש לשדרג את Rolodex כדי לפתוח אותה."
+
+#: rolodex.py
+msgid "Credential field"
+msgstr "שדה פרטי גישה"
+
+#: rolodex.py
+msgid "Key or token field"
+msgstr "שדה מפתח או אסימון"
+
+#: rolodex.py
+msgid "Identity field"
+msgstr "שדה זהות"
+
+#: rolodex.py
+msgid "Link field"
+msgstr "שדה קישור"
+
+#: rolodex.py
+msgid "Date field"
+msgstr "שדה תאריך"
+
+#: rolodex.py
+msgid "Uncategorised field"
+msgstr "שדה ללא סיווג"
+
+#: rolodex.py
+msgid "Empty"
+msgstr "ריקה"
+
+#: rolodex.py
+msgid "Weak"
+msgstr "חלשה"
+
+#: rolodex.py
+msgid "Fair"
+msgstr "סבירה"
+
+#: rolodex.py
+msgid "Good"
+msgstr "טובה"
+
+#: rolodex.py
+msgid "Strong"
+msgstr "חזקה"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Row {row} of the CSV file is malformed: {error}"
+msgstr "שורה {row} בקובץ ה־CSV פגומה: {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Row {row} of the CSV file has more cells than the header."
+msgstr "בשורה {row} בקובץ ה־CSV יש יותר תאים מאשר בכותרת."
+
+#: rolodex.py
+msgid "Choose exactly one column as the Name."
+msgstr "יש לבחור בדיוק עמודה אחת בתור השם."
+
+#: rolodex.py
+msgid "Choose at most one column as the Category."
+msgstr "יש לבחור לכל היותר עמודה אחת בתור הקטגוריה."
+
+#: rolodex.py
+msgid "Choose at most one column as the Notes."
+msgstr "יש לבחור לכל היותר עמודה אחת בתור ההערות."
+
+#: rolodex.py
+msgid "Automatic"
+msgstr "אוטומטי"
+
+#: rolodex.py
+msgid "Dark"
+msgstr "כהה"
+
+#: rolodex.py
+msgid "Light"
+msgstr "בהיר"
+
+#: rolodex.py
+msgid "High contrast"
+msgstr "ניגודיות גבוהה"
+
+#: rolodex.py
+msgid "Blue"
+msgstr "כחול"
+
+#: rolodex.py
+msgid "Teal"
+msgstr "טורקיז"
+
+#: rolodex.py
+msgid "Green"
+msgstr "ירוק"
+
+#: rolodex.py
+msgid "Orange"
+msgstr "כתום"
+
+#: rolodex.py
+msgid "Pink"
+msgstr "ורוד"
+
+#: rolodex.py
+msgid "Purple"
+msgstr "סגול"
+
+#: rolodex.py
+msgid "Slate"
+msgstr "אפור צפחה"
+
+#: rolodex.py
+msgid "refusing a non-https update URL"
+msgstr "דחיית כתובת URL לעדכון שאינה https"
+
+#: rolodex.py
+#, python-brace-format
+msgid "refusing an update URL outside GitHub ({host})"
+msgstr "דחיית כתובת URL לעדכון מחוץ ל־GitHub ({host})"
+
+#: rolodex.py
+msgid "no host"
+msgstr "אין מארח"
+
+#: rolodex.py
+msgid "the update server is too slow; try again later"
+msgstr "שרת העדכונים איטי מדי; יש לנסות שוב מאוחר יותר"
+
+#: rolodex.py
+msgid "download exceeds the size cap"
+msgstr "ההורדה חורגת ממגבלת הגודל"
+
+#: rolodex.py
+#, python-brace-format
+msgid "could not check for updates: {error}"
+msgstr "לא ניתן לבדוק אם יש עדכונים: {error}"
+
+#: rolodex.py
+msgid "self-update is not supported on this build"
+msgstr "עדכון עצמי אינו נתמך בבנייה זו"
+
+#: rolodex.py
+msgid "the update's signature did not verify"
+msgstr "חתימת העדכון לא אומתה"
+
+#: rolodex.py
+#, python-brace-format
+msgid "could not stage the update: {error}"
+msgstr "לא ניתן להכין את העדכון: {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "could not install the update: {error}"
+msgstr "לא ניתן להתקין את העדכון: {error}"
+
+#: rolodex.py
+msgid "All files"
+msgstr "כל הקבצים"
+
+#: rolodex.py
+msgid "Create a master password to encrypt your vault."
+msgstr "יש ליצור סיסמה ראשית כדי להצפין את הכספת."
+
+#: rolodex.py
+msgid "Master password"
+msgstr "סיסמה ראשית"
+
+#: rolodex.py
+msgid "Confirm password"
+msgstr "אישור סיסמה"
+
+#: rolodex.py
+msgid "Create Vault"
+msgstr "יצירת כספת"
+
+#: rolodex.py
+msgid "Unlock"
+msgstr "שחרור נעילה"
+
+#: rolodex.py
+msgid "Use an Existing Vault File…"
+msgstr "שימוש בקובץ כספת קיים…"
+
+#: rolodex.py
+msgid "Restore from Backup…"
+msgstr "שחזור מגיבוי…"
+
+#: rolodex.py
+msgid "Start a New Vault…"
+msgstr "התחלת כספת חדשה…"
+
+#: rolodex.py
+msgid "Please enter a password."
+msgstr "נא להזין סיסמה."
+
+#: rolodex.py
+#, python-brace-format
+msgid "Password must be at least {n} character."
+msgid_plural "Password must be at least {n} characters."
+msgstr[0] "הסיסמה חייבת להכיל לפחות {n} תו."
+msgstr[1] "הסיסמה חייבת להכיל לפחות {n} תווים."
+
+#: rolodex.py
+msgid "Passwords do not match."
+msgstr "הסיסמאות אינן תואמות."
+
+#: rolodex.py
+msgid "Creating..."
+msgstr "מתבצעת יצירה..."
+
+#: rolodex.py
+msgid "Unlocking..."
+msgstr "מתבצע שחרור נעילה..."
+
+#: rolodex.py
+msgid "Wrong password."
+msgstr "סיסמה שגויה."
+
+#: rolodex.py
+#, python-brace-format
+msgid "The vault opened but could not be loaded: {error}"
+msgstr "הכספת נפתחה אך לא ניתן לטעון אותה: {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "The vault was created but could not be opened: {error}"
+msgstr "הכספת נוצרה אך לא ניתן לפתוח אותה: {error}"
+
+#: rolodex.py
+msgid "Choose a Rolodex vault or backup"
+msgstr "בחירת כספת או גיבוי של Rolodex"
+
+#: rolodex.py
+msgid "Rolodex vaults"
+msgstr "כספות Rolodex"
+
+#: rolodex.py
+msgid "Vault file installed. Enter its master password to unlock it."
+msgstr "קובץ הכספת הותקן. יש להזין את הסיסמה הראשית שלו כדי לפתוח אותו."
+
+#. Translators: appended, after a space, to "Vault file installed. Enter its master
+#. password to unlock it."
+#: rolodex.py
+#, python-brace-format
+msgid "The unreadable vault was kept as {filename}."
+msgstr "הכספת שלא ניתן היה לקרוא נשמרה בשם {filename}."
+
+#: rolodex.py
+msgid "Start a New Vault?"
+msgstr "להתחיל כספת חדשה?"
+
+#: rolodex.py
+msgid ""
+"The vault that will not open is kept, renamed beside the original with "
+"“.unreadable-” and the date added, so it can still be recovered. A new, "
+"empty vault is then created with a new master password."
+msgstr "הכספת שאינה נפתחת נשמרת בשם חדש לצד המקורית, בתוספת “.unreadable-” והתאריך, כדי שעדיין יהיה אפשר לשחזר אותה. לאחר מכן נוצרת כספת חדשה וריקה עם סיסמה ראשית חדשה."
+
+#: rolodex.py
+msgid "Cancel"
+msgstr "ביטול"
+
+#: rolodex.py
+msgid "Start New Vault"
+msgstr "התחלת כספת חדשה"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Could not move the unreadable vault aside: {error}"
+msgstr "לא ניתן להעביר הצידה את הכספת שאינה קריאה: {error}"
+
+#: rolodex.py
+msgid "Entry"
+msgstr "רשומה"
+
+#: rolodex.py
+msgid "Uncategorised"
+msgstr "ללא קטגוריה"
+
+#. Translators: what a screen reader says for a category heading, e.g. "Games, 3 entries".
+#: rolodex.py
+#, python-brace-format
+msgid "{category}, {n} entry"
+msgid_plural "{category}, {n} entries"
+msgstr[0] "{category}, {n} רשומה"
+msgstr[1] "{category}, {n} רשומות"
+
+#: rolodex.py
+msgid "Add entry (Ctrl+N)"
+msgstr "הוספת רשומה (Ctrl+N)"
+
+#: rolodex.py
+msgid "Add entry"
+msgstr "הוספת רשומה"
+
+#: rolodex.py
+msgid "Preferences..."
+msgstr "העדפות..."
+
+#: rolodex.py
+msgid "Password health..."
+msgstr "בריאות הסיסמאות..."
+
+#: rolodex.py
+msgid "Manage categories..."
+msgstr "ניהול קטגוריות..."
+
+#: rolodex.py
+msgid "Import from text file..."
+msgstr "ייבוא מקובץ טקסט..."
+
+#: rolodex.py
+msgid "Import from CSV file..."
+msgstr "ייבוא מקובץ CSV..."
+
+#: rolodex.py
+msgid "Backup vault..."
+msgstr "גיבוי הכספת..."
+
+#: rolodex.py
+msgid "Restore vault from backup..."
+msgstr "שחזור הכספת מגיבוי..."
+
+#: rolodex.py
+msgid "Export (decrypted plaintext)..."
+msgstr "ייצוא (טקסט גלוי מפוענח)..."
+
+#: rolodex.py
+msgid "Export as CSV (decrypted)..."
+msgstr "ייצוא כ־CSV (מפוענח)..."
+
+#: rolodex.py
+msgid "Change master password..."
+msgstr "שינוי הסיסמה הראשית..."
+
+#: rolodex.py
+msgid "Check for updates..."
+msgstr "בדיקת עדכונים..."
+
+#: rolodex.py
+msgid "Check for updates automatically"
+msgstr "בדיקת עדכונים אוטומטית"
+
+#: rolodex.py
+msgid "Main menu"
+msgstr "תפריט ראשי"
+
+#: rolodex.py
+msgid "Lock vault (Ctrl+L)"
+msgstr "נעילת הכספת (Ctrl+L)"
+
+#: rolodex.py
+msgid "Lock vault"
+msgstr "נעילת הכספת"
+
+#: rolodex.py
+msgid "Search entries..."
+msgstr "חיפוש רשומות..."
+
+#: rolodex.py
+msgid "Search entries"
+msgstr "חיפוש רשומות"
+
+#: rolodex.py
+msgid "All categories"
+msgstr "כל הקטגוריות"
+
+#: rolodex.py
+msgid "Show category"
+msgstr "הצגת קטגוריה"
+
+#: rolodex.py
+msgid "Clear"
+msgstr "ניקוי"
+
+#: rolodex.py
+msgid "Clear selection"
+msgstr "ניקוי הבחירה"
+
+#: rolodex.py
+msgid "Move to…"
+msgstr "העברה אל…"
+
+#: rolodex.py
+msgid "Delete"
+msgstr "מחיקה"
+
+#: rolodex.py
+msgid "Could Not Save"
+msgstr "לא ניתן לשמור"
+
+#: rolodex.py
+#, python-brace-format
+msgid "The vault was not written to disk: {error}"
+msgstr "הכספת לא נכתבה לכונן: {error}"
+
+#: rolodex.py
+msgid "Vault Changed Elsewhere"
+msgstr "הכספת שונתה במקום אחר"
+
+#: rolodex.py
+msgid ""
+"The vault file was changed by something else since you unlocked it — another "
+"copy of Rolodex, a sync tool, or a file copied over it. Your latest change "
+"was NOT saved.\n"
+"\n"
+"Reload locks Rolodex so you can unlock the version on disk; your unsaved "
+"change is discarded. Overwrite replaces the version on disk with everything "
+"open here, which discards the other change instead."
+msgstr "קובץ הכספת שונה על ידי גורם אחר מאז שחרור הנעילה — עותק אחר של Rolodex, כלי סנכרון, או קובץ שהועתק מעליו. השינוי האחרון שלך לא נשמר.\n\nטעינה מחדש נועלת את Rolodex כדי שאפשר יהיה לפתוח את הגרסה שבכונן; השינוי שלא נשמר יושלך. דריסה מחליפה את הגרסה שבכונן בכל מה שפתוח כאן, ובמקום זאת משליכה את השינוי האחר."
+
+#: rolodex.py
+msgid "Reload From Disk"
+msgstr "טעינה מחדש מהכונן"
+
+#: rolodex.py
+msgid "Overwrite"
+msgstr "דריסה"
+
+#: rolodex.py
+msgid "Saved over the changed vault"
+msgstr "נשמר מעל הכספת ששונתה"
+
+#. Translators: the count under the entry list while a search or filter is active.
+#: rolodex.py
+#, python-brace-format
+msgid "{shown} of {n} entry"
+msgid_plural "{shown} of {n} entries"
+msgstr[0] "{shown} מתוך {n} רשומה"
+msgstr[1] "{shown} מתוך {n} רשומות"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry"
+msgid_plural "{n} entries"
+msgstr[0] "{n} רשומה"
+msgstr[1] "{n} רשומות"
+
+#. Translators: how many entries are selected in the list, shown in the bulk-action bar.
+#: rolodex.py
+#, python-brace-format
+msgid "{n} selected"
+msgid_plural "{n} selected"
+msgstr[0] "{n} נבחרה"
+msgstr[1] "{n} נבחרו"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry selected"
+msgid_plural "{n} entries selected"
+msgstr[0] "{n} רשומה נבחרה"
+msgstr[1] "{n} רשומות נבחרו"
+
+#: rolodex.py
+msgid "Move or delete them with the buttons below the list."
+msgstr "אפשר להעביר או למחוק אותן בעזרת הכפתורים שמתחת לרשימה."
+
+#: rolodex.py
+msgid "Select an entry"
+msgstr "בחירת רשומה"
+
+#: rolodex.py
+msgid "Choose an entry from the list, or add a new one."
+msgstr "יש לבחור רשומה מהרשימה או להוסיף רשומה חדשה."
+
+#: rolodex.py
+msgid "Hidden value"
+msgstr "ערך מוסתר"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Copy {label}"
+msgstr "העתקת {label}"
+
+#: rolodex.py
+msgid "Notes"
+msgstr "הערות"
+
+#: rolodex.py
+msgid "Hide sensitive"
+msgstr "הסתרת פרטים רגישים"
+
+#: rolodex.py
+msgid "Reveal sensitive"
+msgstr "חשיפת פרטים רגישים"
+
+#: rolodex.py
+msgid "Edit"
+msgstr "עריכה"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Created: {date}"
+msgstr "נוצרה: {date}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Modified: {date}"
+msgstr "שונתה: {date}"
+
+#: rolodex.py
+msgid "Code"
+msgstr "קוד"
+
+#: rolodex.py
+msgid ""
+"Your computer's clock is not synchronised, so this code may be rejected. "
+"Turn on automatic time in your system settings."
+msgstr "שעון המחשב אינו מסונכרן, ולכן ייתכן שהקוד הזה יידחה. יש להפעיל שעה אוטומטית בהגדרות המערכת."
+
+#: rolodex.py
+msgid "Copy 2FA code"
+msgstr "העתקת קוד 2FA"
+
+#: rolodex.py
+msgid "2FA code"
+msgstr "קוד 2FA"
+
+#. Translators: seconds left before a 2FA code changes; "s" abbreviates "seconds".
+#: rolodex.py
+#, python-brace-format
+msgid "{seconds}s"
+msgstr "{seconds} שנ׳"
+
+#: rolodex.py
+msgid "Clipboard not available"
+msgstr "לוח הגזירים אינו זמין"
+
+#. Translators: {label} is a field's name, e.g. "Password"; "s" abbreviates "seconds".
+#: rolodex.py
+#, python-brace-format
+msgid "Copied {label} — clipboard clears in {seconds}s"
+msgstr "הועתק: {label} — לוח הגזירים יתרוקן בעוד {seconds} שנ׳"
+
+#. Translators: {label} is a field's name, e.g. "Password".
+#: rolodex.py
+#, python-brace-format
+msgid "Copied {label}"
+msgstr "הועתק: {label}"
+
+#: rolodex.py
+msgid "Couldn't save that setting — the settings file is not writable"
+msgstr "לא ניתן לשמור את ההגדרה — אין הרשאת כתיבה לקובץ ההגדרות"
+
+#: rolodex.py
+msgid "Rolodex will check for updates on startup"
+msgstr "בעת ההפעלה, Rolodex יבדוק אם יש עדכונים"
+
+#: rolodex.py
+msgid "Automatic update checks turned off"
+msgstr "בדיקת העדכונים האוטומטית כובתה"
+
+#: rolodex.py
+msgid "Updates not available"
+msgstr "עדכונים אינם זמינים"
+
+#: rolodex.py
+msgid ""
+"In-app updates work only in the packaged Rolodex build. Running from source "
+"or from a distribution package, updating is handled outside the app."
+msgstr "עדכונים מתוך היישום פועלים רק בגרסה הארוזה של Rolodex. בהרצה מקוד המקור או מחבילה של הפצה, העדכון מתבצע מחוץ ליישום."
+
+#: rolodex.py
+msgid "Checking for updates..."
+msgstr "מתבצעת בדיקת עדכונים..."
+
+#: rolodex.py
+#, python-brace-format
+msgid "Couldn't check for updates: {error}"
+msgstr "לא ניתן לבדוק אם יש עדכונים: {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Rolodex {version} is up to date"
+msgstr "הגרסה Rolodex {version} עדכנית"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Downloading Rolodex {version}..."
+msgstr "מתבצעת הורדה של Rolodex {version}..."
+
+#: rolodex.py
+msgid "Update rejected"
+msgstr "העדכון נדחה"
+
+#: rolodex.py
+msgid ""
+"The downloaded update was not signed by the Rolodex release key, so it was "
+"discarded and nothing was installed. Your current version is untouched."
+msgstr "העדכון שהורד לא נחתם במפתח השחרור של Rolodex, ולכן הוא הושלך ושום דבר לא הותקן. הגרסה הנוכחית שלך לא השתנתה."
+
+#: rolodex.py
+msgid "Update failed"
+msgstr "העדכון נכשל"
+
+#: rolodex.py
+msgid "Select an entry first"
+msgstr "יש לבחור רשומה תחילה"
+
+#: rolodex.py
+msgid "No sensitive field to copy"
+msgstr "אין שדה רגיש להעתקה"
+
+#: rolodex.py
+msgid "Delete entry?"
+msgstr "למחוק את הרשומה?"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete \"{name}\"? This cannot be undone."
+msgstr "למחוק את \"{name}\"? אי אפשר לבטל פעולה זו."
+
+#. Translators: one entry's name inside a list of names, quoted.
+#: rolodex.py
+#, python-brace-format
+msgid "\"{name}\""
+msgstr "\"{name}\""
+
+#. Translators: the separator between names in a list, e.g. '"A", "B", "C"'.
+#: rolodex.py
+msgid ", "
+msgstr ", "
+
+#. Translators: {names} is three quoted entry names; {n} is how many more there are.
+#: rolodex.py
+#, python-brace-format
+msgid "{names} and {n} more"
+msgid_plural "{names} and {n} more"
+msgstr[0] "{names} ועוד {n}"
+msgstr[1] "{names} ועוד {n}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete {n} entry?"
+msgid_plural "Delete {n} entries?"
+msgstr[0] "למחוק {n} רשומה?"
+msgstr[1] "למחוק {n} רשומות?"
+
+#. Translators: {names} is a list of quoted entry names.
+#: rolodex.py
+#, python-brace-format
+msgid "Delete {names}? This cannot be undone."
+msgstr "למחוק את {names}? אי אפשר לבטל פעולה זו."
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry deleted"
+msgid_plural "{n} entries deleted"
+msgstr[0] "{n} רשומה נמחקה"
+msgstr[1] "{n} רשומות נמחקו"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Moved {n} entry to {category}"
+msgid_plural "Moved {n} entries to {category}"
+msgstr[0] "{n} רשומה הועברה אל {category}"
+msgstr[1] "{n} רשומות הועברו אל {category}"
+
+#: rolodex.py
+msgid "Entry deleted"
+msgstr "הרשומה נמחקה"
+
+#: rolodex.py
+msgid "Add Entry"
+msgstr "הוספת רשומה"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Added \"{name}\""
+msgstr "נוספה הרשומה \"{name}\""
+
+#: rolodex.py
+msgid "Edit Entry"
+msgstr "עריכת רשומה"
+
+#: rolodex.py
+msgid "Entry updated"
+msgstr "הרשומה עודכנה"
+
+#: rolodex.py
+msgid "Import from text file"
+msgstr "ייבוא מקובץ טקסט"
+
+#: rolodex.py
+msgid "Text files"
+msgstr "קובצי טקסט"
+
+#: rolodex.py
+msgid "Import Error"
+msgstr "שגיאת ייבוא"
+
+#: rolodex.py
+msgid "Import"
+msgstr "ייבוא"
+
+#: rolodex.py
+msgid "No entries found in file."
+msgstr "לא נמצאו רשומות בקובץ."
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"That file holds {count} entries. Import at most {limit} at a time — split "
+"the file and import each part."
+msgstr "הקובץ מכיל {count} רשומות. אפשר לייבא לכל היותר {limit} בכל פעם — יש לפצל את הקובץ ולייבא כל חלק בנפרד."
+
+#: rolodex.py
+msgid "Import from CSV file"
+msgstr "ייבוא מקובץ CSV"
+
+#: rolodex.py
+msgid "CSV files"
+msgstr "קובצי CSV"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Imported {n} entry."
+msgid_plural "Imported {n} entries."
+msgstr[0] "יובאה {n} רשומה."
+msgstr[1] "יובאו {n} רשומות."
+
+#: rolodex.py
+msgid "Backup vault to..."
+msgstr "גיבוי הכספת אל..."
+
+#: rolodex.py
+msgid "Vault backed up"
+msgstr "הכספת גובתה"
+
+#: rolodex.py
+msgid "Backup Error"
+msgstr "שגיאת גיבוי"
+
+#: rolodex.py
+msgid "Restore from backup"
+msgstr "שחזור מגיבוי"
+
+#: rolodex.py
+msgid ""
+"This will replace all current entries with the backup contents. You will "
+"need to enter the backup's master password."
+msgstr "פעולה זו תחליף את כל הרשומות הנוכחיות בתוכן הגיבוי. יהיה צורך להזין את הסיסמה הראשית של הגיבוי."
+
+#: rolodex.py
+msgid "Restore"
+msgstr "שחזור"
+
+#: rolodex.py
+msgid "Select vault backup"
+msgstr "בחירת גיבוי כספת"
+
+#: rolodex.py
+msgid "Vault files"
+msgstr "קובצי כספת"
+
+#: rolodex.py
+msgid "the vault file was changed elsewhere since you unlocked it"
+msgstr "קובץ הכספת שונה במקום אחר מאז שחרור הנעילה"
+
+#: rolodex.py
+msgid "Restore Failed"
+msgstr "השחזור נכשל"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"The backup could not be written to the vault, so nothing changed: {error}"
+msgstr "לא ניתן היה לכתוב את הגיבוי לכספת, ולכן דבר לא השתנה: {error}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Restored {n} entry from backup"
+msgid_plural "Restored {n} entries from backup"
+msgstr[0] "שוחזרה {n} רשומה מהגיבוי"
+msgstr[1] "שוחזרו {n} רשומות מהגיבוי"
+
+#: rolodex.py
+msgid "Export decrypted backup"
+msgstr "ייצוא גיבוי מפוענח"
+
+#: rolodex.py
+msgid "This will export all entries in plaintext. Continue?"
+msgstr "פעולה זו תייצא את כל הרשומות כטקסט גלוי. להמשיך?"
+
+#: rolodex.py
+msgid "Export"
+msgstr "ייצוא"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"This will export all entries to an unencrypted CSV file. Anyone who can read "
+"the file can read every password. The file will be too large for Rolodex to "
+"import in one go (the limits are {limit} entries and 10 MB). Continue?"
+msgstr "פעולה זו תייצא את כל הרשומות לקובץ CSV לא מוצפן. כל מי שיכול לקרוא את הקובץ יוכל לקרוא כל סיסמה. הקובץ יהיה גדול מכדי ש־Rolodex ייבא אותו בבת אחת (המגבלות הן {limit} רשומות ו־10 MB). להמשיך?"
+
+#: rolodex.py
+msgid ""
+"This will export all entries to an unencrypted CSV file. Anyone who can read "
+"the file can read every password. Continue?"
+msgstr "פעולה זו תייצא את כל הרשומות לקובץ CSV לא מוצפן. כל מי שיכול לקרוא את הקובץ יוכל לקרוא כל סיסמה. להמשיך?"
+
+#: rolodex.py
+msgid "Export as CSV"
+msgstr "ייצוא כ־CSV"
+
+#: rolodex.py
+msgid "Export to file"
+msgstr "ייצוא לקובץ"
+
+#: rolodex.py
+msgid "Export Error"
+msgstr "שגיאת ייצוא"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Exported {n} entry"
+msgid_plural "Exported {n} entries"
+msgstr[0] "יוצאה {n} רשומה"
+msgstr[1] "יוצאו {n} רשומות"
+
+#: rolodex.py
+msgid "Password Not Changed"
+msgstr "הסיסמה לא שונתה"
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"The vault could not be written, so your master password is unchanged: {error}"
+msgstr "לא ניתן היה לכתוב את הכספת, ולכן הסיסמה הראשית לא השתנתה: {error}"
+
+#: rolodex.py
+msgid "Master password changed"
+msgstr "הסיסמה הראשית שונתה"
+
+#: rolodex.py
+msgid "Move to..."
+msgstr "העברה אל..."
+
+#: rolodex.py
+msgid "OK"
+msgstr "אישור"
+
+#: rolodex.py
+msgid "Drag to reorder, or Ctrl+Up / Ctrl+Down"
+msgstr "יש לגרור כדי לשנות את הסדר, או Ctrl+Up / Ctrl+Down"
+
+#: rolodex.py
+msgid "Label"
+msgstr "תווית"
+
+#: rolodex.py
+msgid "Field label"
+msgstr "תווית השדה"
+
+#: rolodex.py
+msgid "Value"
+msgstr "ערך"
+
+#: rolodex.py
+msgid "Field value"
+msgstr "ערך השדה"
+
+#: rolodex.py
+msgid "Generate a strong password"
+msgstr "יצירת סיסמה חזקה"
+
+#: rolodex.py
+msgid "Hide"
+msgstr "הסתרה"
+
+#: rolodex.py
+msgid "Remove field"
+msgstr "הסרת שדה"
+
+#: rolodex.py
+msgid "Hide value"
+msgstr "הסתרת הערך"
+
+#: rolodex.py
+msgid "Show value"
+msgstr "הצגת הערך"
+
+#: rolodex.py
+msgid "Length"
+msgstr "אורך"
+
+#: rolodex.py
+msgid "Lowercase (a–z)"
+msgstr "אותיות קטנות (a–z)"
+
+#: rolodex.py
+msgid "Uppercase (A–Z)"
+msgstr "אותיות גדולות (A–Z)"
+
+#: rolodex.py
+msgid "Digits (0–9)"
+msgstr "ספרות (0–9)"
+
+#: rolodex.py
+msgid "Symbols (!@#…)"
+msgstr "סמלים (!@#…)"
+
+#: rolodex.py
+msgid "Generate"
+msgstr "יצירה"
+
+#: rolodex.py
+msgid "Field"
+msgstr "שדה"
+
+#: rolodex.py
+msgid "Save"
+msgstr "שמירה"
+
+#: rolodex.py
+msgid "Name"
+msgstr "שם"
+
+#: rolodex.py
+msgid "System / service name"
+msgstr "שם המערכת / השירות"
+
+#: rolodex.py
+msgid "Category"
+msgstr "קטגוריה"
+
+#: rolodex.py
+msgid "(None)"
+msgstr "(ללא)"
+
+#: rolodex.py
+msgid "Fields"
+msgstr "שדות"
+
+#: rolodex.py
+msgid "Drag the handle to reorder"
+msgstr "יש לגרור את הידית כדי לשנות את הסדר"
+
+#: rolodex.py
+msgid "Add Field"
+msgstr "הוספת שדה"
+
+#: rolodex.py
+msgid "Discard changes?"
+msgstr "להשליך את השינויים?"
+
+#: rolodex.py
+msgid "This entry has unsaved changes. Discard them?"
+msgstr "ברשומה זו יש שינויים שלא נשמרו. להשליך אותם?"
+
+#: rolodex.py
+msgid "Discard"
+msgstr "השלכה"
+
+#: rolodex.py
+msgid "Duplicate name"
+msgstr "שם כפול"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Another entry is already named \"{name}\". Save anyway?"
+msgstr "כבר קיימת רשומה אחרת בשם \"{name}\". לשמור בכל זאת?"
+
+#: rolodex.py
+msgid "Save Anyway"
+msgstr "שמירה בכל זאת"
+
+#: rolodex.py
+msgid "Import Preview"
+msgstr "תצוגה מקדימה של הייבוא"
+
+#: rolodex.py
+msgid "Import Selected"
+msgstr "ייבוא הנבחרות"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Found {n} entry in file."
+msgid_plural "Found {n} entries in file."
+msgstr[0] "נמצאה {n} רשומה בקובץ."
+msgstr[1] "נמצאו {n} רשומות בקובץ."
+
+#: rolodex.py
+msgid "Select All"
+msgstr "בחירת הכול"
+
+#: rolodex.py
+msgid "Select None"
+msgstr "ביטול הבחירה"
+
+#: rolodex.py
+msgid "No category"
+msgstr "ללא קטגוריה"
+
+#: rolodex.py
+msgid "Categories from file"
+msgstr "קטגוריות מהקובץ"
+
+#: rolodex.py
+msgid "Add to category"
+msgstr "הוספה לקטגוריה"
+
+#. Translators: an import preview row's summary: how many fields, and "+notes"
+#. when the entry carries notes.
+#: rolodex.py
+#, python-brace-format
+msgid "{n} field +notes"
+msgid_plural "{n} fields +notes"
+msgstr[0] "{n} שדה +הערות"
+msgstr[1] "{n} שדות +הערות"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} field"
+msgid_plural "{n} fields"
+msgstr[0] "{n} שדה"
+msgstr[1] "{n} שדות"
+
+#. Translators: {summary} is the field count, e.g. "3 fields +notes".
+#: rolodex.py
+#, python-brace-format
+msgid "{summary}  (duplicate name — tick to import it anyway)"
+msgstr "{summary}  (שם כפול — יש לסמן כדי לייבא בכל זאת)"
+
+#: rolodex.py
+msgid "Tick at least one entry to import."
+msgstr "יש לסמן לפחות רשומה אחת לייבוא."
+
+#: rolodex.py
+msgid "Skip"
+msgstr "דילוג"
+
+#: rolodex.py
+msgid "Match CSV Columns"
+msgstr "התאמת עמודות CSV"
+
+#: rolodex.py
+msgid "Continue"
+msgstr "המשך"
+
+#: rolodex.py
+msgid ""
+"Rolodex does not recognise this file's columns. Say what each one holds."
+msgstr "העמודות בקובץ זה אינן מוכרות ל־Rolodex. יש לציין מה כל אחת מכילה."
+
+#: rolodex.py
+#, python-brace-format
+msgid "Column {number}"
+msgstr "עמודה {number}"
+
+#: rolodex.py
+msgid "Change Master Password"
+msgstr "שינוי הסיסמה הראשית"
+
+#: rolodex.py
+msgid "Change"
+msgstr "שינוי"
+
+#: rolodex.py
+msgid "Current password"
+msgstr "הסיסמה הנוכחית"
+
+#: rolodex.py
+msgid "New password"
+msgstr "סיסמה חדשה"
+
+#: rolodex.py
+msgid "Confirm new password"
+msgstr "אישור הסיסמה החדשה"
+
+#: rolodex.py
+msgid "Incorrect current password."
+msgstr "הסיסמה הנוכחית שגויה."
+
+#: rolodex.py
+msgid "Restore from Backup"
+msgstr "שחזור מגיבוי"
+
+#: rolodex.py
+msgid "Enter the master password for the backup vault."
+msgstr "יש להזין את הסיסמה הראשית של כספת הגיבוי."
+
+#: rolodex.py
+msgid "Backup password"
+msgstr "סיסמת הגיבוי"
+
+#: rolodex.py
+msgid "Please enter the backup password."
+msgstr "נא להזין את סיסמת הגיבוי."
+
+#: rolodex.py
+msgid "Decrypting..."
+msgstr "מתבצע פענוח..."
+
+#: rolodex.py
+msgid "Wrong password for this backup."
+msgstr "סיסמה שגויה לגיבוי זה."
+
+#: rolodex.py
+msgid "Could not read that backup file."
+msgstr "לא ניתן לקרוא את קובץ הגיבוי."
+
+#: rolodex.py
+msgid "Could not restore that backup file."
+msgstr "לא ניתן לשחזר את קובץ הגיבוי."
+
+#: rolodex.py
+msgid "Rename"
+msgstr "שינוי שם"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Rename category {name}"
+msgstr "שינוי שם הקטגוריה {name}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete category {name}"
+msgstr "מחיקת הקטגוריה {name}"
+
+#: rolodex.py
+msgid "Manage Categories"
+msgstr "ניהול קטגוריות"
+
+#: rolodex.py
+msgid "Done"
+msgstr "סיום"
+
+#: rolodex.py
+msgid "New category name..."
+msgstr "שם קטגוריה חדשה..."
+
+#: rolodex.py
+msgid "New category name"
+msgstr "שם קטגוריה חדשה"
+
+#: rolodex.py
+msgid "Add"
+msgstr "הוספה"
+
+#: rolodex.py
+msgid "Type a name for the new category."
+msgstr "יש להקליד שם לקטגוריה החדשה."
+
+#: rolodex.py
+#, python-brace-format
+msgid "A category named “{name}” already exists."
+msgstr "כבר קיימת קטגוריה בשם “{name}”."
+
+#: rolodex.py
+msgid "Rename category"
+msgstr "שינוי שם קטגוריה"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Enter a new name for \"{name}\":"
+msgstr "יש להזין שם חדש עבור \"{name}\":"
+
+#: rolodex.py
+msgid "A category name cannot be empty."
+msgstr "שם קטגוריה לא יכול להיות ריק."
+
+#: rolodex.py
+#, python-brace-format
+msgid ""
+"A category named “{name}” already exists. Categories cannot be merged by "
+"renaming — move the entries, then delete the empty one."
+msgstr "כבר קיימת קטגוריה בשם “{name}”. אי אפשר למזג קטגוריות באמצעות שינוי שם — יש להעביר את הרשומות ואז למחוק את הקטגוריה הריקה."
+
+#: rolodex.py
+#, python-brace-format
+msgid "Delete category \"{name}\"?"
+msgstr "למחוק את הקטגוריה \"{name}\"?"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} entry will be moved to Uncategorised."
+msgid_plural "{n} entries will be moved to Uncategorised."
+msgstr[0] "{n} רשומה תועבר אל \"ללא קטגוריה\"."
+msgstr[1] "{n} רשומות יועברו אל \"ללא קטגוריה\"."
+
+#: rolodex.py
+msgid "Delete category"
+msgstr "מחיקת קטגוריה"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Rolodex {version} is available"
+msgstr "זמינה גרסה חדשה: Rolodex {version}"
+
+#: rolodex.py
+#, python-brace-format
+msgid "You have {version}."
+msgstr "הגרסה המותקנת: {version}."
+
+#: rolodex.py
+msgid "Later"
+msgstr "מאוחר יותר"
+
+#: rolodex.py
+msgid "Skip This Version"
+msgstr "דילוג על גרסה זו"
+
+#: rolodex.py
+msgid "Update Now"
+msgstr "עדכון כעת"
+
+#: rolodex.py
+#, python-brace-format
+msgid "Skipping Rolodex {version}"
+msgstr "דילוג על Rolodex {version}"
+
+#: rolodex.py
+msgid "Password Health"
+msgstr "בריאות הסיסמאות"
+
+#: rolodex.py
+msgid "No passwords stored yet."
+msgstr "עדיין לא נשמרו סיסמאות."
+
+#: rolodex.py
+#, python-brace-format
+msgid "The {n} password looks strong."
+msgid_plural "All {n} passwords look strong."
+msgstr[0] "{n} סיסמה נראית חזקה."
+msgstr[1] "כל {n} הסיסמאות נראות חזקות."
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} weak or fair"
+msgid_plural "{n} weak or fair"
+msgstr[0] "{n} חלשה או סבירה"
+msgstr[1] "{n} חלשות או סבירות"
+
+#: rolodex.py
+#, python-brace-format
+msgid "{n} reused"
+msgid_plural "{n} reused"
+msgstr[0] "{n} בשימוש חוזר"
+msgstr[1] "{n} בשימוש חוזר"
+
+#: rolodex.py
+msgid "Reused"
+msgstr "בשימוש חוזר"
+
+#: rolodex.py
+msgid "Focus search"
+msgstr "מעבר לחיפוש"
+
+#: rolodex.py
+msgid "Copy password / secret"
+msgstr "העתקת סיסמה / סוד"
+
+#: rolodex.py
+msgid "Clear search"
+msgstr "ניקוי החיפוש"
+
+#: rolodex.py
+msgid "Select every entry in the list"
+msgstr "בחירת כל הרשומות ברשימה"
+
+#: rolodex.py
+msgid "Keyboard shortcuts"
+msgstr "קיצורי מקלדת"
+
+#: rolodex.py
+msgid "Preferences"
+msgstr "העדפות"
+
+#: rolodex.py
+msgid "Keyboard Shortcuts"
+msgstr "קיצורי מקלדת"
+
+#: rolodex.py
+msgid "Follow desktop"
+msgstr "לפי שולחן העבודה"
+
+#: rolodex.py
+msgid "Appearance"
+msgstr "מראה"
+
+#: rolodex.py
+msgid "Theme"
+msgstr "ערכת נושא"
+
+#: rolodex.py
+msgid "Automatic follows your desktop's light or dark setting"
+msgstr "אוטומטי: לפי הגדרת המצב הבהיר או הכהה של שולחן העבודה"
+
+#: rolodex.py
+msgid ""
+"Your desktop does not share an accent colour, so Follow desktop uses blue"
+msgstr "שולחן העבודה אינו משתף צבע הדגשה, ולכן \"לפי שולחן העבודה\" משתמש בכחול"
+
+#: rolodex.py
+msgid "Accent colour"
+msgstr "צבע הדגשה"
+
+#: rolodex.py
+msgid "Could not save this setting. It applies until Rolodex closes."
+msgstr "לא ניתן לשמור הגדרה זו. היא תחול עד לסגירת Rolodex."

@@ -55,7 +55,7 @@ reason about changes. (Grep for the banner rather than trusting a line number.)
 Each field is `{"label", "value", "sensitive": bool}`. `sensitive` fields are masked in the
 UI and auto-detected from the label via `SENSITIVE_KEYWORDS`. Separately, `field_category()`
 classifies a label into one of `credential/key/identity/url/date/other`, which picks both the
-colored left-border and the type icon at the head of the row in the detail view
+colored border and the type icon at the head of the row in the detail view
 (`FIELD_CATEGORIES`, first-match-wins; `FIELD_CATEGORY_CUES` holds each category's icon and
 the name a screen reader speaks) — that is presentational and unrelated to the `sensitive`
 flag or the user-defined `categories`.
@@ -99,6 +99,9 @@ desktop's light/dark changes (ROLO-0015). A new colour goes into every palette, 
 `CUSTOM_CSS`; `tests/test_themes.py` fails on a name a palette forgets, on field colours
 that merge under a colourblindness simulation, and on text below 4.5:1. The field-category
 border classes (`.field-credential`, `.field-key`, etc.) correspond to `FIELD_CATEGORIES` keys.
+**A one-sided border needs a `:dir(rtl)` twin after it** (ROLO-0101): GTK's CSS has no
+`border-inline-start`, and the window mirrors when `catalog_is_rtl()` says the catalog in use
+is right to left. `tests/test_themes.py` fails on a rule with no twin.
 
 ## Sibling files
 

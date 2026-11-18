@@ -99,6 +99,18 @@ def _install_translations() -> gettext.NullTranslations:
                                fallback=True)
 
 
+# Languages written right to left. The window mirrors when the catalog in use is one of these.
+RTL_LANGUAGES = frozenset({"ar", "fa", "he", "ps", "ur", "yi"})
+
+
+def catalog_is_rtl(translations: gettext.NullTranslations) -> bool:
+    """Whether the window should mirror (ROLO-0101). The catalog decides, not the environment:
+    on Windows and macOS GTK sees no language at all, and where no catalog ships the text is
+    English and stays left to right."""
+    language = translations.info().get("language", "")
+    return _without_script(language).split("_")[0].lower() in RTL_LANGUAGES
+
+
 _translations = _install_translations()
 _ = _translations.gettext
 ngettext = _translations.ngettext
@@ -1766,6 +1778,10 @@ PALETTES: dict[str, dict] = {
 .notes-frame { border-left-width: 5px; }
 .navigation-sidebar row:selected { background: @rolo_accent_bg; color: #ffffff; }
 .notes-frame { border-color: @rolo_notes; }
+.field-credential:dir(rtl), .field-key:dir(rtl), .field-identity:dir(rtl), .field-url:dir(rtl),
+.field-date:dir(rtl), .field-other:dir(rtl) { border-right-width: 5px; }
+.notes-frame:dir(rtl) { border-left-width: 2px; border-left-color: @rolo_notes;
+                        border-right-width: 5px; }
 """,
         # libadwaita's own surfaces, so its widgets are black and white too.
         "adw": {"window_bg_color": "#000000", "window_fg_color": "#ffffff",
@@ -2564,6 +2580,16 @@ def a11y_label(widget, text: str):
     is not one: it is exposed as a description, so the button itself was announced as nameless.
     Nor is an entry's placeholder, which is gone once the box holds text (ROLO-0017)."""
     widget.update_property([Gtk.AccessibleProperty.LABEL], [text])
+    return widget
+
+
+def keep_digit_order(widget):
+    """Lay out a stored value left to right (ROLO-0101). In a mirrored window GTK reverses
+    digit groups split by spaces, so a 2FA code "123 456" read "456 123". A value that starts
+    with a Hebrew or Arabic letter still runs right to left: its first letter decides. An entry
+    draws through its inner Gtk.Text, which ignores the entry's own direction."""
+    delegate = widget.get_delegate() if isinstance(widget, Gtk.Editable) else None
+    (delegate or widget).set_direction(Gtk.TextDirection.LTR)
     return widget
 
 
@@ -3795,7 +3821,7 @@ class MainWindow(Adw.ApplicationWindow):
             else:
                 display = field["value"]
 
-            val_label = Gtk.Label(label=display)
+            val_label = keep_digit_order(Gtk.Label(label=display))
             val_label.set_selectable(True)
             if is_sensitive and not self._revealed:
                 val_label.add_css_class("field-masked")
@@ -3916,7 +3942,7 @@ class MainWindow(Adw.ApplicationWindow):
             row.set_subtitle(_("Your computer's clock is not synchronised, so this code may be "
                              "rejected. Turn on automatic time in your system settings."))
 
-        code_label = Gtk.Label(valign=Gtk.Align.CENTER, selectable=True)
+        code_label = keep_digit_order(Gtk.Label(valign=Gtk.Align.CENTER, selectable=True))
         code_label.add_css_class("totp-code")
         row.add_suffix(code_label)
 
@@ -4889,8 +4915,8 @@ class FieldRow(Gtk.ListBoxRow):
         self.label_entry.set_size_request(110, -1)
         box.append(self.label_entry)
 
-        self.value_entry = a11y_label(
-            Gtk.Entry(placeholder_text=_("Value"), text=value, hexpand=True), _("Field value"))
+        self.value_entry = keep_digit_order(a11y_label(
+            Gtk.Entry(placeholder_text=_("Value"), text=value, hexpand=True), _("Field value")))
         self.value_entry.set_size_request(160, -1)
         box.append(self.value_entry)
 
@@ -5994,6 +6020,13 @@ CUSTOM_CSS = """
     border-right: 1px solid alpha(@rolo_accent, 0.08);
 }
 
+/* Right to left (ROLO-0101): GTK's CSS has no border-inline-start, so every one-sided border
+   has a :dir(rtl) twin moving it to the other side. tests/test_themes.py checks each has one. */
+.sidebar-box:dir(rtl) {
+    border-right: none;
+    border-left: 1px solid alpha(@rolo_accent, 0.08);
+}
+
 /* Unlock window */
 window.background {
     background-image: linear-gradient(160deg, @rolo_bg_1 0%, @rolo_bg_dialog 50%, @rolo_bg_1 100%);
@@ -6029,6 +6062,12 @@ window.background {
 .field-url        { border-left: 3px solid @rolo_field_url; }
 .field-date       { border-left: 3px solid @rolo_field_date; }
 .field-other      { border-left: 3px solid @rolo_field_other; }
+.field-credential:dir(rtl) { border-left: none; border-right: 3px solid @rolo_field_credential; }
+.field-key:dir(rtl)        { border-left: none; border-right: 3px solid @rolo_field_key; }
+.field-identity:dir(rtl)   { border-left: none; border-right: 3px solid @rolo_field_identity; }
+.field-url:dir(rtl)        { border-left: none; border-right: 3px solid @rolo_field_url; }
+.field-date:dir(rtl)       { border-left: none; border-right: 3px solid @rolo_field_date; }
+.field-other:dir(rtl)      { border-left: none; border-right: 3px solid @rolo_field_other; }
 
 /* Notes frame: glass card, in its own colour apart from the field categories */
 .notes-frame {
@@ -6040,6 +6079,11 @@ window.background {
     box-shadow:
         0 2px 12px @rolo_shadow_soft,
         inset 0 1px 0 @rolo_highlight;
+}
+
+.notes-frame:dir(rtl) {
+    border-left: 1px solid alpha(@rolo_notes, 0.25);
+    border-right: 3px solid @rolo_notes;
 }
 
 /* Navigation sidebar rows: glass on hover/select */
@@ -6062,6 +6106,11 @@ window.background {
     background: alpha(@rolo_accent, 0.15);
     border-left: 3px solid @rolo_accent;
     box-shadow: inset 0 1px 0 @rolo_highlight;
+}
+
+.navigation-sidebar row:selected:dir(rtl) {
+    border-left: none;
+    border-right: 3px solid @rolo_accent;
 }
 
 /* Action buttons: glass pill style */
@@ -6261,6 +6310,10 @@ row.entry {
     background: transparent;
     border-left: none;
     box-shadow: none;
+}
+
+.navigation-sidebar .category-header-row:selected:dir(rtl) {
+    border-right: none;
 }
 
 .category-header-label {
@@ -6493,6 +6546,9 @@ class RolodexApp(Adw.Application):
 
     def do_startup(self):
         Adw.Application.do_startup(self)
+        # After GTK's init, which sets the direction from GTK's own reading of the locale.
+        Gtk.Widget.set_default_direction(Gtk.TextDirection.RTL if catalog_is_rtl(_translations)
+                                         else Gtk.TextDirection.LTR)
         # INV-15: remove update temps orphaned by a download whose process did not outlive it.
         sweep_stale_update_temps()
         display = Gdk.Display.get_default()

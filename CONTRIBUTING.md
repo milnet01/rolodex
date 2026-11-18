@@ -90,7 +90,10 @@ until every catalog covers the template and every `.mo` matches its `.po`.
 
 To add a language:
 `msginit --input=po/rolodex.pot --locale=<lang> --output=po/<lang>.po`, translate it, run the
-script, and add the code to `LANGUAGES` in `tests/test_translations.py`.
+script, and add the code to `LANGUAGES` in `tests/test_translations.py`. A language written
+right to left also goes in `RTL_LANGUAGES` in `rolodex.py`, which mirrors the window. A CSS rule
+that puts a border on one side needs a `:dir(rtl)` twin moving it to the other side;
+`tests/test_themes.py` fails without one.
 
 ## Commit messages
 

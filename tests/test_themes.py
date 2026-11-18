@@ -133,6 +133,34 @@ def test_high_contrast_rules_come_after_the_shared_stylesheet():
     assert css.index(rolodex.CUSTOM_CSS) < css.index(rolodex.PALETTES["high-contrast"]["extra_css"])
 
 
+def _css_rules(css):
+    """(selectors, declared property names) for each rule, comments stripped."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    rules = []
+    for sel, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        props = {d.split(":")[0].strip() for d in body.split(";") if ":" in d}
+        rules.append(([s.strip() for s in sel.split(",")], props))
+    return rules
+
+
+@pytest.mark.parametrize("palette", list(rolodex.PALETTES))
+def test_ROLO0101_every_one_sided_border_has_a_right_to_left_twin(palette):
+    """GTK's CSS has no border-inline-start, so a rule naming a left or right border puts its
+    cue on the wrong side of a mirrored window unless a :dir(rtl) rule moves it across. The twin
+    must come after the rule, so a theme's own wider borders need twins of their own."""
+    rules = _css_rules(rolodex.theme_css(palette, rolodex.FALLBACK_ACCENT))
+    side = re.compile(r"^border-(left|right)")
+    swap = {"left": "right", "right": "left"}
+    for i, (selectors, props) in enumerate(rules):
+        sides = {side.match(p).group(1) for p in props if side.match(p)}
+        if not sides or any(":dir(" in s for s in selectors):
+            continue
+        for sel in selectors:
+            twin = set().union(*(p for sels, p in rules[i + 1:] if f"{sel}:dir(rtl)" in sels))
+            for s in sides:
+                assert any(p.startswith(f"border-{swap[s]}") for p in twin), (sel, s)
+
+
 @pytest.mark.parametrize("theme,system_dark,expected", [
     ("auto", True, "dark"), ("auto", False, "light"),
     ("dark", False, "dark"), ("light", True, "light"),

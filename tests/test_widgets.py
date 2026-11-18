@@ -511,6 +511,59 @@ def test_ROLO0026_main_window_reopens_the_remembered_entry(app, tmp_path, monkey
     assert win2._current_entry_id is None
 
 
+# --- ROLO-0101: a mirrored window keeps numbers in order ----------------------------------
+
+
+def _labels(widget):
+    from gi.repository import Gtk
+
+    child = widget.get_first_child()
+    while child is not None:
+        if isinstance(child, Gtk.Label):
+            yield child
+        yield from _labels(child)
+        child = child.get_next_sibling()
+
+
+def _reads_left_to_right(label):
+    text = label.get_text()
+    layout = label.get_layout()
+    return layout.index_to_pos(0).x < layout.index_to_pos(len(text.encode()) - 1).x
+
+
+def test_ROLO0101_values_and_codes_keep_their_digit_order_right_to_left(app, tmp_path,
+                                                                        monkeypatch):
+    # In a right-to-left paragraph the bidi rules reverse groups of digits split by spaces, so
+    # a 2FA code "123 456" read "456 123" and a phone number ran backwards.
+    from gi.repository import Gtk
+
+    monkeypatch.setattr(rolodex, "CONFIG_FILE", str(tmp_path / "conf"))
+    path = str(tmp_path / "v.vault")
+    vault, salt, key = rolodex.create_vault_with_key(PW, path)
+    phone = "+27 82 555 1234"
+    eid = rolodex.add_entry(vault, "Bank", [
+        {"label": "Phone", "value": phone, "sensitive": False},
+        {"label": "TOTP", "value": "otpauth://totp/x?secret=JBSWY3DPEHPK3PXP",
+         "sensitive": True}])
+    Gtk.Widget.set_default_direction(Gtk.TextDirection.RTL)
+    try:
+        win = rolodex.MainWindow(app, vault, salt, PW, path, key)
+        win._show_detail(eid)
+        labels = list(_labels(win.detail_box))
+        value = [lb for lb in labels if lb.get_text() == phone]
+        code = [lb for lb in labels if lb.has_css_class("totp-code")]
+        assert value and code
+        assert all(_reads_left_to_right(lb) for lb in value + code)
+        win._cancel_totp_tick()
+        # The editor's box draws through its inner Gtk.Text, which ignores the box's own
+        # direction: only the inner widget's setting kept "123 456" in order on screen.
+        row = rolodex.FieldRow(rolodex.AddEditDialog(FakeMainWindow(), "Add Entry"),
+                               "Phone", phone)
+        assert row.value_entry.get_delegate().get_direction() == Gtk.TextDirection.LTR
+    finally:
+        Gtk.Widget.set_default_direction(Gtk.TextDirection.LTR)
+
+
 # --- ROLO-0009: the sidebar category filter -----------------------------------------------
 
 

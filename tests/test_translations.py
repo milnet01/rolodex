@@ -17,7 +17,7 @@ import rolodex
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POT = os.path.join(REPO, "po", "rolodex.pot")
-LANGUAGES = ["de", "es", "fr", "ja", "zh_CN"]
+LANGUAGES = ["ar", "de", "es", "fr", "he", "ja", "zh_CN"]
 PLACEHOLDER = re.compile(r"\{(\w*)\}")
 
 
@@ -130,6 +130,18 @@ def test_ROLO0028_compiled_catalog_matches_its_po(lang):
             for n in (1, 5):
                 assert mo.ngettext(e["msgid"], e["plural"], n) == e["msgstr"][mo.plural(n)], \
                     (e["msgid"], n)
+
+
+@pytest.mark.parametrize("lang, rtl", [("he", True), ("ar", True), ("de", False),
+                                       ("ja", False)])
+def test_ROLO0101_layout_mirrors_for_a_right_to_left_catalog(lang, rtl):
+    with open(os.path.join(rolodex.LOCALE_DIR, lang, "LC_MESSAGES", "rolodex.mo"), "rb") as fh:
+        assert rolodex.catalog_is_rtl(gettext.GNUTranslations(fh)) is rtl
+
+
+def test_ROLO0101_english_fallback_stays_left_to_right():
+    # A Persian desktop gets English text (no catalog ships), so the window must not mirror.
+    assert rolodex.catalog_is_rtl(gettext.NullTranslations()) is False
 
 
 @pytest.mark.parametrize("apple_locale, expected", [
