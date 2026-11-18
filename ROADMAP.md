@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=106 -->
+<!-- ants-roadmap-id-high-water: ROLO=109 -->
 
 # Rolodex Roadmap
 
@@ -703,7 +703,7 @@ Wanted work not yet promised to any release.
   Kind: investigate.
   Source: user-request-2026-11-18.
 
-- 📋 [ROLO-0103] **Publish a signed Flatpak repository on GitHub Pages so Discover lists Rolodex and Flatpak installs update.**
+- 💭 [ROLO-0103] **Publish a signed Flatpak repository on GitHub Pages so Discover lists Rolodex and Flatpak installs update.**
   Design from ROLO-0102's sandbox test (method:
   `know_how` topic `flatpak-sandboxed-testing`).
 
@@ -726,6 +726,10 @@ Wanted work not yet promised to any release.
   machine finds Rolodex in search after the source is added, shows its
   icon, and lists a Rolodex update in the Updates page. The sandbox could
   not prove the Updates page or the icon.
+  Parked 2026-11-18: the user wants Tinbox found in Discover with no
+  source added by hand, so chose openSUSE's main repository (ROLO-0107
+  to ROLO-0109) over this one-click link. Flathub is out: its team told
+  the user it is not interested in AI-assisted apps.
   **Layman:** Rolodex shows up in KDE Discover after one click on an "Add to Discover" link, and the .flatpak download keeps itself up to date.
   Kind: package.
   Source: user-request-2026-11-18.
@@ -782,6 +786,55 @@ Wanted work not yet promised to any release.
   Kind: implement.
   Source: user-decision-2026-11-18.
   Blocked-by: ROLO-0105.
+
+- 📋 [ROLO-0107] **Find out what openSUSE requires before Tinbox can enter its main repository.**
+  Goal (user, 2026-11-18): install openSUSE, open Discover, search
+  "Tinbox", install it, with no source added by hand. Discover reads
+  the AppStream catalogue of the main OSS repository
+  (/var/cache/swcatalog/xml/download.opensuse.org-oss.xml.gz lists
+  KeePassXC, checked 2026-11-18), so the package must reach
+  openSUSE:Factory, which feeds Tumbleweed.
+
+  Find out:
+  - Whether openSUSE has a rule on AI-written code or packaging, and
+    what disclosure it expects. A web search on 2026-11-18 found none.
+  - Which devel project to submit to, and its maintainers' rules.
+  - What the user must do in person: an openSUSE account, and whose
+    name goes on the submit requests.
+  - Whether Leap reaches Discover by the same route, or separately.
+
+  Done when: the findings are written up and the user has decided.
+  **Layman:** Learn openSUSE's rules for adding a new app to its official store, before doing the work.
+  Kind: investigate.
+  Source: user-request-2026-11-18.
+
+- 📋 [ROLO-0108] **Let Tinbox run when installed system-wide by a distro package.**
+  Run from source, APP_DIR is the script's own folder. Installed under
+  /usr that folder is read-only, so the vault cannot be saved. A
+  distro install needs the user data folder, as frozen and Flatpak
+  builds already use, and translations from the system locale folder
+  (LOCALE_DIR). It must never offer the in-app updater: the distro
+  updates it.
+
+  Done when: a package installed under /usr creates, saves and
+  reopens a vault, shows a translated UI, and offers no update.
+  **Layman:** Make the app work when openSUSE installs it in the system folders instead of running it from a download.
+  Kind: implement.
+  Source: user-request-2026-11-18.
+
+- 📋 [ROLO-0109] **Package Tinbox for openSUSE and get it into Tumbleweed's main repository.**
+  An RPM spec built on the openSUSE Build Service from the release
+  tarball, installing the app, its .desktop file, icon, metainfo
+  and translations. Build it in the user's OBS home project first,
+  then submit to the devel project and on to openSUSE:Factory, per
+  the rules ROLO-0107 finds.
+
+  Done when: on a fresh Tumbleweed install (a virtual machine),
+  Discover finds Tinbox by search and installs it, and it opens.
+  **Layman:** Tinbox appears in Discover on any openSUSE Tumbleweed computer, ready to install.
+  Kind: package.
+  Source: user-request-2026-11-18.
+  Blocked-by: ROLO-0106, ROLO-0107, ROLO-0108.
 
 ## High priority
 
