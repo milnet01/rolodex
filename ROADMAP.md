@@ -642,12 +642,23 @@ Wanted work not yet promised to any release.
   Source: user-decision-2026-11-18 (split from ROLO-0028 at the 2.1.0 release).
   Splits-from: ROLO-0028.
 
-- 📋 [ROLO-0101] **Support right-to-left languages: Hebrew and Arabic.**
+- ✅ [ROLO-0101] **Support right-to-left languages: Hebrew and Arabic.**
   Why: last in the user's language order (2026-09-21). Not just two
   catalogues: the layout must mirror.
   Scope: Gtk.Widget direction, start/end margins rather than left/right,
-  and the CSS border-left field cues become border-inline-start. Then
+  and each one-sided CSS border gets a :dir(rtl) twin (GTK's CSS has
+  no border-inline-start). Then
   po/he.po and po/ar.po. Treat it as its own unit of work.
+  Shipped in 1290793, unreleased (CHANGELOG Unreleased). po/he.po
+  and po/ar.po (six Arabic plural forms). The direction follows the
+  catalog shown (catalog_is_rtl), set in do_startup, so Windows and
+  macOS mirror too. Also fixed: a right-to-left paragraph reversed
+  digit groups, so a 2FA code "123 456" read "456 123";
+  keep_digit_order() lays values, the live code and the editor's
+  value box out left to right. Checked 2026-11-18 from source with
+  Hebrew screenshots, dark and high-contrast. Unchecked: Windows and
+  macOS builds; a native speaker's read; other text boxes holding
+  numbers (search, the password generator's length).
   **Layman:** Add Hebrew and Arabic, with the window laid out right to left.
   Kind: accessibility.
   Source: user-decision-2026-11-18 (split from ROLO-0028 at the 2.1.0 release).
