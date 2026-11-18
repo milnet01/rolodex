@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=103 -->
+<!-- ants-roadmap-id-high-water: ROLO=104 -->
 
 # Rolodex Roadmap
 
@@ -728,6 +728,30 @@ Wanted work not yet promised to any release.
   not prove the Updates page or the icon.
   **Layman:** Rolodex shows up in KDE Discover after one click on an "Add to Discover" link, and the .flatpak download keeps itself up to date.
   Kind: package.
+  Source: user-request-2026-11-18.
+  Blocked-by: ROLO-0104.
+
+- 📋 [ROLO-0104] **Check whether the name "Rolodex" and the app ID com.rolodex.Contacts are safe to keep.**
+  Raised while checking store rules for ROLO-0102: Flathub's
+  requirements forbid names that violate trademarks, and an app ID
+  must use a domain its author controls (`com.rolodex` implies
+  rolodex.com). Flathub itself stays out (user, reconfirmed 2026-11-18),
+  but distros and other channels may object to the name too.
+
+  Investigate:
+  - Who holds the "Rolodex" trademark today, in which classes, and
+    whether software is covered.
+  - What a rename touches: app name, Flatpak app ID (a new ID is a new
+    app, so the data folder under ~/.var/app moves), the GitHub
+    repository, release asset names the updater matches exactly
+    (PLATFORM_ASSETS), the website.
+  - Candidate names, checked for clashes.
+
+  Done when: a written recommendation (keep, or rename with a migration
+  plan) for the user to decide. Do this before ROLO-0103 publishes the
+  app ID to users, since changing it later strands their installs.
+  **Layman:** "Rolodex" is a brand name for card files; find out whether using it for a free app is a risk, and what renaming would cost existing users.
+  Kind: investigate.
   Source: user-request-2026-11-18.
 
 ## High priority
