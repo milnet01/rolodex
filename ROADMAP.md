@@ -813,6 +813,10 @@ Wanted work not yet promised to any release.
   say nothing on it. New packages get a full licence and copyright
   review. Asking openSUSE directly before packaging is the cheap test,
   as Flathub's direct answer was.
+  2026-11-18: the user will ask openSUSE in person, on the factory
+  mailing list, whether an AI-assisted app would be accepted and which
+  devel project fits. ROLO-0108 and ROLO-0109 wait for the answer;
+  ROLO-0106 (rename) goes ahead meanwhile.
   **Layman:** Learn openSUSE's rules for adding a new app to its official store, before doing the work.
   Kind: investigate.
   Source: user-request-2026-11-18.
