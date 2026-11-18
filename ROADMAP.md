@@ -621,7 +621,7 @@ Wanted work not yet promised to any release.
   Source: pr-1-review-2026-10-29.
   Lanes: gui.
 
-- 📋 [ROLO-0100] **Translate Rolodex into Chinese and Japanese.**
+- ✅ [ROLO-0100] **Translate Rolodex into Chinese and Japanese.**
   Why: the user's language order (2026-09-21) puts Chinese and Japanese
   next after German, French and Spanish, which shipped in 2.1.0 under
   ROLO-0028.
@@ -630,6 +630,13 @@ Wanted work not yet promised to any release.
   tests/test_translations.py already cover any new .po. Workflow:
   CONTRIBUTING.md § Translations. Check the fonts render CJK in the
   Flatpak and the frozen builds.
+  Shipped in 8540b55, unreleased (CHANGELOG Unreleased). po/zh_CN.po
+  and po/ja.po; tests now read nplurals from each header. Also
+  fixed: a macOS language with a script subtag (zh-Hans_CN) fell
+  to English; _without_script() strips it. CJK rendering checked
+  2026-11-18 from source, the frozen Linux binary and the Flatpak
+  via flatpak run (fonts come from the host, /run/host/fonts).
+  Unchecked: Windows and macOS builds; a native speaker's read.
   **Layman:** Add Chinese and Japanese to the languages Rolodex speaks.
   Kind: accessibility.
   Source: user-decision-2026-11-18 (split from ROLO-0028 at the 2.1.0 release).
