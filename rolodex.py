@@ -76,7 +76,21 @@ def _os_ui_languages() -> list[str] | None:
                 name = out.stdout.strip().split("@")[0]  # "de_DE@rg=dezzzz" -> "de_DE"
     except (OSError, AttributeError, ValueError, subprocess.SubprocessError):
         return None
-    return [name] if name else None
+    return [_without_script(name)] if name else None
+
+
+def _without_script(name: str) -> str:
+    """"zh-Hans_CN" -> "zh_CN" (ROLO-0100). gettext matches language_REGION, and macOS and
+    Windows can put a four-letter script between them. Chinese with a script but no region
+    gets the region that script implies, so Traditional never lands on the Simplified catalog."""
+    parts = name.replace("-", "_").split("_")
+    script = next((p for p in parts[1:] if len(p) == 4 and p.isalpha()), None)
+    if script is None:
+        return "_".join(parts)
+    parts.remove(script)
+    if parts == ["zh"]:
+        parts.append({"Hans": "CN", "Hant": "TW"}.get(script.title(), ""))
+    return "_".join(p for p in parts if p)
 
 
 def _install_translations() -> gettext.NullTranslations:

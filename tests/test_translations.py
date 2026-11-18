@@ -17,7 +17,7 @@ import rolodex
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POT = os.path.join(REPO, "po", "rolodex.pot")
-LANGUAGES = ["de", "es", "fr"]
+LANGUAGES = ["de", "es", "fr", "ja", "zh_CN"]
 PLACEHOLDER = re.compile(r"\{(\w*)\}")
 
 
@@ -93,16 +93,27 @@ def test_ROLO0028_template_matches_the_code():
     assert _keys(_parse_po(POT)) == _source_strings()
 
 
+def _nplurals(path):
+    """The plural-form count the catalog's header declares: 2 for German, 1 for Japanese."""
+    with open(path, encoding="utf-8") as fh:
+        found = re.search(r"Plural-Forms: nplurals=(\d+);", fh.read())
+    assert found, f"{path} declares no Plural-Forms"
+    return int(found.group(1))
+
+
 @pytest.mark.parametrize("lang", LANGUAGES)
 def test_ROLO0028_catalog_translates_every_template_string(lang):
-    entries = _parse_po(os.path.join(REPO, "po", f"{lang}.po"))
+    path = os.path.join(REPO, "po", f"{lang}.po")
+    entries = _parse_po(path)
     assert _keys(entries) == _keys(_parse_po(POT))
+    nplurals = _nplurals(path)
     for e in entries:
         assert not e["fuzzy"], e["msgid"]
-        expected = 2 if e["plural"] is not None else 1
+        expected = nplurals if e["plural"] is not None else 1
         assert len(e["msgstr"]) == expected and all(e["msgstr"].values()), e["msgid"]
         # A placeholder the translation drops or renames raises KeyError at .format() time.
-        wanted = set(PLACEHOLDER.findall(e["msgid"]))
+        # A one-form language must carry the plural's placeholders too.
+        wanted = set(PLACEHOLDER.findall(e["msgid"] + (e["plural"] or "")))
         for text in e["msgstr"].values():
             assert set(PLACEHOLDER.findall(text)) == wanted, (e["msgid"], text)
 
@@ -112,10 +123,27 @@ def test_ROLO0028_compiled_catalog_matches_its_po(lang):
     # The app loads the .mo, not the .po: an edit without a recompile never reaches a user.
     with open(os.path.join(rolodex.LOCALE_DIR, lang, "LC_MESSAGES", "rolodex.mo"), "rb") as fh:
         mo = gettext.GNUTranslations(fh)
-    one, many = 1, 5
     for e in _parse_po(os.path.join(REPO, "po", f"{lang}.po")):
         if e["plural"] is None:
             assert mo.gettext(e["msgid"]) == e["msgstr"][0], e["msgid"]
         else:
-            assert mo.ngettext(e["msgid"], e["plural"], one) == e["msgstr"][0], e["msgid"]
-            assert mo.ngettext(e["msgid"], e["plural"], many) == e["msgstr"][1], e["msgid"]
+            for n in (1, 5):
+                assert mo.ngettext(e["msgid"], e["plural"], n) == e["msgstr"][mo.plural(n)], \
+                    (e["msgid"], n)
+
+
+@pytest.mark.parametrize("apple_locale, expected", [
+    ("zh-Hans_CN", ["zh_CN"]),  # macOS puts the script between language and region
+    ("zh-Hans", ["zh_CN"]),
+    ("zh-Hant_TW", ["zh_TW"]),  # Traditional must not fall to the Simplified catalog
+    ("ja_JP", ["ja_JP"]),
+    ("de_DE@rg=dezzzz", ["de_DE"]),
+])
+def test_ROLO0100_macos_locale_with_a_script_finds_its_catalog(monkeypatch, apple_locale,
+                                                               expected):
+    for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(rolodex.sys, "platform", "darwin")
+    monkeypatch.setattr(rolodex.subprocess, "run", lambda *a, **k: rolodex.subprocess.
+                        CompletedProcess(a, 0, stdout=apple_locale + "\n", stderr=""))
+    assert rolodex._os_ui_languages() == expected

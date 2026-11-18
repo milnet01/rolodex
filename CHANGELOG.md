@@ -9,6 +9,12 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Simplified Chinese and Japanese.** (ROLO-0100)
+  Rolodex shows them when the system language is set to either. On macOS, a system language
+  written with a script, such as `zh-Hans`, now finds its translation too.
+
 ## [2.1.0] - 2026-11-18
 
 **Theme:** Windows updates, Flatpak, languages
