@@ -9,6 +9,10 @@ All notable changes to Rolodex are documented here. The format is based on
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-18
+
+**Theme:** Chinese, Japanese, Hebrew and Arabic
+
 ### Added
 
 - **Simplified Chinese and Japanese.** (ROLO-0100)
@@ -565,7 +569,8 @@ app reached this state, not a tagged release.)
 - Encrypted backup & restore, plaintext export, and master-password change.
 - Vault schema migration (v1 → v2) applied on load.
 
-[Unreleased]: https://github.com/milnet01/rolodex/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/milnet01/rolodex/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/milnet01/rolodex/releases/tag/v2.2.0
 [2.1.0]: https://github.com/milnet01/rolodex/releases/tag/v2.1.0
 [2.0.0]: https://github.com/milnet01/rolodex/releases/tag/v2.0.0
 [1.6.0]: https://github.com/milnet01/rolodex/releases/tag/v1.6.0

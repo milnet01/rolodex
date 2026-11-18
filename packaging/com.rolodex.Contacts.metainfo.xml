@@ -72,6 +72,15 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="2.2.0" date="2026-11-18">
+      <description>
+        <p>Adds Simplified Chinese, Japanese, Hebrew and Arabic.</p>
+        <ul>
+          <li>Simplified Chinese and Japanese. Rolodex shows them when the system language is set to either. On macOS, a system language written with a script, such as zh-Hans, now finds its translation too.</li>
+          <li>Hebrew and Arabic, with the window laid out right to left. In either language the sidebar moves to the right, and the colour bars on each field and the notes sit on the right-hand edge. The layout follows the language Rolodex shows, so it mirrors on Windows and macOS too.</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-11-18">
       <description>
         <p>Adds a Flatpak download, a software-centre listing, German, French and Spanish, and in-app updates on Windows.</p>
