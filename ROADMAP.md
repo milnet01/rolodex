@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=102 -->
+<!-- ants-roadmap-id-high-water: ROLO=103 -->
 
 # Rolodex Roadmap
 
@@ -664,7 +664,7 @@ Wanted work not yet promised to any release.
   Source: user-decision-2026-11-18 (split from ROLO-0028 at the 2.1.0 release).
   Splits-from: ROLO-0028.
 
-- 📋 [ROLO-0102] **Find a way for KDE Discover to list and update Rolodex without Flathub.**
+- ✅ [ROLO-0102] **Find a way for KDE Discover to list and update Rolodex without Flathub.**
   Discover searches only the sources configured on a machine. Rolodex
   ships as a single-file bundle (`rolodex.flatpak`, built by
   `packaging/flatpak/build.sh`) attached to each GitHub release, and
@@ -683,8 +683,51 @@ Wanted work not yet promised to any release.
 
   Done when: a written recommendation with its cost, and a follow-up
   item to build it if the user agrees.
+  Done 2026-11-18. Recommendation: a signed Flatpak repository on
+  GitHub Pages; the user agreed, follow-up ROLO-0103.
+
+  Measured in a sandbox (FLATPAK_USER_DIR, local HTTP, throwaway GPG key):
+  - Discover 6.8.3 search lists Rolodex from an added repository.
+  - `flatpak update` pulls a new signed build from the repository, and
+    also into a bundle install built with `--repo-url --gpg-keys`.
+  - Today's bundle has no `--repo-url`, so its `contacts-origin` remote
+    is empty: Flatpak installs never update. Discover never lists
+    no-enumerate remotes, so a bundle alone is never searchable.
+  - The repository is about 10 MB per release; GitHub Pages allows 1 GB.
+  Not proven: Discover's Updates page (it never finished loading in the
+  sandbox) and the search icon (the listing carries it; Discover showed
+  a placeholder).
+  Discover has no single-file-binary backend, so the PyInstaller Linux
+  download can never be listed there.
   **Layman:** Searching for Rolodex in KDE Discover finds nothing today; work out how to make it show up and update there without using Flathub.
   Kind: investigate.
+  Source: user-request-2026-11-18.
+
+- 📋 [ROLO-0103] **Publish a signed Flatpak repository on GitHub Pages so Discover lists Rolodex and Flatpak installs update.**
+  Design from ROLO-0102's sandbox test (method:
+  `know_how` topic `flatpak-sandboxed-testing`).
+
+  - A GPG key for the repository, made once. Private half only as a
+    `release`-environment secret plus the maintainer's backup; losing it
+    means every Flatpak user re-adds the source by hand.
+  - `build.yml`: on a release tag, export the build into the repository
+    on GitHub Pages, signed (`build-update-repo --gpg-sign
+    --generate-static-deltas --prune`), keeping the previous history so
+    installed copies can update. The `flatpak` job stays secret-free.
+  - `packaging/flatpak/build.sh`: `build-bundle --repo-url=<pages
+    repo> --gpg-keys=<public key>`, so a bundle install updates from it.
+  - Publish `rolodex.flatpakrepo` (and a `.flatpakref` with
+    `RuntimeRepo=` Flathub) and link it from the README; tell the
+    website session.
+  - Keep one update path per install: the Flatpak never offers the
+    in-app updater (`FLATPAK_ID` already gates it).
+
+  Done when: on the first release after this lands, Discover on this
+  machine finds Rolodex in search after the source is added, shows its
+  icon, and lists a Rolodex update in the Updates page. The sandbox could
+  not prove the Updates page or the icon.
+  **Layman:** Rolodex shows up in KDE Discover after one click on an "Add to Discover" link, and the .flatpak download keeps itself up to date.
+  Kind: package.
   Source: user-request-2026-11-18.
 
 ## High priority
