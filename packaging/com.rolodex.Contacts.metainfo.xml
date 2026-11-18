@@ -72,6 +72,18 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="2.1.0" date="2026-11-18">
+      <description>
+        <p>Adds a Flatpak download, a software-centre listing, German, French and Spanish, and in-app updates on Windows.</p>
+        <ul>
+          <li>A Flatpak download. Each release carries rolodex.flatpak, installable on any Linux distribution. It is not on Flathub.</li>
+          <li>The Flatpak carries a description, screenshots and release history, so GNOME Software and Discover show Rolodex properly.</li>
+          <li>German, French and Spanish. Rolodex follows the system language; other languages show English.</li>
+          <li>On 64-bit Windows, Update Now installs the new version and reopens Rolodex. Your vault and settings are not touched. Windows builds 2.0.0 and older cannot update themselves, so install this release by hand once.</li>
+          <li>Password Health with one password now reads "The 1 password looks strong."</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-11-08">
       <description>
         <p>Adds CSV import and export, selecting several entries at once, a layout for narrow windows, themes and accent colours, better screen reader support, and a stronger vault key.</p>
