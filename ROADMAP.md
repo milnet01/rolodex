@@ -731,7 +731,7 @@ Wanted work not yet promised to any release.
   Source: user-request-2026-11-18.
   Blocked-by: ROLO-0104.
 
-- 📋 [ROLO-0104] **Check whether the name "Rolodex" and the app ID com.rolodex.Contacts are safe to keep.**
+- ✅ [ROLO-0104] **Check whether the name "Rolodex" and the app ID com.rolodex.Contacts are safe to keep.**
   Raised while checking store rules for ROLO-0102: Flathub's
   requirements forbid names that violate trademarks, and an app ID
   must use a domain its author controls (`com.rolodex` implies
@@ -750,6 +750,9 @@ Wanted work not yet promised to any release.
   Done when: a written recommendation (keep, or rename with a migration
   plan) for the user to decide. Do this before ROLO-0103 publishes the
   app ID to users, since changing it later strands their installs.
+  Recommendation written 2026-11-18: docs/name-and-app-id.md. Change the
+  app ID to io.github.milnet01.<Name> before ROLO-0103 whatever the
+  name; rename in the same release. The user decides.
   **Layman:** "Rolodex" is a brand name for card files; find out whether using it for a free app is a risk, and what renaming would cost existing users.
   Kind: investigate.
   Source: user-request-2026-11-18.
