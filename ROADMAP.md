@@ -1,6 +1,6 @@
 <!-- ants-roadmap-format: 1 -->
 <!-- Generated from the Ants Terminal roadmap store. Edit it with roadmap_log; hand edits are discarded by the next write. -->
-<!-- ants-roadmap-id-high-water: ROLO=99 -->
+<!-- ants-roadmap-id-high-water: ROLO=101 -->
 
 # Rolodex Roadmap
 
@@ -550,7 +550,7 @@ Wanted work not yet promised to any release.
   Kind: package.
   Source: in-session-2026-07-04.
 
-- 🚧 [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
+- ✅ [ROLO-0028] **Externalize UI strings for translation (gettext/i18n).**
   Why: all UI text is hardcoded English; internationalization widens reach and is expected of a desktop app.
   Scope: wrap user-facing strings in gettext _(), add a translation template (.pot) and a build step, and document the workflow. Touches every UI string — do it as one deliberate pass.
   Re-requested by the user 2026-09-18: "add other language support to
@@ -582,6 +582,10 @@ Wanted work not yet promised to any release.
   .mo freshness. Workflow in CONTRIBUTING.md § Translations. Next:
   Chinese and Japanese; then RTL (Hebrew, Arabic) as its own unit.
   Unchecked: a German UI screenshot of the running app.
+  Closed 2026-11-18 at the 2.1.0 release (user decision): this item
+  covers the gettext plumbing plus German, French and Spanish. Chinese
+  and Japanese moved to ROLO-0100; right-to-left (Hebrew, Arabic) to
+  ROLO-0101.
   **Layman:** Prepare the app so it can be translated into other languages.
   Kind: accessibility.
   Source: in-session-2026-07-04.
@@ -616,6 +620,31 @@ Wanted work not yet promised to any release.
   Kind: fix.
   Source: pr-1-review-2026-10-29.
   Lanes: gui.
+
+- 📋 [ROLO-0100] **Translate Rolodex into Chinese and Japanese.**
+  Why: the user's language order (2026-09-21) puts Chinese and Japanese
+  next after German, French and Spanish, which shipped in 2.1.0 under
+  ROLO-0028.
+  Scope: po/zh_CN.po (or zh_Hans) and po/ja.po from po/rolodex.pot via
+  scripts/update-translations.sh; compiled locale/; tests in
+  tests/test_translations.py already cover any new .po. Workflow:
+  CONTRIBUTING.md § Translations. Check the fonts render CJK in the
+  Flatpak and the frozen builds.
+  **Layman:** Add Chinese and Japanese to the languages Rolodex speaks.
+  Kind: accessibility.
+  Source: user-decision-2026-11-18 (split from ROLO-0028 at the 2.1.0 release).
+  Splits-from: ROLO-0028.
+
+- 📋 [ROLO-0101] **Support right-to-left languages: Hebrew and Arabic.**
+  Why: last in the user's language order (2026-09-21). Not just two
+  catalogues: the layout must mirror.
+  Scope: Gtk.Widget direction, start/end margins rather than left/right,
+  and the CSS border-left field cues become border-inline-start. Then
+  po/he.po and po/ar.po. Treat it as its own unit of work.
+  **Layman:** Add Hebrew and Arabic, with the window laid out right to left.
+  Kind: accessibility.
+  Source: user-decision-2026-11-18 (split from ROLO-0028 at the 2.1.0 release).
+  Splits-from: ROLO-0028.
 
 ## High priority
 
