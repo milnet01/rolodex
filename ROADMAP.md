@@ -804,6 +804,15 @@ Wanted work not yet promised to any release.
   - Whether Leap reaches Discover by the same route, or separately.
 
   Done when: the findings are written up and the user has decided.
+  Found 2026-11-18 (web search, list archives not read in full):
+  openSUSE has no adopted AI policy. A draft is under debate on the
+  project@lists.opensuse.org thread "Discuss openSUSE AI Policy" (since
+  August 2026). Most posters keep a human submitter accountable and
+  argue for disclosure; some want generated code banned. No vote or
+  final text was found. The Factory wiki pages predate the debate and
+  say nothing on it. New packages get a full licence and copyright
+  review. Asking openSUSE directly before packaging is the cheap test,
+  as Flathub's direct answer was.
   **Layman:** Learn openSUSE's rules for adding a new app to its official store, before doing the work.
   Kind: investigate.
   Source: user-request-2026-11-18.
